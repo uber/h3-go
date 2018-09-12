@@ -320,9 +320,10 @@ func FromUnidirectionalEdge(
 	return
 }
 
-// ToUnidirectionalEdges returns the six unidirectional edges from `h`
-// to each of `h`'s neighbors.
+// ToUnidirectionalEdges returns the six (or five if pentagon) unidirectional
+// edges from `h` to each of `h`'s neighbors.
 func ToUnidirectionalEdges(h H3Index) []H3Index {
+	// allocating max size, `h3SliceFromCFitted` will adjust cap
 	cout := make([]C.H3Index, 6)
 	C.getH3UnidirectionalEdgesFromHexagon(h, &cout[0])
 	return h3SliceFromCFitted(cout)
@@ -330,16 +331,10 @@ func ToUnidirectionalEdges(h H3Index) []H3Index {
 
 // UnidirectionalEdgeBoundary returns the geocoordinates of a unidirectional
 // edge boundary.
-//
-// Bindings Note: the C core returns a `GeoBoundary` struct with `numVerts ==
-// 2`, whereas this returns `[]GeoCoord` with size 2
-func UnidirectionalEdgeBoundary(edge H3Index) []GeoCoord {
+func UnidirectionalEdgeBoundary(edge H3Index) GeoBoundary {
 	gb := new(C.GeoBoundary)
 	C.getH3UnidirectionalEdgeBoundary(edge, gb)
-	return []GeoCoord{
-		geoCoordFromC(gb.verts[0]),
-		geoCoordFromC(gb.verts[1]),
-	}
+	return geoBndryFromC(gb)
 }
 
 func geoCoordFromC(cg C.GeoCoord) GeoCoord {
