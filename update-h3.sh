@@ -31,9 +31,14 @@ pushd () {
 }
 
 popd () {
-    command popd "$@" > /dev/null
+    command popd > /dev/null
 }
 # -- -- -- -- -- -- -- --
+
+badexit () {
+    echo "something went wrong"
+    exit 1
+}
 
 cleanup () {
     echo "Cleaning up!"
@@ -63,19 +68,19 @@ if  [ -d "$H3_SRC_DIR" ]; then
     rm -rf "$H3_SRC_DIR"
 fi
 
-H3_VERSION=$(cat H3_VERSION)
+H3_VERSION=$(< H3_VERSION)
 echo "Checking out $H3_VERSION (found in file H3_VERSION)"
 
 git clone "$GIT_REMOTE" "$H3_SRC_DIR"
 
-pushd "$H3_SRC_DIR"
+pushd "$H3_SRC_DIR" || badexit
     git checkout -q tags/"$H3_VERSION"
 
     echo Copying source files into working directory
-    pushd ./src/h3lib/lib/
+    pushd ./src/h3lib/lib/ || badexit
         for f in *.c; do
-            cp -- "$f" "$CWD/h3_$f" 2>&1 > /dev/null
+            cp -- "$f" "$CWD/h3_$f" || badexit
         done
-    popd
-    cp -R ./src/h3lib/include/. "$CWD"/include
-popd
+    popd || badexit
+    cp -R ./src/h3lib/include/ "$CWD"/include
+popd || badexit
