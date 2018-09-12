@@ -74,7 +74,7 @@ func (g GeoCoord) toCPtr() *C.GeoCoord {
 // Additional documentation available at
 // https://uber.github.io/h3/#/documentation/api-reference/indexing
 
-// FromGeo returns the H3Index at resoultion `res` for a geographic coordinate.
+// FromGeo returns the H3Index at resolution `res` for a geographic coordinate.
 func FromGeo(geoCoord GeoCoord, res int) H3Index {
 	return H3Index(C.geoToH3(geoCoord.toCPtr(), C.int(res)))
 }
