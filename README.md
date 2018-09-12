@@ -47,6 +47,9 @@ func ExampleFromGeo() {
 
 ## API Differences
 
+* All `GeoCoord` structs return `Latitude` and `Longitude` as degrees, instead
+  of radians.
+
 Some superficial changes have been made relative to the H3 C core API in order
 to adhere to idiomatic Go styling.  Most notable are the following:
 
