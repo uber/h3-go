@@ -347,13 +347,18 @@ func TestString(t *testing.T) {
 	t.Parallel()
 	t.Run("bad string", func(t *testing.T) {
 		t.Parallel()
-		_, ok := FromString("not valid")
-		assert.False(t, ok)
+		h := FromString("oops")
+		assert.Equal(t, H3Index(0), h)
 	})
-	t.Run("good string", func(t *testing.T) {
+	t.Run("good string round trip", func(t *testing.T) {
 		t.Parallel()
-		_, ok := FromString(ToString(validH3Index))
-		assert.True(t, ok)
+		h := FromString(ToString(validH3Index))
+		assert.Equal(t, validH3Index, h)
+	})
+	t.Run("no 0x prefix", func(t *testing.T) {
+		t.Parallel()
+		h3addr := ToString(validH3Index)
+		assert.Equal(t, "850dab63fffffff", h3addr)
 	})
 }
 

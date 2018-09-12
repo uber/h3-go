@@ -29,7 +29,7 @@ import "C"
 import (
 	"errors"
 	"math"
-	"unsafe"
+	"strconv"
 )
 
 const (
@@ -109,19 +109,17 @@ func BaseCell(h H3Index) int {
 }
 
 // FromString returns an H3Index parsed from a string.
-func FromString(hStr string) (H3Index, bool) {
-	cstr := C.CString(hStr)
-	defer C.free(unsafe.Pointer(cstr))
-	h := C.stringToH3(cstr)
-	return h, IsValid(h)
+func FromString(hStr string) H3Index {
+	h, err := strconv.ParseInt(hStr, 16, 64)
+	if err != nil {
+		return 0
+	}
+	return H3Index(h)
 }
 
 // ToString returns a string representation of an H3Index.
 func ToString(h H3Index) string {
-	// see `h3ToString` in h3Index.c for info on the magic number 17.
-	var out [17]C.char
-	C.h3ToString(h, &out[0], 17)
-	return C.GoString(&out[0])
+	return strconv.FormatInt(int64(h), 16)
 }
 
 // IsValid returns true if `h` is valid.

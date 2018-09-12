@@ -1,8 +1,6 @@
 package h3
 
-import (
-	"testing"
-)
+import "testing"
 
 // buckets for preventing compiler optimizing out calls
 var (
@@ -24,7 +22,7 @@ func BenchmarkToString(b *testing.B) {
 
 func BenchmarkFromString(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		h3idx, _ = FromString("850dab63fffffff")
+		h3idx = FromString("850dab63fffffff")
 	}
 }
 
