@@ -1,6 +1,7 @@
 # Contributing
 
 Pull requests and Github issues are welcome!
+Ask **questions** by posting to the [H3 tag on StackOverflow](https://stackoverflow.com/questions/tagged/h3)
 
 ## Pull requests
 
