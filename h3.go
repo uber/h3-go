@@ -24,6 +24,7 @@ package h3
 #cgo CFLAGS: -I ${SRCDIR}/include
 #include <stdlib.h>
 #include <h3api.h>
+#include <h3Index.h>
 */
 import "C"
 import (
@@ -36,6 +37,9 @@ const (
 	// MaxCellBndryVerts is the maximum number of vertices that can be used
 	// to represent the shape of a cell.
 	MaxCellBndryVerts = C.MAX_CELL_BNDRY_VERTS
+
+	// InvalidH3Index is a sentinel value for an invalid H3 index.
+	InvalidH3Index = C.H3_INVALID_INDEX
 )
 
 var (
@@ -361,12 +365,20 @@ func h3SliceFromC(chs []C.H3Index) []H3Index {
 }
 
 func h3SliceFromCFitted(chs []C.H3Index) []H3Index {
-	// find index of first zero-value
 	var outsz int
 	for ; outsz < len(chs); outsz++ {
-		if chs[outsz] == 0 {
+		// find index of first zero-value but ignore if the first elem is 0
+		if chs[outsz] == InvalidH3Index && outsz != 0 {
 			break
 		}
+	}
+	// if first elem is invalid, but next elem is valid, found a pentagon.
+	// bit of an implementation leak but much faster than calling `IsPentagon`
+	// for a rarity.
+	// see https://github.com/uber/h3/blob/master/src/h3lib/lib/h3UniEdge.c#L213
+	if outsz > 0 && chs[0] == InvalidH3Index {
+		// found a pentagon
+		return h3SliceFromC(chs[1:outsz])
 	}
 
 	return h3SliceFromC(chs[:outsz])

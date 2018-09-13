@@ -332,9 +332,8 @@ func TestUnidirectionalEdge(t *testing.T) {
 	})
 	t.Run("get edges from pentagon", func(t *testing.T) {
 		t.Parallel()
-		// edges := GetH3UnidirectionalEdgesFromHexagon(pentagonH3Index)
-		// TODO: pentagons return 0 edges instead of 5
-		// require.Len(t, edges, 5, "pentagon has 5 edges")
+		edges := ToUnidirectionalEdges(pentagonH3Index)
+		require.Len(t, edges, 5, "pentagon has 5 edges")
 	})
 	t.Run("get boundary from edge", func(t *testing.T) {
 		t.Parallel()
