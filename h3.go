@@ -57,7 +57,7 @@ var (
 type H3Index = C.H3Index
 
 // GeoBoundary is a slice of `GeoCoord`.  Note, `len(GeoBoundary)` will never
-// be exceed `MaxCellBndryVerts`.
+// exceed `MaxCellBndryVerts`.
 type GeoBoundary []GeoCoord
 
 // GeoCoord is a struct for geographic coordinates.
@@ -114,7 +114,7 @@ func BaseCell(h H3Index) int {
 
 // FromString returns an H3Index parsed from a string.
 func FromString(hStr string) H3Index {
-	h, err := strconv.ParseInt(hStr, 16, 64)
+	h, err := strconv.ParseUint(hStr, 16, 64)
 	if err != nil {
 		return 0
 	}
@@ -123,7 +123,7 @@ func FromString(hStr string) H3Index {
 
 // ToString returns a string representation of an H3Index.
 func ToString(h H3Index) string {
-	return strconv.FormatInt(int64(h), 16)
+	return strconv.FormatUint(uint64(h), 16)
 }
 
 // IsValid returns true if `h` is valid.
@@ -232,7 +232,7 @@ func HexRing(origin H3Index, k int) ([]H3Index, error) {
 }
 
 // AreNeighbors returns true if `h1` and `h2` are neighbors.  Two
-// `H3` are neighbors if they share an edge.
+// indexes are neighbors if they share an edge.
 func AreNeighbors(h1, h2 H3Index) bool {
 	return C.h3IndexesAreNeighbors(h1, h2) == 1
 }
