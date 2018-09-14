@@ -268,7 +268,7 @@ func Compact(in []H3Index) []H3Index {
 	// input
 	cout := make([]C.H3Index, csz)
 	C.compact(&cin[0], &cout[0], csz)
-	return h3SliceFromCFitted(cout)
+	return h3SliceFromC(cout)
 }
 
 // Uncompact splits every `H3Index` in `in` if its resolution is greater than
@@ -281,7 +281,7 @@ func Uncompact(in []H3Index, res int) []H3Index {
 		&cin[0], C.int(len(in)),
 		&cout[0], maxUncompactSz,
 		C.int(res))
-	return h3SliceFromCFitted(cout)
+	return h3SliceFromC(cout)
 }
 
 // --- REGIONS ---
@@ -327,10 +327,10 @@ func FromUnidirectionalEdge(
 // ToUnidirectionalEdges returns the six (or five if pentagon) unidirectional
 // edges from `h` to each of `h`'s neighbors.
 func ToUnidirectionalEdges(h H3Index) []H3Index {
-	// allocating max size, `h3SliceFromCFitted` will adjust cap
+	// allocating max size, `h3SliceFromC` will adjust cap
 	cout := make([]C.H3Index, 6)
 	C.getH3UnidirectionalEdgesFromHexagon(h, &cout[0])
-	return h3SliceFromCFitted(cout)
+	return h3SliceFromC(cout)
 }
 
 // UnidirectionalEdgeBoundary returns the geocoordinates of a unidirectional
@@ -357,31 +357,16 @@ func geoBndryFromC(cb *C.GeoBoundary) GeoBoundary {
 }
 
 func h3SliceFromC(chs []C.H3Index) []H3Index {
-	out := make([]H3Index, len(chs))
-	for i, ch := range chs {
-		out[i] = H3Index(ch)
+	out := make([]H3Index, 0, len(chs))
+	for _, ch := range chs {
+		// C API returns a sparse array of indexes in the event pentagons and
+		// deleted sequences are encountered.
+		if ch == InvalidH3Index {
+			continue
+		}
+		out = append(out, H3Index(ch))
 	}
 	return out
-}
-
-func h3SliceFromCFitted(chs []C.H3Index) []H3Index {
-	var outsz int
-	for ; outsz < len(chs); outsz++ {
-		// find index of first zero-value but ignore if the first elem is 0
-		if chs[outsz] == InvalidH3Index && outsz != 0 {
-			break
-		}
-	}
-	// if first elem is invalid, but next elem is valid, found a pentagon.
-	// bit of an implementation leak but much faster than calling `IsPentagon`
-	// for a rarity.
-	// see https://github.com/uber/h3/blob/master/src/h3lib/lib/h3UniEdge.c#L213
-	if outsz > 0 && chs[0] == InvalidH3Index {
-		// found a pentagon
-		return h3SliceFromC(chs[1:outsz])
-	}
-
-	return h3SliceFromC(chs[:outsz])
 }
 
 func h3SliceToC(hs []H3Index) []C.H3Index {
