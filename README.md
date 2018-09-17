@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/uber/h3-go.svg?token=uWDSvxxUxztEK47563G5&branch=master)](https://travis-ci.com/uber/h3-go)
+
 # H3-Go
 
 This library provides Golang bindings for the [H3 Core
