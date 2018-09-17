@@ -22,6 +22,7 @@ package h3
 #cgo CFLAGS: -std=c99
 #cgo CFLAGS: -DH3_HAVE_VLA=1
 #cgo CFLAGS: -I ${SRCDIR}/include
+#cgo LDFLAGS: -lm
 #include <stdlib.h>
 #include <h3api.h>
 #include <h3Index.h>
