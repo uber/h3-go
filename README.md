@@ -1,3 +1,7 @@
+[![Build Status](https://travis-ci.com/uber/h3-go.svg?branch=master)](https://travis-ci.com/uber/h3-go)
+[![Coverage Status](https://coveralls.io/repos/github/uber/h3-go/badge.svg)](https://coveralls.io/github/uber/h3-go)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 # H3-Go
 
 This library provides Golang bindings for the [H3 Core
