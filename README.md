@@ -75,6 +75,17 @@ is no need to introduce a build process or a system dependency on an H3 binary.
 Effectively, this decision makes `h3` as easy to use in a Go project as adding
 it as a dependency with your favorite dependency manager.
 
+## Memory management
+
+Current CGO implementation doesn't allow to insert nested GoType C-pointers into the 
+C functions. Some regions algorithms allocates the memory but the user is responsible to free the memory by using the Destroy methods.
+
+The functions and structs that requires memory management:
+
+* Polyfill - The `*GeoPolygon` used as an argument
+* MaxPolyfillSize - The `*GeoPolygon` used as an argument
+* SetToLinkedGeoPolygon - The resultant `*LinkedGeoPolygon`
+
 # Contributing
 
 Pull requests and Github issues are welcome.  Please read our [contributing
