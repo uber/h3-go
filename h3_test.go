@@ -17,6 +17,7 @@ package h3
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"testing"
 
@@ -98,6 +99,156 @@ var (
 	}
 
 	validGeoRing = []GeoCoord{{}}
+
+	validPolyfillFences []*Geofence = []*Geofence{
+		{
+			GeoCoords: &GeoCoords{
+				Coords: []*GeoCoord{
+					{
+						19.953317642211914,
+						52.90636558063081,
+					},
+					{
+						19.980440139770508,
+						52.90636558063081,
+					},
+					{
+						19.980440139770508,
+						52.92282408926116,
+					},
+					{
+						19.953317642211914,
+						52.92282408926116,
+					},
+					{
+						19.953317642211914,
+						52.90636558063081,
+					},
+				},
+			},
+		},
+
+		{
+			GeoCoords: &GeoCoords{
+				Coords: []*GeoCoord{
+					{
+						21.08696937561035,
+						52.17041802836794,
+					},
+					{
+						21.08767747879028,
+						52.17268154422601,
+					},
+					{
+						21.083557605743408,
+						52.17477387796151,
+					},
+					{
+						21.075360774993896,
+						52.17202355730302,
+					},
+					{
+						21.07673406600952,
+						52.16502197378441,
+					},
+					{
+						21.086883544921875,
+						52.16439019777352,
+					},
+					{
+						21.091046333312985,
+						52.16823336315624,
+					},
+					{
+						21.08475923538208,
+						52.167785888371064,
+					},
+					{
+						21.08349323272705,
+						52.169075656426074,
+					},
+					{
+						21.08696937561035,
+						52.17041802836794,
+					},
+				},
+			},
+		},
+		{
+			GeoCoords: &GeoCoords{
+				Coords: []*GeoCoord{
+					{
+						21.085832118988037,
+						52.17206797172662,
+					},
+					{
+						21.08570337295532,
+						52.172204504677005,
+					},
+					{
+						21.085188388824463,
+						52.17201862236433,
+					},
+					{
+						21.08533054590225,
+						52.171877153889106,
+					},
+					{
+						21.085832118988037,
+						52.17206797172662,
+					},
+				},
+			},
+		},
+	}
+	validPolyfillHoles = [][]*Geofence{
+		{},
+		{},
+		{&Geofence{
+			GeoCoords: &GeoCoords{
+				Coords: []*GeoCoord{
+					{
+						21.08563631772995,
+						52.17211238610587,
+					},
+					{
+						21.08567386865616,
+						52.17206632674875,
+					},
+					{
+						21.085743606090542,
+						52.17208442150187,
+					},
+					{
+						21.08570337295532,
+						52.17212225596189,
+					},
+					{
+						21.085655093193054,
+						52.17211074112963,
+					},
+					{
+						21.08563631772995,
+						52.17211238610587,
+					},
+				},
+			},
+		}},
+	}
+
+	validH3LinkedGeoPolygonSingle = []H3Index{
+		0x8d526520b612b3f,
+	}
+	validH3LinkedGeoPolygons = []H3Index{
+		0x8928308280bffff,
+		0x89283082873ffff,
+		0x89283082877ffff,
+		0x8928308283bffff,
+		0x89283082807ffff,
+		0x89283082803ffff,
+
+		0x8d526520b612b3f,
+	}
 )
 
 func TestFromGeo(t *testing.T) {
@@ -119,6 +270,167 @@ func TestToGeoBoundary(t *testing.T) {
 	t.Parallel()
 	boundary := ToGeoBoundary(validH3Index)
 	assertGeoCoords(t, validGeofence[:], boundary[:])
+}
+
+func TestSetToLinkedGeoPolygon(t *testing.T) {
+	t.Parallel()
+	t.Run("single", func(t *testing.T) {
+		var h3s []H3Index = []H3Index{validH3LinkedGeoPolygonSingle[0]}
+		linkedGP := SetToLinkedGeo(h3s)
+		if assert.NotNil(t, linkedGP) {
+			defer linkedGP.Destroy()
+
+			assert.Nil(t, linkedGP.Next())
+
+			linkedLoop := linkedGP.First()
+			if assert.NotNil(t, linkedLoop) {
+				h3ind := h3s[0]
+
+				bounds := ToGeoBoundary(h3ind)
+				var linkedCoord *LinkedGeoCoord = linkedLoop.First()
+
+				for linkedCoord != nil {
+					var found bool
+					for _, geo := range bounds {
+						if geoCoordsAlmostEqual(geo, linkedCoord.Vertex) {
+							found = true
+							break
+						}
+					}
+					assert.True(t, found)
+					linkedCoord = linkedCoord.Next()
+				}
+			}
+		}
+	})
+	t.Run("multiple", func(t *testing.T) {
+		linkedGP := SetToLinkedGeo(validH3LinkedGeoPolygons)
+		t.Run("First", func(t *testing.T) {
+			first := linkedGP.First()
+			assert.NotNil(t, first)
+
+			t.Run("GeoLoop", func(t *testing.T) {
+				t.Run("First", func(t *testing.T) {
+					lFirst := first.First()
+					assert.NotNil(t, lFirst)
+				})
+				t.Run("Last", func(t *testing.T) {
+					lLast := first.Last()
+					assert.NotNil(t, lLast)
+				})
+				t.Run("Next", func(t *testing.T) {
+					lNext := first.Next()
+					if assert.NotNil(t, lNext) {
+						for lNext != nil {
+							lNext = lNext.Next()
+						}
+					}
+				})
+			})
+		})
+		t.Run("Last", func(t *testing.T) {
+			last := linkedGP.Last()
+			assert.NotNil(t, last)
+		})
+		t.Run("Next", func(t *testing.T) {
+			next := linkedGP.Next()
+			assert.Nil(t, next)
+		})
+	})
+}
+
+func TestGeofence(t *testing.T) {
+	t.Run("with geocoords", func(t *testing.T) {
+		fence := &Geofence{
+			GeoCoords: &GeoCoords{Coords: []*GeoCoord{{Latitude: 0.214, Longitude: 12.412}}},
+		}
+		cPtr := fence.toCPtr()
+		gcPtr1 := fence.v.verts
+
+		assert.NotNil(t, cPtr)
+		defer fence.destroy()
+		// call one more time should not create pointer again
+		cPtr2 := fence.toCPtr()
+
+		assert.Equal(t, cPtr, cPtr2)
+
+		gcPtr := fence.GeoCoords.toCPtr()
+		assert.Equal(t, gcPtr1, gcPtr)
+
+	})
+
+	t.Run("no geocoords", func(t *testing.T) {
+		fence := &Geofence{}
+
+		cPtr := fence.toCPtr()
+		assert.NotNil(t, cPtr)
+		defer fence.destroy()
+		assert.Nil(t, fence.v.verts)
+	})
+}
+
+func TestGeoCoords(t *testing.T) {
+	gc := &GeoCoords{}
+
+	gcCptr := gc.toCPtr()
+	assert.Nil(t, gcCptr)
+}
+
+func TestLinkedGeoLoop(t *testing.T) {
+	// Create new raw geoloop struct with no pointers
+	gl := &LinkedGeoLoop{}
+	assert.NotNil(t, gl.toCPtr())
+
+	assert.Nil(t, gl.First())
+	assert.Nil(t, gl.Last())
+	assert.Nil(t, gl.Next())
+}
+
+func TestLinkedGeoPolygon(t *testing.T) {
+	gp := &LinkedGeoPolygon{}
+	assert.NotNil(t, gp.toCPtr())
+
+	assert.Nil(t, gp.First())
+	assert.Nil(t, gp.Last())
+	assert.Nil(t, gp.Next())
+
+	t.Run("next", func(t *testing.T) {
+		nextLGP := &LinkedGeoPolygon{}
+		gp.v.next = nextLGP.toCPtr()
+
+		assert.NotNil(t, gp.Next())
+	})
+
+}
+
+func TestPolyfill(t *testing.T) {
+	t.Parallel()
+
+	for i, fence := range validPolyfillFences {
+		var res int
+		switch i {
+		case 0:
+			res = 10
+		case 1:
+			res = 13
+		case 2:
+			res = 15
+		}
+
+		t.Run(fmt.Sprintf("polyfill %d", i), func(t *testing.T) {
+			polygon := &GeoPolygon{Exterior: &(*fence)}
+			if holes := validPolyfillHoles[i]; len(holes) > 0 {
+				polygon.Holes = holes
+			}
+
+			h3Set := Polyfill(polygon, res)
+			defer polygon.Destroy()
+
+			assert.True(t, len(h3Set) <= MaxPolyfillSize(polygon, res))
+
+			t.Logf("Polyfill %d, len: %d", i, len(h3Set))
+		})
+	}
 }
 
 func TestHexRing(t *testing.T) {
@@ -419,4 +731,15 @@ func max(x, y int) int {
 		return x
 	}
 	return y
+}
+
+func floatsAlmostEqual(first, second float64) bool {
+	actualEps := math.Abs(first-second) / math.Abs(first)
+	return actualEps <= eps
+}
+
+func geoCoordsAlmostEqual(first, second GeoCoord) bool {
+	latOk := floatsAlmostEqual(first.Latitude, second.Latitude)
+	lonOk := floatsAlmostEqual(first.Longitude, second.Longitude)
+	return latOk && lonOk
 }

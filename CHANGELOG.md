@@ -8,6 +8,13 @@ fixes via patches with patch version bumps.
 
 ## Unreleased
 
+* Solved nested regions problems with Polyfill
+	* Implemented Polyfill function
+	* Implemented MaxPolyfillSize function
+
+* Implemented Regions Geostructs (GeoPolygon, Geofence, LinkedGeoPolygon, LinkedGeoLoop, LinkedGeoCoords)
+* Implemented SetToLinkedGeoPolygon 
+
 Nothing yet.
 
 ## v3.0.0

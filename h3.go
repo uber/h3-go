@@ -32,6 +32,7 @@ import (
 	"errors"
 	"math"
 	"strconv"
+	"unsafe"
 )
 
 const (
@@ -73,6 +74,268 @@ func (g GeoCoord) toCPtr() *C.GeoCoord {
 	}
 }
 
+// GeoCoords is a wrapper around GeoCoord C-Style array pointer
+type GeoCoords struct {
+	Coords []*GeoCoord
+	v      *C.GeoCoord
+}
+
+func (g *GeoCoords) toCPtr() *C.GeoCoord {
+	if g.v != nil {
+		return g.v
+	}
+
+	if len(g.Coords) > 0 {
+		// malloc the *GeoCoord for the provided coordinates
+		ptr := C.malloc(C.size_t(len(g.Coords)) * C.sizeof_GeoCoord)
+
+		coordSlice := (*[1 << 30]C.GeoCoord)(unsafe.Pointer(ptr))[:len(g.Coords):len(g.Coords)]
+		for i := range coordSlice {
+			coordSlice[i].lat = C.double(deg2rad * g.Coords[i].Latitude)
+			coordSlice[i].lon = C.double(deg2rad * g.Coords[i].Longitude)
+		}
+
+		g.v = (*C.GeoCoord)(ptr)
+	} else {
+		g.v = nil
+	}
+	return g.v
+}
+
+func (g *GeoCoords) destroy() {
+	if g.v != nil {
+		C.free(unsafe.Pointer(g.v))
+		g.v = nil
+	}
+}
+
+// Geofence is a slice of `GeoCoord`. The difference between the Geoboundary is that it's length
+// may be greater than the MaxCellBndryVerts
+type Geofence struct {
+	GeoCoords *GeoCoords
+	v         *C.Geofence
+}
+
+func (g *Geofence) destroy() {
+	// destroy the Geocoords
+	if g.GeoCoords != nil {
+		g.GeoCoords.destroy()
+	}
+
+	if g.v != nil {
+		C.free(unsafe.Pointer(g.v))
+		g.v = nil
+	}
+}
+
+func (g *Geofence) toCPtr() *C.Geofence {
+	if g.v != nil {
+		return g.v
+	}
+
+	ptr := C.malloc(C.sizeof_Geofence)
+
+	g.v = (*C.Geofence)(ptr)
+	if g.GeoCoords != nil {
+		g.v.verts = g.GeoCoords.toCPtr()
+		g.v.numVerts = C.int(len(g.GeoCoords.Coords))
+	} else {
+		g.v.verts = nil
+		g.v.numVerts = C.int(0)
+	}
+
+	return g.v
+}
+
+// GeoPolygon is simplified core of GeoJSON Polygon coordinates definition
+// The user is responsible for freeing the memory with the Destroy method!
+type GeoPolygon struct {
+	Exterior *Geofence
+	Holes    []*Geofence
+	v        *C.GeoPolygon
+}
+
+// Destroy frees allocated memory for the provided GeoPolygon and it's substructs.
+func (g *GeoPolygon) Destroy() {
+	g.destroy()
+}
+
+func (g *GeoPolygon) destroy() {
+	if g.Exterior != nil {
+		g.Exterior.destroy()
+	}
+	// at first destroy all geocoords within holes
+	// the holes itself are allocated as a single array pointer
+	for i := range g.Holes {
+		g.Holes[i].destroy()
+	}
+
+	if g.v != nil {
+		if g.v.holes != nil {
+			// Clear the holes array pointer
+			C.free(unsafe.Pointer(g.v.holes))
+			g.v.holes = nil
+		}
+
+		// Clear the main polygon pointer
+		C.free(unsafe.Pointer(g.v))
+		g.v = nil
+	}
+
+}
+
+// toCPtr returns the *C.GeoPolygon of the proivded geopolygon.
+func (g *GeoPolygon) toCPtr() *C.GeoPolygon {
+	if g.v != nil {
+		return g.v
+	}
+
+	// allocate memory for GeoPolygon
+	polyPtr := C.malloc(C.sizeof_GeoPolygon)
+
+	g.v = (*C.GeoPolygon)(polyPtr)
+
+	// if Exterior is not nil
+	if g.Exterior != nil {
+		if g.Exterior.GeoCoords != nil {
+			// fmt.Printf("Before verts: %v\n", g.v.geofence.verts)
+			g.v.geofence.verts = g.Exterior.GeoCoords.toCPtr()
+			// fmt.Printf("After verts: %v\n", g.v.geofence.verts)
+			g.v.geofence.numVerts = C.int(len(g.Exterior.GeoCoords.Coords))
+			// fmt.Printf("NumHoles: %v\n", g.v.geofence.numVerts)
+		}
+	}
+
+	if len(g.Holes) > 0 {
+		// malloc the *GeoCoord for the provided coordinates
+		ptr := C.malloc(C.size_t(len(g.Holes)) * C.sizeof_Geofence)
+
+		holesArr := (*[1 << 30]C.Geofence)(unsafe.Pointer(ptr))[:len(g.Holes):len(g.Holes)]
+		for i, hole := range g.Holes {
+			holesArr[i].verts = hole.GeoCoords.toCPtr()
+			holesArr[i].numVerts = C.int(len(hole.GeoCoords.Coords))
+		}
+		g.v.holes = (*C.Geofence)(ptr)
+	} else {
+		g.v.holes = nil
+	}
+
+	g.v.numHoles = C.int(len(g.Holes))
+	return g.v
+}
+
+// LinkedGeoCoord is a coordinate node in a linked geo structure, part of a linked list
+type LinkedGeoCoord struct {
+	Vertex GeoCoord
+	v      *C.LinkedGeoCoord
+}
+
+// Next returns the next LinkedGeoCoord in the linked list
+func (l LinkedGeoCoord) Next() *LinkedGeoCoord {
+	next := l.v.next
+	if uintptr(unsafe.Pointer(next)) == 0 {
+		return nil
+	}
+	coord := geoCoordFromC(next.vertex)
+	return &LinkedGeoCoord{Vertex: coord, v: next}
+}
+
+// LinkedGeoLoop is a loop node in a linked geo structure, part of a linked list
+type LinkedGeoLoop struct {
+	v *C.LinkedGeoLoop
+}
+
+// First returns the first *LinkedGeoCoord in the linked list
+func (l LinkedGeoLoop) First() *LinkedGeoCoord {
+	cFirst := l.v.first
+	if uintptr(unsafe.Pointer(cFirst)) == 0 {
+		return nil
+	}
+	coord := geoCoordFromC(cFirst.vertex)
+	first := &LinkedGeoCoord{
+		Vertex: coord,
+		v:      cFirst,
+	}
+	return first
+
+}
+
+// Last returns last LinkedGeoCoord in the linked list.
+func (l LinkedGeoLoop) Last() *LinkedGeoCoord {
+	cLast := l.v.last
+	if uintptr(unsafe.Pointer(cLast)) == 0 {
+		return nil
+	}
+
+	coord := geoCoordFromC(cLast.vertex)
+	last := &LinkedGeoCoord{
+		Vertex: coord,
+		v:      cLast,
+	}
+	return last
+}
+
+// Next returns next linked geoloop in the linked list
+func (l LinkedGeoLoop) Next() *LinkedGeoLoop {
+	cNext := l.v.next
+	if uintptr(unsafe.Pointer(cNext)) == 0 {
+		return nil
+	}
+	return &LinkedGeoLoop{cNext}
+}
+
+// toCPtr creates C pointer. Used only for testing purpose
+func (l *LinkedGeoLoop) toCPtr() *C.LinkedGeoLoop {
+	l.v = &C.LinkedGeoLoop{}
+
+	return l.v
+}
+
+// LinkedGeoPolygon - A polygon node in a linked geo structure, part of a linked list.
+type LinkedGeoPolygon struct {
+	v *C.LinkedGeoPolygon
+}
+
+// First returns the first LinkedGeoPolygon in the linked list
+func (l LinkedGeoPolygon) First() *LinkedGeoLoop {
+	first := l.v.first
+	if uintptr(unsafe.Pointer(first)) == 0 {
+		return nil
+	}
+	return &LinkedGeoLoop{v: first}
+}
+
+// Last returns the last LinkedGeoPolygon in the linked list
+func (l LinkedGeoPolygon) Last() *LinkedGeoLoop {
+	last := l.v.last
+	if uintptr(unsafe.Pointer(last)) == 0 {
+		return nil
+	}
+	return &LinkedGeoLoop{v: last}
+}
+
+// Next returns next LinkedGeoPolygon in the linked list
+func (l LinkedGeoPolygon) Next() *LinkedGeoPolygon {
+	next := l.v.next
+	if uintptr(unsafe.Pointer(next)) == 0 {
+		return nil
+	}
+	return &LinkedGeoPolygon{v: next}
+}
+
+// Destroy is the function that frees the memory allocated in the CGO
+func (l *LinkedGeoPolygon) Destroy() {
+	if uintptr(unsafe.Pointer(l.v)) != 0 {
+		C.destroyLinkedPolygon(l.v)
+	}
+}
+
+// toCPtr creates C pointer for C.LinkedGeoPolygon. Used only for testing cases.
+func (l *LinkedGeoPolygon) toCPtr() *C.LinkedGeoPolygon {
+	l.v = &C.LinkedGeoPolygon{}
+	return l.v
+}
+
 // --- INDEXING ---
 //
 // This section defines bindings for H3 indexing functions.
@@ -96,6 +359,16 @@ func ToGeoBoundary(h H3Index) GeoBoundary {
 	gb := new(C.GeoBoundary)
 	C.h3ToGeoBoundary(h, gb)
 	return geoBndryFromC(gb)
+}
+
+// SetToLinkedGeo returns a LinkedGeoPolygon based on the given the provided set of
+// h3 hexagons.
+// Important is tha the caller is responsible to free the memory by using
+// the Destroy method on the given LinkedGeoPolygon!
+func SetToLinkedGeo(h3Set []H3Index) LinkedGeoPolygon {
+	linkedGeo := &C.LinkedGeoPolygon{}
+	C.h3SetToLinkedGeo(&h3Set[0], C.int(len(h3Set)), linkedGeo)
+	return LinkedGeoPolygon{v: linkedGeo}
 }
 
 // --- INSPECTION ---
@@ -287,7 +560,33 @@ func Uncompact(in []H3Index, res int) []H3Index {
 
 // --- REGIONS ---
 
-// TODO(gilley) solve nested c struct problem for Polyfill funcs
+// MaxPolyfillSize returns the number of hexagons that will fit within given geoPolygon
+// on provided resolution
+func MaxPolyfillSize(geoPolygon *GeoPolygon, res int) int {
+	cPolygon := geoPolygon.toCPtr()
+	size := C.maxPolyfillSize(cPolygon, C.int(res))
+	return int(size)
+}
+
+// Polyfill takes a given GeoJSON-like data structure and fills it with hexagons
+// that are contained by the GeoJSON-like data structure
+func Polyfill(geoPolygon *GeoPolygon, res int) []H3Index {
+	cPolygon := geoPolygon.toCPtr()
+	var size C.int = C.maxPolyfillSize(cPolygon, C.int(res))
+
+	indexes := make([]H3Index, int(size))
+
+	C.polyfill(cPolygon, C.int(res), &indexes[0])
+
+	var clearedIndexes []H3Index
+	for _, index := range indexes {
+		if index != 0 {
+			clearedIndexes = append(clearedIndexes, index)
+		}
+	}
+
+	return clearedIndexes
+}
 
 // UnidirectionalEdge returns a unidirectional `H3Index` from `origin` to
 // `destination`.
