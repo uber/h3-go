@@ -15,3 +15,11 @@ Nothing yet.
 ### Added
 
 * everything! first commit.
+
+### fix range of lat and lng
+* fix bug :lat and lng are not in range
+
+### support fillpoly method
+* change api: change orignal api to adpter cgo
+* change update-h3.sh: ignore the gowrapper file
+* add go test: add go test of polyfill method
