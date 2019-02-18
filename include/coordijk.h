@@ -31,10 +31,13 @@
 #define COORDIJK_H
 
 #include "geoCoord.h"
+#include "h3api.h"
 #include "vec2d.h"
 
 /** @struct CoordIJK
  * @brief IJK hexagon coordinates
+ *
+ * Each axis is spaced 120 degrees apart.
  */
 typedef struct {
     int i;  ///< i component
@@ -101,5 +104,10 @@ void _ijkRotate60ccw(CoordIJK* ijk);
 void _ijkRotate60cw(CoordIJK* ijk);
 Direction _rotate60ccw(Direction digit);
 Direction _rotate60cw(Direction digit);
+int ijkDistance(const CoordIJK* a, const CoordIJK* b);
+void ijkToIj(const CoordIJK* ijk, CoordIJ* ij);
+void ijToIjk(const CoordIJ* ij, CoordIJK* ijk);
+void ijkToCube(CoordIJK* ijk);
+void cubeToIjk(CoordIJK* ijk);
 
 #endif

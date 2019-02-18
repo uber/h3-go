@@ -29,6 +29,7 @@
 #include "h3Index.h"
 #include "h3api.h"
 #include "linkedGeo.h"
+#include "polygon.h"
 #include "stackAlloc.h"
 #include "vertexGraph.h"
 
@@ -149,17 +150,11 @@ static const Direction NEW_ADJUSTMENT_III[7][7] = {
 
 /**
  * Maximum number of indices that result from the kRing algorithm with the given
- * k.
+ * k. Formula source and proof: https://oeis.org/A003215
  *
  * @param k k value, k >= 0.
  */
-int H3_EXPORT(maxKringSize)(int k) {
-    int result = 1;
-    for (int i = 0; i < k; i++) {
-        result = result + 6 * (i + 1);
-    }
-    return result;
-}
+int H3_EXPORT(maxKringSize)(int k) { return 3 * k * (k + 1) + 1; }
 
 /**
  * k-rings produces indices within k distance of the origin index.
@@ -176,8 +171,9 @@ int H3_EXPORT(maxKringSize)(int k) {
  */
 void H3_EXPORT(kRing)(H3Index origin, int k, H3Index* out) {
     int maxIdx = H3_EXPORT(maxKringSize)(k);
-    STACK_ARRAY_CALLOC(int, distances, maxIdx);
+    int* distances = malloc(maxIdx * sizeof(int));
     H3_EXPORT(kRingDistances)(origin, k, out, distances);
+    free(distances);
 }
 
 /**
@@ -196,16 +192,14 @@ void H3_EXPORT(kRing)(H3Index origin, int k, H3Index* out) {
  */
 void H3_EXPORT(kRingDistances)(H3Index origin, int k, H3Index* out,
                                int* distances) {
-    int maxIdx = H3_EXPORT(maxKringSize)(k);
+    const int maxIdx = H3_EXPORT(maxKringSize)(k);
     // Optimistically try the faster hexRange algorithm first
-    int failed = H3_EXPORT(hexRangeDistances)(origin, k, out, distances);
+    const bool failed = H3_EXPORT(hexRangeDistances)(origin, k, out, distances);
     if (failed) {
         // Fast algo failed, fall back to slower, correct algo
         // and also wipe out array because contents untrustworthy
-        for (int i = 0; i < maxIdx; i++) {
-            out[i] = H3_INVALID_INDEX;
-            distances[i] = 0;
-        }
+        memset(out, 0, maxIdx * sizeof(out[0]));
+        memset(distances, 0, maxIdx * sizeof(distances[0]));
         _kRingInternal(origin, k, out, distances, maxIdx, 0);
     }
 }
@@ -231,10 +225,7 @@ void _kRingInternal(H3Index origin, int k, H3Index* out, int* distances,
     // Put origin in the output array. out is used as a hash set.
     int off = origin % maxIdx;
     while (out[off] != 0 && out[off] != origin) {
-        off++;
-        if (off >= maxIdx) {
-            off = 0;
-        }
+        off = (off + 1) % maxIdx;
     }
 
     // We either got a free slot in the hash set or hit a duplicate
@@ -378,7 +369,7 @@ H3Index h3NeighborRotations(H3Index origin, Direction dir, int* rotations) {
         // Account for differing orientation of the base cells (this edge
         // might not follow properties of some other edges.)
         if (oldBaseCell != newBaseCell) {
-            if (newBaseCell == 4 || newBaseCell == 117) {
+            if (_isBaseCellPolarPentagon(newBaseCell)) {
                 // 'polar' base cells behave differently because they have all
                 // i neighbors.
                 if (oldBaseCell != 118 && oldBaseCell != 8 &&
@@ -646,120 +637,6 @@ int H3_EXPORT(maxPolyfillSize)(const GeoPolygon* geoPolygon, int res) {
 }
 
 /**
- * Normalize a longitude value, converting it into a comparable value in
- * transmeridian cases.
- * @param  lng Longitude to normalize
- * @param  isTransmeridian Whether this longitude is part of a transmeridian
- *                         polygon
- * @return Normalized longitude
- */
-double _normalizeLng(double lng, bool isTransmeridian) {
-    return isTransmeridian && lng < 0 ? lng + M_2PI : lng;
-}
-
-/**
- * _pointInPolyContainsLoop is the core loop of the pointInPolyContains
- * algorithm, working on a Geofence struct
- *
- * @param geofence The geofence to check
- * @param bbox The bbox for the loop being tested
- * @param coord The coordinate to check if contained by the geofence
- * @return true or false
- */
-bool _pointInPolyContainsLoop(const Geofence* geofence, const BBox* bbox,
-                              const GeoCoord* coord) {
-    // fail fast if we're outside the bounding box
-    if (!bboxContains(bbox, coord)) {
-        return false;
-    }
-    bool isTransmeridian = bboxIsTransmeridian(bbox);
-    bool contains = false;
-
-    double lat = coord->lat;
-    double lng = _normalizeLng(coord->lon, isTransmeridian);
-
-    for (int i = 0; i < geofence->numVerts; i++) {
-        GeoCoord a = geofence->verts[i];
-        GeoCoord b;
-        if (i + 1 == geofence->numVerts) {
-            b = geofence->verts[0];
-        } else {
-            b = geofence->verts[i + 1];
-        }
-
-        // Ray casting algo requires the second point to always be higher
-        // than the first, so swap if needed
-        if (a.lat > b.lat) {
-            a = b;
-            b = geofence->verts[i];
-        }
-
-        // If we're totally above or below the latitude ranges, the test
-        // ray cannot intersect the line segment, so let's move on
-        if (lat < a.lat || lat > b.lat) {
-            continue;
-        }
-
-        double aLng = _normalizeLng(a.lon, isTransmeridian);
-        double bLng = _normalizeLng(b.lon, isTransmeridian);
-
-        // Rays are cast in the longitudinal direction, in case a point
-        // exactly matches, to decide tiebreakers, bias westerly
-        if (aLng == lng || bLng == lng) {
-            lng -= DBL_EPSILON;
-        }
-
-        // For the latitude of the point, compute the longitude of the
-        // point that lies on the line segment defined by a and b
-        // This is done by computing the percent above a the lat is,
-        // and traversing the same percent in the longitudinal direction
-        // of a to b
-        double ratio = (lat - a.lat) / (b.lat - a.lat);
-        double testLng =
-            _normalizeLng(aLng + (bLng - aLng) * ratio, isTransmeridian);
-
-        // Intersection of the ray
-        if (testLng > lng) {
-            contains = !contains;
-        };
-    }
-
-    return contains;
-}
-
-/**
- * pointInPolyContains takes a given GeoJSON-like data structure
- * and a point, and checks if said point is contained in the GeoJSON-like
- * struct.
- *
- * @param geoPolygon The geofence and holes defining the relevant area
- * @param bboxes The bboxes for the main geofence and each of its holes
- * @param coord The coordinate to check if contained by the geoJson-like
- * struct
- * @return true or false
- */
-bool _pointInPolyContains(const GeoPolygon* geoPolygon, const BBox* bboxes,
-                          const GeoCoord* coord) {
-    // Start with contains state of primary geofence
-    bool contains =
-        _pointInPolyContainsLoop(&(geoPolygon->geofence), &bboxes[0], coord);
-
-    // If the point is contained in the primary geofence, but there are holes in
-    // the geofence iterate through all holes and return false if the point is
-    // contained in any hole
-    if (contains && geoPolygon->numHoles > 0) {
-        for (int i = 0; i < geoPolygon->numHoles; i++) {
-            if (_pointInPolyContainsLoop(&(geoPolygon->holes[i]),
-                                         &bboxes[i + 1], coord)) {
-                return false;
-            }
-        }
-    }
-
-    return contains;
-}
-
-/**
  * polyfill takes a given GeoJSON-like data structure and preallocated,
  * zeroed memory, and fills it with the hexagons that are contained by
  * the GeoJSON-like data structure.
@@ -791,7 +668,8 @@ void H3_EXPORT(polyfill)(const GeoPolygon* geoPolygon, int res, H3Index* out) {
     // This first part is identical to the maxPolyfillSize above.
 
     // Get the bounding boxes for the polygon and any holes
-    STACK_ARRAY_CALLOC(BBox, bboxes, geoPolygon->numHoles + 1);
+    BBox* bboxes = malloc((geoPolygon->numHoles + 1) * sizeof(BBox));
+    assert(bboxes != NULL);
     bboxesFromGeoPolygon(geoPolygon, bboxes);
     int minK = bboxHexRadius(&bboxes[0], res);
     int numHexagons = H3_EXPORT(maxKringSize)(minK);
@@ -818,10 +696,11 @@ void H3_EXPORT(polyfill)(const GeoPolygon* geoPolygon, int res, H3Index* out) {
         hexCenter.lat = constrainLat(hexCenter.lat);
         hexCenter.lon = constrainLng(hexCenter.lon);
         // And remove from list if not
-        if (!_pointInPolyContains(geoPolygon, bboxes, &hexCenter)) {
+        if (!pointInsidePolygon(geoPolygon, bboxes, &hexCenter)) {
             out[i] = H3_INVALID_INDEX;
         }
     }
+    free(bboxes);
 }
 
 /**
@@ -880,13 +759,13 @@ void h3SetToVertexGraph(const H3Index* h3Set, const int numHexes,
  * @param out   Output polygon
  */
 void _vertexGraphToLinkedGeo(VertexGraph* graph, LinkedGeoPolygon* out) {
-    initLinkedPolygon(out);
+    *out = (LinkedGeoPolygon){0};
     LinkedGeoLoop* loop;
     VertexNode* edge;
     GeoCoord nextVtx;
     // Find the next unused entry point
     while ((edge = firstVertexNode(graph)) != NULL) {
-        loop = addLinkedLoop(out);
+        loop = addNewLinkedLoop(out);
         // Walk the graph to get the outline
         do {
             addLinkedCoord(loop, &edge->from);
@@ -900,21 +779,17 @@ void _vertexGraphToLinkedGeo(VertexGraph* graph, LinkedGeoPolygon* out) {
 
 /**
  * Create a LinkedGeoPolygon describing the outline(s) of a set of  hexagons.
+ * Polygon outlines will follow GeoJSON MultiPolygon order: Each polygon will
+ * have one outer loop, which is first in the list, followed by any holes.
+ *
  * It is the responsibility of the caller to call destroyLinkedPolygon on the
  * populated linked geo structure, or the memory for that structure will
  * not be freed.
  *
- * It is expected that all hexagons in the set will have the same resolution.
- * If you pass in hexagons at different resolutions, the algorithm should work
- * fine, but we won't be able to merge the outlines of different-resolution
- * hexagons, so you might get overlap. I'd suggest not doing this.
- *
- * TODO: At present, if the set of hexagons is not contiguous, this function
- * will return a single polygon with multiple outer loops. The correct GeoJSON
- * output should only have one outer loop per polygon. It appears that most
- * GeoJSON consumers are fine with the first input format, but it's less correct
- * than the second format, and we should update the function to produce
- * multiple polygons in that case.
+ * It is expected that all hexagons in the set have the same resolution and
+ * that the set contains no duplicates. Behavior is undefined if duplicates
+ * or multiple resolutions are present, and the algorithm may produce
+ * unexpected or invalid output.
  *
  * @param h3Set    Set of hexagons
  * @param numHexes Number of hexagons in set
@@ -925,5 +800,8 @@ void H3_EXPORT(h3SetToLinkedGeo)(const H3Index* h3Set, const int numHexes,
     VertexGraph graph;
     h3SetToVertexGraph(h3Set, numHexes, &graph);
     _vertexGraphToLinkedGeo(&graph, out);
+    // TODO: The return value, possibly indicating an error, is discarded here -
+    // we should use this when we update the API to return a value
+    normalizeMultiPolygon(out);
     destroyVertexGraph(&graph);
 }

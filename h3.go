@@ -396,26 +396,26 @@ func UnidirectionalEdgeBoundary(edge H3Index) GeoBoundary {
 	return geoBndryFromC(gb)
 }
 
-//fix range of lat
-func mercatorLat(lat float64) float64 {
-	if lat > 90 {
-		return lat - 180
-	}
-	return lat
-}
+// //fix range of lat
+// func mercatorLat(lat float64) float64 {
+// 	if lat > 90 {
+// 		return lat - 180
+// 	}
+// 	return lat
+// }
 
-//fix range of lng
-func mercatorLng(lng float64) float64 {
-	if lng > 180 {
-		return lng - 360
-	}
-	return lng
-}
+// //fix range of lng
+// func mercatorLng(lng float64) float64 {
+// 	if lng > 180 {
+// 		return lng - 360
+// 	}
+// 	return lng
+// }
 
 func geoCoordFromC(cg C.GeoCoord) GeoCoord {
 	g := GeoCoord{}
-	g.Latitude = mercatorLat(rad2deg * float64(cg.lat))
-	g.Longitude = mercatorLng(rad2deg * float64(cg.lon))
+	g.Latitude = rad2deg * float64(cg.lat)
+	g.Longitude = rad2deg * float64(cg.lon)
 	return g
 }
 
