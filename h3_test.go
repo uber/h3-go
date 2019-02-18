@@ -29,6 +29,85 @@ const validH3Index = H3Index(0x850dab63fffffff)
 const pentagonH3Index = H3Index(0x821c07fffffffff)
 
 var (
+	geoHasHole = &GeoPolygon{
+		Geofence: Geofence{
+			GeoCoord{
+				Latitude:  0.659966917655 * rad2deg,
+				Longitude: -2.1364398519396 * rad2deg,
+			},
+			GeoCoord{
+				Latitude:  0.6595011102219 * rad2deg,
+				Longitude: -2.1359434279405 * rad2deg,
+			},
+			GeoCoord{
+				Latitude:  0.6583348114025 * rad2deg,
+				Longitude: -2.1354884206045 * rad2deg,
+			},
+			GeoCoord{
+				Latitude:  0.6581220034068 * rad2deg,
+				Longitude: -2.1382437718946 * rad2deg,
+			},
+			GeoCoord{
+				Latitude:  0.6594479998527 * rad2deg,
+				Longitude: -2.1384597563896 * rad2deg,
+			},
+			GeoCoord{
+				Latitude:  0.6599990002976 * rad2deg,
+				Longitude: -2.1376771158464 * rad2deg,
+			},
+		},
+		Holes: []Geofence{
+			Geofence{
+				GeoCoord{
+					Latitude:  0.6595072188743 * rad2deg,
+					Longitude: -2.1371053983433 * rad2deg,
+				},
+				GeoCoord{
+					Latitude:  0.6591482046471 * rad2deg,
+					Longitude: -2.1373141048153 * rad2deg,
+				},
+				GeoCoord{
+					Latitude:  0.6592295020837 * rad2deg,
+					Longitude: -2.1365222838402 * rad2deg,
+				},
+			},
+		},
+	}
+	geoNoHole = &GeoPolygon{
+		Geofence: Geofence{
+			GeoCoord{
+				Latitude:  0.659966917655 * rad2deg,
+				Longitude: -2.1364398519396 * rad2deg,
+			},
+			GeoCoord{
+				Latitude:  0.6595011102219 * rad2deg,
+				Longitude: -2.1359434279405 * rad2deg,
+			},
+			GeoCoord{
+				Latitude:  0.6583348114025 * rad2deg,
+				Longitude: -2.1354884206045 * rad2deg,
+			},
+			GeoCoord{
+				Latitude:  0.6581220034068 * rad2deg,
+				Longitude: -2.1382437718946 * rad2deg,
+			},
+			GeoCoord{
+				Latitude:  0.6594479998527 * rad2deg,
+				Longitude: -2.1384597563896 * rad2deg,
+			},
+			GeoCoord{
+				Latitude:  0.6599990002976 * rad2deg,
+				Longitude: -2.1376771158464 * rad2deg,
+			},
+		},
+	}
+	validH3NoHoleFill = []H3Index{
+		604189371209351167,
+		604189371075133439,
+		604189372417310719,
+		604189376309624831,
+		604189376175407103,
+	}
 	validH3Rings1 = [][]H3Index{
 		{
 			validH3Index,
@@ -358,6 +437,21 @@ func TestString(t *testing.T) {
 		t.Parallel()
 		h3addr := ToString(validH3Index)
 		assert.Equal(t, "850dab63fffffff", h3addr)
+	})
+}
+
+func TestFill(t *testing.T) {
+	t.Parallel()
+	t.Run("no hole", func(t *testing.T) {
+		t.Parallel()
+		h := Polyfill(geoNoHole, 6)
+		fmt.Println(h)
+		assert.Equal(t, validH3NoHoleFill, h)
+	})
+	t.Run("has hole", func(t *testing.T) {
+		t.Parallel()
+		h := Polyfill(geoHasHole, 6)
+		assert.Equal(t, validH3NoHoleFill, h)
 	})
 }
 

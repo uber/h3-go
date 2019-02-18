@@ -26,12 +26,14 @@ package h3
 #include <stdlib.h>
 #include <h3api.h>
 #include <h3Index.h>
+#include <goWrapper.h>
 */
 import "C"
 import (
 	"errors"
 	"math"
 	"strconv"
+	"unsafe"
 )
 
 const (
@@ -66,11 +68,29 @@ type GeoCoord struct {
 	Latitude, Longitude float64
 }
 
+type Geofence []GeoCoord
+
+type GeoPolygon struct {
+	Geofence Geofence
+	Holes    []Geofence
+}
+
 func (g GeoCoord) toCPtr() *C.GeoCoord {
 	return &C.GeoCoord{
 		lat: C.double(deg2rad * g.Latitude),
 		lon: C.double(deg2rad * g.Longitude),
 	}
+}
+
+func (fence Geofence) toCFence() *C.GeoCoord {
+	n := len(fence)
+	cArray := make([]C.GeoCoord, n)
+	for i, v := range fence {
+		cArray[i].lat = C.double(deg2rad * v.Latitude)
+		cArray[i].lon = C.double(deg2rad * v.Longitude)
+	}
+	//该数组的首地址
+	return &cArray[0]
 }
 
 // --- INDEXING ---
@@ -286,8 +306,42 @@ func Uncompact(in []H3Index, res int) []H3Index {
 }
 
 // --- REGIONS ---
+// change h3 orginal api to adpter the cgo
+func maxPolyfillSize(geoPolygon *GeoPolygon, res int) int {
+	numVerts := C.int(len(geoPolygon.Geofence))
+	verts := geoPolygon.Geofence.toCFence()
+	numHoles := C.int(len(geoPolygon.Holes))
+	hole_numVerts := C.int(len(geoPolygon.Holes))
+	hole_verts := new(C.GeoCoord)
+	return int(C.maxPolyfillSizeGo(numVerts, verts, numHoles, hole_numVerts, hole_verts, C.int(res)))
+}
 
-// TODO(gilley) solve nested c struct problem for Polyfill funcs
+func Polyfill(geoPolygon *GeoPolygon, res int) []H3Index {
+	numVerts := C.int(len(geoPolygon.Geofence))
+	verts := geoPolygon.Geofence.toCFence()
+	numHoles := C.int(len(geoPolygon.Holes))
+	maxSize := maxPolyfillSize(geoPolygon, res)
+	out := make([]C.H3Index, maxSize)
+	if len(geoPolygon.Holes) == 0 {
+		hole_verts_num := C.int(0)
+		holes := new(*C.GeoCoord)
+		C.polyfillGo(numVerts, verts, numHoles, &hole_verts_num, holes, C.int(res), &out[0])
+	} else {
+		hole_verts_num := make([]C.int, len(geoPolygon.Holes))
+		holes := make([]*C.GeoCoord, len(geoPolygon.Holes))
+		for i, v := range geoPolygon.Holes {
+			p := (*C.GeoCoord)(C.malloc(C.size_t(C.sizeof_int * len(v))))
+			holes[i] = p
+			pa := (*[1 << 30]C.GeoCoord)(unsafe.Pointer(p))
+			for ii, vv := range v {
+				(*pa)[ii].lat = C.double(deg2rad * vv.Latitude)
+				(*pa)[ii].lon = C.double(deg2rad * vv.Longitude)
+			}
+		}
+		C.polyfillGo(numVerts, verts, numHoles, &hole_verts_num[0], &holes[0], C.int(res), &out[0])
+	}
+	return h3SliceFromC(out)
+}
 
 // UnidirectionalEdge returns a unidirectional `H3Index` from `origin` to
 // `destination`.
@@ -342,10 +396,26 @@ func UnidirectionalEdgeBoundary(edge H3Index) GeoBoundary {
 	return geoBndryFromC(gb)
 }
 
+//fix range of lat
+func mercatorLat(lat float64) float64 {
+	if lat > 90 {
+		return lat - 180
+	}
+	return lat
+}
+
+//fix range of lng
+func mercatorLng(lng float64) float64 {
+	if lng > 180 {
+		return lng - 360
+	}
+	return lng
+}
+
 func geoCoordFromC(cg C.GeoCoord) GeoCoord {
 	g := GeoCoord{}
-	g.Latitude = rad2deg * float64(cg.lat)
-	g.Longitude = rad2deg * float64(cg.lon)
+	g.Latitude = mercatorLat(rad2deg * float64(cg.lat))
+	g.Longitude = mercatorLng(rad2deg * float64(cg.lon))
 	return g
 }
 

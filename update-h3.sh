@@ -56,10 +56,11 @@ H3_INC_DIR="include"
 CWD=$(pwd)
 
 # clean up existing C source code.
-find . -name "*.c" -depth 1 -exec rm {} \;
-if [ -d "$H3_INC_DIR" ]; then
-    rm -rf "$H3_INC_DIR"
-fi
+find . -name "*.c" ! -name "h3_goWrapper.c" -depth 1 -exec rm {} \;
+find ./$H3_INC_DIR -name "*.h" ! -name "goWrapper.h" -depth 1 -exec rm {} \;
+# if [ -d "$H3_INC_DIR" ]; then
+#     rm -rf "$H3_INC_DIR"
+# fi
 
 echo Downloading H3 from "$GIT_REMOTE"
 
