@@ -311,9 +311,24 @@ func maxPolyfillSize(geoPolygon *GeoPolygon, res int) int {
 	numVerts := C.int(len(geoPolygon.Geofence))
 	verts := geoPolygon.Geofence.toCFence()
 	numHoles := C.int(len(geoPolygon.Holes))
-	hole_numVerts := C.int(len(geoPolygon.Holes))
-	hole_verts := new(C.GeoCoord)
-	return int(C.maxPolyfillSizeGo(numVerts, verts, numHoles, hole_numVerts, hole_verts, C.int(res)))
+	if len(geoPolygon.Holes) == 0 {
+		hole_verts_num := C.int(0)
+		holes := new(*C.GeoCoord)
+		return int(C.maxPolyfillSizeGo(numVerts, verts, numHoles, &hole_verts_num, holes, C.int(res)))
+	} else {
+		hole_verts_num := make([]C.int, len(geoPolygon.Holes))
+		holes := make([]*C.GeoCoord, len(geoPolygon.Holes))
+		for i, v := range geoPolygon.Holes {
+			p := (*C.GeoCoord)(C.malloc(C.size_t(C.sizeof_GeoCoord * len(v))))
+			holes[i] = p
+			pa := (*[1 << 30]C.GeoCoord)(unsafe.Pointer(p))
+			for ii, vv := range v {
+				(*pa)[ii].lat = C.double(deg2rad * vv.Latitude)
+				(*pa)[ii].lon = C.double(deg2rad * vv.Longitude)
+			}
+		}
+		return int(C.maxPolyfillSizeGo(numVerts, verts, numHoles, &hole_verts_num[0], &holes[0], C.int(res)))
+	}
 }
 
 func Polyfill(geoPolygon *GeoPolygon, res int) []H3Index {
@@ -330,7 +345,7 @@ func Polyfill(geoPolygon *GeoPolygon, res int) []H3Index {
 		hole_verts_num := make([]C.int, len(geoPolygon.Holes))
 		holes := make([]*C.GeoCoord, len(geoPolygon.Holes))
 		for i, v := range geoPolygon.Holes {
-			p := (*C.GeoCoord)(C.malloc(C.size_t(C.sizeof_int * len(v))))
+			p := (*C.GeoCoord)(C.malloc(C.size_t(C.sizeof_GeoCoord * len(v))))
 			holes[i] = p
 			pa := (*[1 << 30]C.GeoCoord)(unsafe.Pointer(p))
 			for ii, vv := range v {
