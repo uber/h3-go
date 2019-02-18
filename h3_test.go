@@ -163,17 +163,17 @@ var (
 	}
 
 	validGeoCoord = GeoCoord{
-		Latitude:  67.15092686397713,
-		Longitude: 191.6091114190303,
+		Latitude:  67.1509268640,
+		Longitude: -168.3908885810,
 	}
 
 	validGeofence = GeoBoundary{
-		{Latitude: 67.224749856, Longitude: 191.476993415},
-		{Latitude: 67.140938355, Longitude: 191.373085667},
-		{Latitude: 67.067252558, Longitude: 191.505086715},
-		{Latitude: 67.077062918, Longitude: 191.740304069},
-		{Latitude: 67.160561948, Longitude: 191.845198829},
-		{Latitude: 67.234563187, Longitude: 191.713897218},
+		{Latitude: 67.224749856, Longitude: -168.523006585},
+		{Latitude: 67.140938355, Longitude: -168.626914333},
+		{Latitude: 67.067252558, Longitude: -168.494913285},
+		{Latitude: 67.077062918, Longitude: -168.259695931},
+		{Latitude: 67.160561948, Longitude: -168.154801171},
+		{Latitude: 67.234563187, Longitude: -168.286102782},
 	}
 
 	validGeoRing = []GeoCoord{{}}
@@ -445,7 +445,6 @@ func TestFill(t *testing.T) {
 	t.Run("no hole", func(t *testing.T) {
 		t.Parallel()
 		h := Polyfill(geoNoHole, 6)
-		fmt.Println(h)
 		assert.Equal(t, validH3NoHoleFill, h)
 	})
 	t.Run("has hole", func(t *testing.T) {
