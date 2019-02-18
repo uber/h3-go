@@ -327,7 +327,13 @@ func maxPolyfillSize(geoPolygon *GeoPolygon, res int) int {
 				(*pa)[ii].lon = C.double(deg2rad * vv.Longitude)
 			}
 		}
-		return int(C.maxPolyfillSizeGo(numVerts, verts, numHoles, &hole_verts_num[0], &holes[0], C.int(res)))
+		maxSize := int(C.maxPolyfillSizeGo(numVerts, verts, numHoles, &hole_verts_num[0], &holes[0], C.int(res)))
+		if holes != nil {
+			for _, v := range holes {
+				C.free(unsafe.Pointer(v))
+			}
+		}
+		return maxSize
 	}
 }
 
@@ -354,6 +360,11 @@ func Polyfill(geoPolygon *GeoPolygon, res int) []H3Index {
 			}
 		}
 		C.polyfillGo(numVerts, verts, numHoles, &hole_verts_num[0], &holes[0], C.int(res), &out[0])
+		if holes != nil {
+			for _, v := range holes {
+				C.free(unsafe.Pointer(v))
+			}
+		}
 	}
 	return h3SliceFromC(out)
 }
