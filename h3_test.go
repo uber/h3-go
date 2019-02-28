@@ -97,13 +97,6 @@ var (
 		{Latitude: 67.077062918, Longitude: -168.259695931},
 		{Latitude: 67.160561948, Longitude: -168.154801171},
 		{Latitude: 67.234563187, Longitude: -168.286102782},
-
-		// {Latitude: 67.224749856, Longitude: 191.476993415},
-		// {Latitude: 67.140938355, Longitude: 191.373085667},
-		// {Latitude: 67.067252558, Longitude: 191.505086715},
-		// {Latitude: 67.077062918, Longitude: 191.740304069},
-		// {Latitude: 67.160561948, Longitude: 191.845198829},
-		// {Latitude: 67.234563187, Longitude: 191.713897218},
 	}
 
 	validGeoRing = []GeoCoord{{}}
@@ -115,7 +108,7 @@ func TestFromGeo(t *testing.T) {
 		Latitude:  67.194013596,
 		Longitude: 191.598258018,
 	}, 5)
-	t.Logf("Index:%x\n", h)
+	assert.Equal(t, validH3Index, h, "expected %x but got %x", validH3Index, h)
 	assert.Equal(t, validH3Index, h)
 }
 
