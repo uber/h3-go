@@ -18,6 +18,7 @@
  */
 
 #include "baseCells.h"
+#include "h3Index.h"
 
 /** @struct BaseCellOrient
  *  @brief base cell at a given ijk and required rotations into its system
@@ -823,6 +824,12 @@ int _isBaseCellPentagon(int baseCell) {
     return baseCellData[baseCell].isPentagon;
 }
 
+/** @brief Return whether the indicated base cell is a pentagon where all
+ * neighbors are oriented towards it. */
+bool _isBaseCellPolarPentagon(int baseCell) {
+    return baseCell == 4 || baseCell == 117;
+}
+
 /** @brief Find base cell given FaceIJK.
  *
  * Given the face number and a resolution 0 ijk+ coordinate in that face's
@@ -866,4 +873,39 @@ bool _baseCellIsCwOffset(int baseCell, int testFace) {
  */
 int _getBaseCellNeighbor(int baseCell, Direction dir) {
     return baseCellNeighbors[baseCell][dir];
+}
+
+/** @brief Return the direction from the origin base cell to the neighbor.
+ * Returns INVALID_DIGIT if the base cells are not neighbors.
+ */
+Direction _getBaseCellDirection(int originBaseCell, int neighboringBaseCell) {
+    for (Direction dir = CENTER_DIGIT; dir < NUM_DIGITS; dir++) {
+        int testBaseCell = _getBaseCellNeighbor(originBaseCell, dir);
+        if (testBaseCell == neighboringBaseCell) {
+            return dir;
+        }
+    }
+    return INVALID_DIGIT;
+}
+
+/**
+ * res0IndexCount returns the number of resolution 0 indexes
+ *
+ * @return int count of resolution 0 indexes
+ */
+int H3_EXPORT(res0IndexCount)() { return NUM_BASE_CELLS; }
+
+/**
+ * getRes0Indexes generates all base cells storing them into the provided
+ * memory pointer. Buffer must be of size NUM_BASE_CELLS * sizeof(H3Index).
+ *
+ * @param out H3Index* the memory to store the resulting base cells in
+ */
+void H3_EXPORT(getRes0Indexes)(H3Index* out) {
+    for (int bc = 0; bc < NUM_BASE_CELLS; bc++) {
+        H3Index baseCell = H3_INIT;
+        H3_SET_MODE(baseCell, H3_HEXAGON_MODE);
+        H3_SET_BASE_CELL(baseCell, bc);
+        out[bc] = baseCell;
+    }
 }

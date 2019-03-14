@@ -25,6 +25,7 @@
 #include <string.h>
 #include "constants.h"
 #include "geoCoord.h"
+#include "mathExtensions.h"
 
 /**
  * Sets an IJK coordinate to the specified component values.
@@ -488,5 +489,66 @@ void _downAp3r(CoordIJK* ijk) {
     _ijkAdd(&iVec, &jVec, ijk);
     _ijkAdd(ijk, &kVec, ijk);
 
+    _ijkNormalize(ijk);
+}
+
+/**
+ * Finds the distance between the two coordinates. Returns result.
+ *
+ * @param c1 The first set of ijk coordinates.
+ * @param c2 The second set of ijk coordinates.
+ */
+int ijkDistance(const CoordIJK* c1, const CoordIJK* c2) {
+    CoordIJK diff;
+    _ijkSub(c1, c2, &diff);
+    _ijkNormalize(&diff);
+    CoordIJK absDiff = {abs(diff.i), abs(diff.j), abs(diff.k)};
+    return MAX(absDiff.i, MAX(absDiff.j, absDiff.k));
+}
+
+/**
+ * Transforms coordinates from the IJK+ coordinate system to the IJ coordinate
+ * system.
+ *
+ * @param ijk The input IJK+ coordinates
+ * @param ij The output IJ coordinates
+ */
+void ijkToIj(const CoordIJK* ijk, CoordIJ* ij) {
+    ij->i = ijk->i - ijk->k;
+    ij->j = ijk->j - ijk->k;
+}
+
+/**
+ * Transforms coordinates from the IJ coordinate system to the IJK+ coordinate
+ * system.
+ *
+ * @param ij The input IJ coordinates
+ * @param ijk The output IJK+ coordinates
+ */
+void ijToIjk(const CoordIJ* ij, CoordIJK* ijk) {
+    ijk->i = ij->i;
+    ijk->j = ij->j;
+    ijk->k = 0;
+
+    _ijkNormalize(ijk);
+}
+
+/**
+ * Convert IJK coordinates to cube coordinates, in place
+ * @param ijk Coordinate to convert
+ */
+void ijkToCube(CoordIJK* ijk) {
+    ijk->i = -ijk->i + ijk->k;
+    ijk->j = ijk->j - ijk->k;
+    ijk->k = -ijk->i - ijk->j;
+}
+
+/**
+ * Convert cube coordinates to IJK coordinates, in place
+ * @param ijk Coordinate to convert
+ */
+void cubeToIjk(CoordIJK* ijk) {
+    ijk->i = -ijk->i;
+    ijk->k = 0;
     _ijkNormalize(ijk);
 }

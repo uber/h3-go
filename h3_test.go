@@ -25,6 +25,8 @@ import (
 )
 
 const eps = 1e-4
+
+// validH3Index resolution 5
 const validH3Index = H3Index(0x850dab63fffffff)
 const pentagonH3Index = H3Index(0x821c07fffffffff)
 
@@ -84,17 +86,17 @@ var (
 	}
 
 	validGeoCoord = GeoCoord{
-		Latitude:  67.15092686397713,
-		Longitude: 191.6091114190303,
+		Latitude:  67.1509268640,
+		Longitude: -168.3908885810,
 	}
 
 	validGeofence = GeoBoundary{
-		{Latitude: 67.224749856, Longitude: 191.476993415},
-		{Latitude: 67.140938355, Longitude: 191.373085667},
-		{Latitude: 67.067252558, Longitude: 191.505086715},
-		{Latitude: 67.077062918, Longitude: 191.740304069},
-		{Latitude: 67.160561948, Longitude: 191.845198829},
-		{Latitude: 67.234563187, Longitude: 191.713897218},
+		{Latitude: 67.224749856, Longitude: -168.523006585},
+		{Latitude: 67.140938355, Longitude: -168.626914333},
+		{Latitude: 67.067252558, Longitude: -168.494913285},
+		{Latitude: 67.077062918, Longitude: -168.259695931},
+		{Latitude: 67.160561948, Longitude: -168.154801171},
+		{Latitude: 67.234563187, Longitude: -168.286102782},
 	}
 
 	validGeoRing = []GeoCoord{{}}
@@ -106,6 +108,7 @@ func TestFromGeo(t *testing.T) {
 		Latitude:  67.194013596,
 		Longitude: 191.598258018,
 	}, 5)
+	assert.Equal(t, validH3Index, h, "expected %x but got %x", validH3Index, h)
 	assert.Equal(t, validH3Index, h)
 }
 
