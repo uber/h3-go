@@ -6,9 +6,9 @@
 
 # H3-Go
 
-This library provides Golang bindings for the [H3 Core
-Library](https://github.com/uber/h3). For API reference, please see the [H3
-Documentation](https://uber.github.io/h3/).
+This library provides Golang bindings for the
+[H3 Core Library](https://github.com/uber/h3). For API reference, please see the
+[H3 Documentation](https://uber.github.io/h3/).
 
 # Usage
 
@@ -18,6 +18,18 @@ Documentation](https://uber.github.io/h3/).
 
 ```bash
 dep ensure -add github.com/uber/h3-go
+```
+
+Note: h3-go includes non-go directories that, by default, `dep` will
+[prune](https://golang.github.io/dep/docs/Gopkg.toml.html#prune).  You can
+prevent this by including the following prune directive in your `Gopkg.toml`:
+
+```toml
+[prune]
+	[[prune.project]]
+		name = "github.com/uber/h3-go"
+		non-go = false
+		unused-packages = false
 ```
 
 ### [golang/cmd/go](https://golang.org/cmd/go/)
