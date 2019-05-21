@@ -1,6 +1,8 @@
 package h3
 
-import "testing"
+import (
+	"testing"
+)
 
 // buckets for preventing compiler optimizing out calls
 var (
@@ -47,5 +49,11 @@ func BenchmarkToGeoBndryRes15(b *testing.B) {
 func BenchmarkHexRange(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		h3idxs, _ = HexRange(h3idx, 10)
+	}
+}
+
+func BenchmarkPolyfill(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		h3idxs = Polyfill(validGeopolygonWithHoles, 6)
 	}
 }

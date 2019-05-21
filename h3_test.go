@@ -99,6 +99,31 @@ var (
 		{Latitude: 67.234563187, Longitude: -168.286102782},
 	}
 
+	validGeofenceHole1 = GeoBoundary{
+		{Latitude: 67.2, Longitude: -168.4},
+		{Latitude: 67.1, Longitude: -168.4},
+		{Latitude: 67.1, Longitude: -168.3},
+		{Latitude: 67.2, Longitude: -168.3},
+	}
+
+	validGeofenceHole2 = GeoBoundary{
+		{Latitude: 67.21, Longitude: -168.41},
+		{Latitude: 67.22, Longitude: -168.41},
+		{Latitude: 67.22, Longitude: -168.42},
+	}
+
+	validGeopolygonWithoutHoles = GeoPolygon{
+		Geofence: validGeofence,
+	}
+
+	validGeopolygonWithHoles = GeoPolygon{
+		Geofence: validGeofence,
+		Holes: [][]GeoCoord{
+			validGeofenceHole1,
+			validGeofenceHole2,
+		},
+	}
+
 	validGeoRing = []GeoCoord{{}}
 )
 
@@ -361,6 +386,44 @@ func TestString(t *testing.T) {
 		t.Parallel()
 		h3addr := ToString(validH3Index)
 		assert.Equal(t, "850dab63fffffff", h3addr)
+	})
+}
+
+func TestPolyfill(t *testing.T) {
+	t.Parallel()
+	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+		indexes := Polyfill(GeoPolygon{}, 6)
+		assert.Len(t, indexes, 0)
+	})
+	t.Run("without holes", func(t *testing.T) {
+		t.Parallel()
+		indexes := Polyfill(validGeopolygonWithoutHoles, 6)
+		assert.Len(t, indexes, 7)
+		expectedIndexes := []H3Index{
+			0x860dab607ffffff,
+			0x860dab60fffffff,
+			0x860dab617ffffff,
+			0x860dab61fffffff,
+			0x860dab627ffffff,
+			0x860dab62fffffff,
+			0x860dab637ffffff,
+		}
+		assert.ElementsMatch(t, expectedIndexes, indexes)
+	})
+	t.Run("with hole", func(t *testing.T) {
+		t.Parallel()
+		indexes := Polyfill(validGeopolygonWithHoles, 6)
+		assert.Len(t, indexes, 6)
+		expectedIndexes := []H3Index{
+			0x860dab60fffffff,
+			0x860dab617ffffff,
+			0x860dab61fffffff,
+			0x860dab627ffffff,
+			0x860dab62fffffff,
+			0x860dab637ffffff,
+		}
+		assert.ElementsMatch(t, expectedIndexes, indexes)
 	})
 }
 
