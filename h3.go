@@ -80,8 +80,11 @@ func (g GeoCoord) toC() C.GeoCoord {
 
 // GeoPolygon is a geofence with 0 or more geofence holes
 type GeoPolygon struct {
-	Geofence []GeoCoord   ///< exterior boundary of the polygon
-	Holes    [][]GeoCoord ///< interior boundaries (holes) in the polygon
+	// Geofence is the exterior boundary of the polygon
+	Geofence []GeoCoord
+
+	// Holes is a slice of interior boundary (holes) in the polygon
+	Holes [][]GeoCoord
 }
 
 // --- INDEXING ---
@@ -298,76 +301,6 @@ func Uncompact(in []H3Index, res int) []H3Index {
 
 // --- REGIONS ---
 
-// Convert slice of geocoordinates to an array of C geocoordinates (represented in C-style as a
-// pointer to the first item in the array). The caller must free the returned pointer when
-// finished with it.
-func geoCoordsToC(coords []GeoCoord) *C.GeoCoord {
-	if len(coords) == 0 {
-		return nil
-	}
-
-	// Use malloc to construct a C-style struct array for the output
-	cverts := C.malloc(C.size_t(C.sizeof_GeoCoord * len(coords)))
-	pv := cverts
-	for _, gc := range coords {
-		*((*C.GeoCoord)(pv)) = gc.toC()
-		pv = unsafe.Pointer(uintptr(pv) + C.sizeof_GeoCoord)
-	}
-
-	return (*C.GeoCoord)(cverts)
-}
-
-// Convert geofences (slices of slices of geocoordinates) to C geofences (represented in C-style as
-// a pointer to the first item in the array). The caller must free the returned pointer and any
-// pointer on the verts field when finished using it.
-func geofencesToC(geofences [][]GeoCoord) *C.Geofence {
-	if len(geofences) == 0 {
-		return nil
-	}
-
-	// Use malloc to construct a C-style struct array for the output
-	cgeofences := C.malloc(C.size_t(C.sizeof_Geofence * len(geofences)))
-
-	pcgeofences := cgeofences
-	for _, coords := range geofences {
-		cverts := geoCoordsToC(coords)
-
-		*((*C.Geofence)(pcgeofences)) = C.Geofence{
-			verts:    cverts,
-			numVerts: C.int(len(coords)),
-		}
-		pcgeofences = unsafe.Pointer(uintptr(pcgeofences) + C.sizeof_Geofence)
-	}
-
-	return (*C.Geofence)(cgeofences)
-}
-
-// Convert GeoPolygon struct to C equivalent struct.
-func geoPolygonToC(gp GeoPolygon) C.GeoPolygon {
-	cverts := geoCoordsToC(gp.Geofence)
-	choles := geofencesToC(gp.Holes)
-
-	return C.GeoPolygon{
-		geofence: C.Geofence{
-			numVerts: C.int(len(gp.Geofence)),
-			verts:    cverts,
-		},
-		numHoles: C.int(len(gp.Holes)),
-		holes:    choles,
-	}
-}
-
-// Free pointer values on a C GeoPolygon struct
-func freeCGeoPolygon(cgp *C.GeoPolygon) {
-	C.free(unsafe.Pointer(cgp.geofence.verts))
-	ph := unsafe.Pointer(cgp.holes)
-	for i := C.int(0); i < cgp.numHoles; i++ {
-		C.free(unsafe.Pointer((*C.Geofence)(ph).verts))
-		ph = unsafe.Pointer(uintptr(ph) + uintptr(C.sizeof_Geofence))
-	}
-	C.free(unsafe.Pointer(cgp.holes))
-}
-
 // Polyfill returns the hexagons at the given resolution whose centers are within the
 // geofences given in the GeoPolygon struct.
 func Polyfill(gp GeoPolygon, res int) []H3Index {
@@ -483,4 +416,74 @@ func ringSize(k int) int {
 
 func rangeSize(k int) int {
 	return int(C.maxKringSize(C.int(k)))
+}
+
+// Convert slice of geocoordinates to an array of C geocoordinates (represented in C-style as a
+// pointer to the first item in the array). The caller must free the returned pointer when
+// finished with it.
+func geoCoordsToC(coords []GeoCoord) *C.GeoCoord {
+	if len(coords) == 0 {
+		return nil
+	}
+
+	// Use malloc to construct a C-style struct array for the output
+	cverts := C.malloc(C.size_t(C.sizeof_GeoCoord * len(coords)))
+	pv := cverts
+	for _, gc := range coords {
+		*((*C.GeoCoord)(pv)) = gc.toC()
+		pv = unsafe.Pointer(uintptr(pv) + C.sizeof_GeoCoord)
+	}
+
+	return (*C.GeoCoord)(cverts)
+}
+
+// Convert geofences (slices of slices of geocoordinates) to C geofences (represented in C-style as
+// a pointer to the first item in the array). The caller must free the returned pointer and any
+// pointer on the verts field when finished using it.
+func geofencesToC(geofences [][]GeoCoord) *C.Geofence {
+	if len(geofences) == 0 {
+		return nil
+	}
+
+	// Use malloc to construct a C-style struct array for the output
+	cgeofences := C.malloc(C.size_t(C.sizeof_Geofence * len(geofences)))
+
+	pcgeofences := cgeofences
+	for _, coords := range geofences {
+		cverts := geoCoordsToC(coords)
+
+		*((*C.Geofence)(pcgeofences)) = C.Geofence{
+			verts:    cverts,
+			numVerts: C.int(len(coords)),
+		}
+		pcgeofences = unsafe.Pointer(uintptr(pcgeofences) + C.sizeof_Geofence)
+	}
+
+	return (*C.Geofence)(cgeofences)
+}
+
+// Convert GeoPolygon struct to C equivalent struct.
+func geoPolygonToC(gp GeoPolygon) C.GeoPolygon {
+	cverts := geoCoordsToC(gp.Geofence)
+	choles := geofencesToC(gp.Holes)
+
+	return C.GeoPolygon{
+		geofence: C.Geofence{
+			numVerts: C.int(len(gp.Geofence)),
+			verts:    cverts,
+		},
+		numHoles: C.int(len(gp.Holes)),
+		holes:    choles,
+	}
+}
+
+// Free pointer values on a C GeoPolygon struct
+func freeCGeoPolygon(cgp *C.GeoPolygon) {
+	C.free(unsafe.Pointer(cgp.geofence.verts))
+	ph := unsafe.Pointer(cgp.holes)
+	for i := C.int(0); i < cgp.numHoles; i++ {
+		C.free(unsafe.Pointer((*C.Geofence)(ph).verts))
+		ph = unsafe.Pointer(uintptr(ph) + uintptr(C.sizeof_Geofence))
+	}
+	C.free(unsafe.Pointer(cgp.holes))
 }
