@@ -304,10 +304,8 @@ func Uncompact(in []H3Index, res int) []H3Index {
 // Polyfill returns the hexagons at the given resolution whose centers are within the
 // geofences given in the GeoPolygon struct.
 func Polyfill(gp GeoPolygon, res int) []H3Index {
-	var cgp C.GeoPolygon
+	cgp := geoPolygonToC(gp)
 	defer freeCGeoPolygon(&cgp)
-
-	cgp = geoPolygonToC(gp)
 
 	maxSize := C.maxPolyfillSize(&cgp, C.int(res))
 	cout := make([]C.H3Index, maxSize)
@@ -480,10 +478,15 @@ func geoPolygonToC(gp GeoPolygon) C.GeoPolygon {
 // Free pointer values on a C GeoPolygon struct
 func freeCGeoPolygon(cgp *C.GeoPolygon) {
 	C.free(unsafe.Pointer(cgp.geofence.verts))
+	cgp.geofence.verts = nil
+
 	ph := unsafe.Pointer(cgp.holes)
 	for i := C.int(0); i < cgp.numHoles; i++ {
 		C.free(unsafe.Pointer((*C.Geofence)(ph).verts))
+		(*C.Geofence)(ph).verts = nil
 		ph = unsafe.Pointer(uintptr(ph) + uintptr(C.sizeof_Geofence))
 	}
+
 	C.free(unsafe.Pointer(cgp.holes))
+	cgp.holes = nil
 }
