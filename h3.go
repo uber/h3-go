@@ -75,10 +75,7 @@ func (g GeoCoord) toCPtr() *C.GeoCoord {
 }
 
 func (g GeoCoord) toC() C.GeoCoord {
-	return C.GeoCoord{
-		lat: C.double(deg2rad * g.Latitude),
-		lon: C.double(deg2rad * g.Longitude),
-	}
+	return *g.toCPtr()
 }
 
 // GeoPolygon is a geofence with 0 or more geofence holes
