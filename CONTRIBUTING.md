@@ -14,6 +14,12 @@ Ask **questions** by posting to the [H3 tag on StackOverflow](https://stackoverf
 
 ## Development
 
+Install dependencies:
+
+```bash
+go get -t ./...
+```
+
 Run tests:
 
 ```bash
