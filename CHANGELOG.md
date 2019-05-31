@@ -8,6 +8,7 @@ fixes via patches with patch version bumps.
 
 ## Unreleased
 
+### Fixed
 * Handle error case in Uncompact
 
 ## v3.0.0
