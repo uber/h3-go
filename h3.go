@@ -49,6 +49,9 @@ var (
 	// and cannot handle it.
 	ErrPentagonEncountered = errors.New("pentagon encountered")
 
+	// ErrInvalidResolution is returned when the requested resolution is not valid
+	ErrInvalidResolution = errors.New("resolution invalid")
+
 	// conversion units for faster maths
 	deg2rad = math.Pi / 180.0
 	rad2deg = 180.0 / math.Pi
@@ -288,15 +291,20 @@ func Compact(in []H3Index) []H3Index {
 
 // Uncompact splits every `H3Index` in `in` if its resolution is greater than
 // `res` recursively. Returns all the `H3Index`es at resolution `res`.
-func Uncompact(in []H3Index, res int) []H3Index {
+func Uncompact(in []H3Index, res int) ([]H3Index, error) {
 	cin := h3SliceToC(in)
 	maxUncompactSz := C.maxUncompactSize(&cin[0], C.int(len(in)), C.int(res))
+	if maxUncompactSz < 0 {
+		// A size of less than zero indicates an error uncompacting such as the
+		// requested resolution being less than the resolution of the hexagons.
+		return nil, ErrInvalidResolution
+	}
 	cout := make([]C.H3Index, maxUncompactSz)
 	C.uncompact(
 		&cin[0], C.int(len(in)),
 		&cout[0], maxUncompactSz,
 		C.int(res))
-	return h3SliceFromC(cout)
+	return h3SliceFromC(cout), nil
 }
 
 // --- REGIONS ---

@@ -307,8 +307,20 @@ func TestUncompact(t *testing.T) {
 	res := Resolution(validH3Index) - 1
 	parent := ToParent(validH3Index, res)
 
-	out := Uncompact([]H3Index{parent}, res+1)
+	out, err := Uncompact([]H3Index{parent}, res+1)
+	assert.NoError(t, err)
 	assertHexIn(t, validH3Index, out)
+}
+
+func TestUncompactError(t *testing.T) {
+	t.Parallel()
+	res := Resolution(validH3Index) - 1
+	parent := ToParent(validH3Index, res)
+
+	// use a resolution that is too small
+	out, err := Uncompact([]H3Index{parent}, res-1)
+	assert.Nil(t, out)
+	assert.Equal(t, ErrInvalidResolution, err)
 }
 
 func TestIsResClassIII(t *testing.T) {
