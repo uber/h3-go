@@ -8,7 +8,8 @@ fixes via patches with patch version bumps.
 
 ## Unreleased
 
-* Add polyfill function
+### Added
+* Polyfill function
 
 ## v3.0.0
 
