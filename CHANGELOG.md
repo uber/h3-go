@@ -8,8 +8,13 @@ fixes via patches with patch version bumps.
 
 ## Unreleased
 
+### Changed
+
+* [breaking] `Uncompat` now returns `([]H3Index, error)` instead of `[]H3Index` to accommodate error scenario from C API.
+
 ### Fixed
-* Handle error case in Uncompact
+
+* panic when using `Uncompact` with invalid resolutions.
 
 ## v3.0.0
 
