@@ -8,18 +8,24 @@ fixes via patches with patch version bumps.
 
 ## Unreleased
 
+Nothing yet.
+
+## 3.0.1
+
 ### Added
 
-* Polyfill function
+* Polyfill function (#19).
 
 ### Changed
 
-* [breaking] `Uncompat` now returns `([]H3Index, error)` instead of `[]H3Index` 
-  to accommodate error scenario from C API.
+* [breaking] `Uncompat` now returns `([]H3Index, error)` instead of `[]H3Index`
+  to accommodate error scenario from C API (#19).
 
 ### Fixed
 
-* panic when using `Uncompact` with invalid resolutions.
+* panic when using `Uncompact` with invalid resolutions (#20).
+* latitudes and longitudes outside of respective ranges when unprojecting in
+  certain areas (#7, #9, #13).
 
 ## v3.0.0
 
