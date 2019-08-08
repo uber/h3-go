@@ -1,3 +1,5 @@
+<img align="right" src="https://uber.github.io/res/h3Logo-color.svg" alt="H3 Logo" width="200">
+
 [![Build Status](https://travis-ci.com/uber/h3-go.svg?branch=master)](https://travis-ci.com/uber/h3-go)
 [![Coverage Status](https://coveralls.io/repos/github/uber/h3-go/badge.svg)](https://coveralls.io/github/uber/h3-go)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
