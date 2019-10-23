@@ -8,7 +8,12 @@ fixes via patches with patch version bumps.
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+* Some useful H3 constants:
+  * `MaxResolution`
+  * `NumIcosaFaces`
+  * `NumBaseCells`
 
 ## 3.0.1
 
