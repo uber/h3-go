@@ -10,7 +10,7 @@ fixes via patches with patch version bumps.
 
 ### Added
 
-* Some useful H3 constants:
+* Some useful H3 constants (#22):
   * `MaxResolution`
   * `NumIcosaFaces`
   * `NumBaseCells`
