@@ -40,6 +40,15 @@ const (
 	// to represent the shape of a cell.
 	MaxCellBndryVerts = C.MAX_CELL_BNDRY_VERTS
 
+	// MaxResolution is the maximum H3 resolution a GeoCoord can be indexed to.
+	MaxResolution = C.MAX_H3_RES
+
+	// The number of faces on an icosahedron
+	NumIcosaFaces = C.NUM_ICOSA_FACES
+
+	// The number of H3 base cells
+	NumBaseCells = C.NUM_BASE_CELLS
+
 	// InvalidH3Index is a sentinel value for an invalid H3 index.
 	InvalidH3Index = C.H3_INVALID_INDEX
 )
