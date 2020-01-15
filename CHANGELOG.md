@@ -14,6 +14,7 @@ fixes via patches with patch version bumps.
   * `MaxResolution`
   * `NumIcosaFaces`
   * `NumBaseCells`
+* Support for GOMODULES (#24)
 
 ## 3.0.1
 
