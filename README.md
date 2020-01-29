@@ -14,6 +14,14 @@ This library provides Golang bindings for the
 
 # Usage
 
+## Prerequisites
+
+H3-Go requires [CGO](https://golang.org/cmd/cgo/) (`CGO_ENABLED=1`) in order to be built.  Generally, Go should do the right thing when including this library:
+
+> The cgo tool is enabled by default for native builds on systems where it is expected to work. It is disabled by default when cross-compiling. You can control this by setting the CGO_ENABLED environment variable when running the go tool: set it to 1 to enable the use of cgo, and to 0 to disable it. The go tool will set the build constraint "cgo" if cgo is enabled. The special import "C" implies the "cgo" build constraint, as though the file also said "// +build cgo". Therefore, if cgo is disabled, files that import "C" will not be built by the go tool. (For more about build constraints see https://golang.org/pkg/go/build/#hdr-Build_Constraints).
+
+If you see errors/warnings like _"build constraints exclude all Go files..."_, then the `cgo` build constraint is likely disabled; try setting `CGO_ENABLED=1` environment variable for your build step.
+
 ## Installation
 
 ### [golang/dep](https://github.com/golang/dep)
