@@ -17,8 +17,8 @@
  * @brief   Base cell related lookup tables and access functions.
  */
 
-#include "baseCells.h"
-#include "h3Index.h"
+#include "h3_baseCells.h"
+#include "h3_h3Index.h"
 
 /** @struct BaseCellOrient
  *  @brief base cell at a given ijk and required rotations into its system

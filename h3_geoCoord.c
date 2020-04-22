@@ -17,11 +17,11 @@
  * @brief   Functions for working with lat/lon coordinates.
  */
 
-#include "geoCoord.h"
+#include "h3_geoCoord.h"
 #include <math.h>
 #include <stdbool.h>
-#include "constants.h"
-#include "h3api.h"
+#include "h3_constants.h"
+#include "h3_h3api.h"
 
 /**
  * Normalizes radians to a value between 0.0 and two PI.

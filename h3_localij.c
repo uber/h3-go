@@ -19,16 +19,15 @@
  * These functions try to provide a useful coordinate space in the vicinity of
  * an origin index.
  */
-#include <faceijk.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include "baseCells.h"
-#include "faceijk.h"
-#include "h3Index.h"
-#include "mathExtensions.h"
-#include "stackAlloc.h"
+#include "h3_baseCells.h"
+#include "h3_faceijk.h"
+#include "h3_h3Index.h"
+#include "h3_mathExtensions.h"
+#include "h3_stackAlloc.h"
 
 /**
  * Origin leading digit -> index leading digit -> rotations 60 cw

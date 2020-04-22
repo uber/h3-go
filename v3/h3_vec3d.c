@@ -17,7 +17,7 @@
  * @brief   3D floating point vector functions.
  */
 
-#include "vec3d.h"
+#include "h3_vec3d.h"
 #include <math.h>
 
 /**

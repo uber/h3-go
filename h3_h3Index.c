@@ -17,16 +17,15 @@
  * @brief   H3Index utility functions
  *          (see h3api.h for the main library entry functions)
  */
-#include "h3Index.h"
-#include <faceijk.h>
+#include "h3_h3Index.h"
 #include <inttypes.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include "baseCells.h"
-#include "faceijk.h"
-#include "mathExtensions.h"
-#include "stackAlloc.h"
+#include "h3_baseCells.h"
+#include "h3_faceijk.h"
+#include "h3_mathExtensions.h"
+#include "h3_stackAlloc.h"
 
 /**
  * Returns the H3 resolution of an H3 index.

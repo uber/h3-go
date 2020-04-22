@@ -17,16 +17,16 @@
  * @brief Polygon (Geofence) algorithms
  */
 
-#include "polygon.h"
+#include "h3_polygon.h"
 #include <assert.h>
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
-#include "bbox.h"
-#include "constants.h"
-#include "geoCoord.h"
-#include "h3api.h"
-#include "linkedGeo.h"
+#include "h3_bbox.h"
+#include "h3_constants.h"
+#include "h3_geoCoord.h"
+#include "h3_h3api.h"
+#include "h3_linkedGeo.h"
 
 // Define macros used in polygon algos for Geofence
 #define TYPE Geofence
@@ -34,7 +34,7 @@
 #define ITERATE ITERATE_GEOFENCE
 #define IS_EMPTY IS_EMPTY_GEOFENCE
 
-#include "polygonAlgos.h"
+#include "h3_polygonAlgos.h"
 
 #undef TYPE
 #undef INIT_ITERATION

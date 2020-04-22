@@ -17,21 +17,21 @@
  * @brief   Hexagon grid algorithms
  */
 
-#include "algos.h"
+#include "h3_algos.h"
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include "baseCells.h"
-#include "bbox.h"
-#include "faceijk.h"
-#include "geoCoord.h"
-#include "h3Index.h"
-#include "h3api.h"
-#include "linkedGeo.h"
-#include "polygon.h"
-#include "stackAlloc.h"
-#include "vertexGraph.h"
+#include "h3_baseCells.h"
+#include "h3_bbox.h"
+#include "h3_faceijk.h"
+#include "h3_geoCoord.h"
+#include "h3_h3Index.h"
+#include "h3_h3api.h"
+#include "h3_linkedGeo.h"
+#include "h3_polygon.h"
+#include "h3_stackAlloc.h"
+#include "h3_vertexGraph.h"
 
 /*
  * Return codes from hexRange and related functions.
