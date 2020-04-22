@@ -17,13 +17,13 @@
  * @brief   Data structure for storing a graph of vertices
  */
 
-#include "vertexGraph.h"
+#include "h3_vertexGraph.h"
 #include <assert.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "geoCoord.h"
+#include "h3_geoCoord.h"
 
 /**
  * Initialize a new VertexGraph

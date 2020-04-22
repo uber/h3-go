@@ -24,8 +24,8 @@ package h3
 #cgo CFLAGS: -I ${SRCDIR}
 #cgo LDFLAGS: -lm
 #include <stdlib.h>
-#include <h3api.h>
-#include <h3Index.h>
+#include <h3_h3api.h>
+#include <h3_h3Index.h>
 */
 import "C"
 import (

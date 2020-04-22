@@ -17,7 +17,7 @@
  * @brief   Math functions that should've been in math.h but aren't
  */
 
-#include "mathExtensions.h"
+#include "h3_mathExtensions.h"
 
 /**
  * _ipow does integer exponentiation efficiently. Taken from StackOverflow.

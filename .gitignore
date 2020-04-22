@@ -27,8 +27,5 @@ _testmain.go
 # Editor cruft
 *.sw[op]
 
-# Workspace files
-.idea
-
 # Intellij project files
 .idea

@@ -17,7 +17,7 @@
  * @brief   2D floating point vector functions.
  */
 
-#include "vec2d.h"
+#include "h3_vec2d.h"
 #include <math.h>
 #include <stdio.h>
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Uber Technologies, Inc.
+ * Copyright 2016-2019 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,21 +17,22 @@
  * @brief   Hexagon grid algorithms
  */
 
-#include "algos.h"
+#include "h3_algos.h"
+#include <assert.h>
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include "baseCells.h"
-#include "bbox.h"
-#include "faceijk.h"
-#include "geoCoord.h"
-#include "h3Index.h"
-#include "h3api.h"
-#include "linkedGeo.h"
-#include "polygon.h"
-#include "stackAlloc.h"
-#include "vertexGraph.h"
+#include <string.h>
+#include "h3_baseCells.h"
+#include "h3_bbox.h"
+#include "h3_faceijk.h"
+#include "h3_geoCoord.h"
+#include "h3_h3Index.h"
+#include "h3_h3api.h"
+#include "h3_linkedGeo.h"
+#include "h3_polygon.h"
+#include "h3_vertexGraph.h"
 
 /*
  * Return codes from hexRange and related functions.
@@ -149,74 +150,82 @@ static const Direction NEW_ADJUSTMENT_III[7][7] = {
      CENTER_DIGIT, IJ_AXES_DIGIT}};
 
 /**
- * Maximum number of indices that result from the kRing algorithm with the given
+ * Maximum number of cells that result from the kRing algorithm with the given
  * k. Formula source and proof: https://oeis.org/A003215
  *
- * @param k k value, k >= 0.
+ * @param  k   k value, k >= 0.
  */
 int H3_EXPORT(maxKringSize)(int k) { return 3 * k * (k + 1) + 1; }
 
 /**
- * k-rings produces indices within k distance of the origin index.
+ * Produce cells within grid distance k of the origin cell.
  *
- * k-ring 0 is defined as the origin index, k-ring 1 is defined as k-ring 0 and
- * all neighboring indices, and so on.
+ * k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+ * all neighboring cells, and so on.
  *
  * Output is placed in the provided array in no particular order. Elements of
  * the output array may be left zero, as can happen when crossing a pentagon.
  *
- * @param origin Origin location.
- * @param k k >= 0
- * @param out Zero-filled array which must be of size maxKringSize(k).
+ * @param  origin   origin cell
+ * @param  k        k >= 0
+ * @param  out      zero-filled array which must be of size maxKringSize(k)
  */
 void H3_EXPORT(kRing)(H3Index origin, int k, H3Index* out) {
-    int maxIdx = H3_EXPORT(maxKringSize)(k);
-    int* distances = malloc(maxIdx * sizeof(int));
-    H3_EXPORT(kRingDistances)(origin, k, out, distances);
-    free(distances);
+    H3_EXPORT(kRingDistances)(origin, k, out, NULL);
 }
 
 /**
- * k-rings produces indices within k distance of the origin index.
+ * Produce cells and their distances from the given origin cell, up to
+ * distance k.
  *
- * k-ring 0 is defined as the origin index, k-ring 1 is defined as k-ring 0 and
- * all neighboring indices, and so on.
+ * k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+ * all neighboring cells, and so on.
  *
  * Output is placed in the provided array in no particular order. Elements of
  * the output array may be left zero, as can happen when crossing a pentagon.
  *
- * @param origin Origin location.
- * @param k k >= 0
- * @param out Zero-filled array which must be of size maxKringSize(k).
- * @param distances Zero-filled array which must be of size maxKringSize(k).
+ * @param  origin      origin cell
+ * @param  k           k >= 0
+ * @param  out         zero-filled array which must be of size maxKringSize(k)
+ * @param  distances   NULL or a zero-filled array which must be of size
+ *                     maxKringSize(k)
  */
 void H3_EXPORT(kRingDistances)(H3Index origin, int k, H3Index* out,
                                int* distances) {
-    const int maxIdx = H3_EXPORT(maxKringSize)(k);
     // Optimistically try the faster hexRange algorithm first
     const bool failed = H3_EXPORT(hexRangeDistances)(origin, k, out, distances);
     if (failed) {
+        const int maxIdx = H3_EXPORT(maxKringSize)(k);
         // Fast algo failed, fall back to slower, correct algo
         // and also wipe out array because contents untrustworthy
-        memset(out, 0, maxIdx * sizeof(out[0]));
-        memset(distances, 0, maxIdx * sizeof(distances[0]));
-        _kRingInternal(origin, k, out, distances, maxIdx, 0);
+        memset(out, 0, maxIdx * sizeof(H3Index));
+
+        if (distances == NULL) {
+            distances = calloc(maxIdx, sizeof(int));
+            _kRingInternal(origin, k, out, distances, maxIdx, 0);
+            free(distances);
+        } else {
+            memset(distances, 0, maxIdx * sizeof(int));
+            _kRingInternal(origin, k, out, distances, maxIdx, 0);
+        }
     }
 }
 
 /**
  * Internal helper function called recursively for kRingDistances.
  *
- * Adds the origin index to the output set (treating it as a hash set)
+ * Adds the origin cell to the output set (treating it as a hash set)
  * and recurses to its neighbors, if needed.
  *
- * @param origin
- * @param k Maximum distance to move from the origin.
- * @param out Array treated as a hash set, elements being either H3Index or 0.
- * @param distances Scratch area, with elements paralleling the out array.
- * Elements indicate ijk distance from the origin index to the output index.
- * @param maxIdx Size of out and scratch arrays (must be maxKringSize(k))
- * @param curK Current distance from the origin.
+ * @param  origin      Origin cell
+ * @param  k           Maximum distance to move from the origin
+ * @param  out         Array treated as a hash set, elements being either
+ *                     H3Index or 0.
+ * @param  distances   Scratch area, with elements paralleling the out array.
+ *                     Elements indicate ijk distance from the origin cell to
+ *                     the output cell
+ * @param  maxIdx      Size of out and scratch arrays (must be maxKringSize(k))
+ * @param  curK        Current distance from the origin
  */
 void _kRingInternal(H3Index origin, int k, H3Index* out, int* distances,
                     int maxIdx, int curK) {
@@ -409,7 +418,7 @@ H3Index h3NeighborRotations(H3Index origin, Direction dir, int* rotations) {
  * @return 0 if no pentagon or pentagonal distortion area was encountered.
  */
 int H3_EXPORT(hexRange)(H3Index origin, int k, H3Index* out) {
-    return H3_EXPORT(hexRangeDistances)(origin, k, out, 0);
+    return H3_EXPORT(hexRangeDistances)(origin, k, out, NULL);
 }
 
 /**
@@ -468,7 +477,7 @@ int H3_EXPORT(hexRangeDistances)(H3Index origin, int k, H3Index* out,
             // the end of this ring.
             origin =
                 h3NeighborRotations(origin, NEXT_RING_DIRECTION, &rotations);
-            if (origin == 0) {
+            if (origin == 0) {  // LCOV_EXCL_BR_LINE
                 // Should not be possible because `origin` would have to be a
                 // pentagon
                 return HEX_RANGE_K_SUBSEQUENCE;  // LCOV_EXCL_LINE
@@ -481,7 +490,7 @@ int H3_EXPORT(hexRangeDistances)(H3Index origin, int k, H3Index* out,
         }
 
         origin = h3NeighborRotations(origin, DIRECTIONS[direction], &rotations);
-        if (origin == 0) {
+        if (origin == 0) {  // LCOV_EXCL_BR_LINE
             // Should not be possible because `origin` would have to be a
             // pentagon
             return HEX_RANGE_K_SUBSEQUENCE;  // LCOV_EXCL_LINE
@@ -538,12 +547,17 @@ int H3_EXPORT(hexRanges)(H3Index* h3Set, int length, int k, H3Index* out) {
 }
 
 /**
- * Returns the hollow hexagonal ring centered at origin with sides of length k.
+ * Returns the "hollow" ring of hexagons at exactly grid distance k from
+ * the origin hexagon. In particular, k=0 returns just the origin hexagon.
+ *
+ * A nonzero failure code may be returned in some cases, for example,
+ * if a pentagon is encountered.
+ * Failure cases may be fixed in future versions.
  *
  * @param origin Origin location.
  * @param k k >= 0
  * @param out Array which must be of size 6 * k (or 1 if k == 0)
- * @return 0 if no pentagonal distortion was encountered.
+ * @return 0 if successful; nonzero otherwise.
  */
 int H3_EXPORT(hexRing)(H3Index origin, int k, H3Index* out) {
     // Short-circuit on 'identity' ring
@@ -563,7 +577,7 @@ int H3_EXPORT(hexRing)(H3Index origin, int k, H3Index* out) {
 
     for (int ring = 0; ring < k; ring++) {
         origin = h3NeighborRotations(origin, NEXT_RING_DIRECTION, &rotations);
-        if (origin == 0) {
+        if (origin == 0) {  // LCOV_EXCL_BR_LINE
             // Should not be possible because `origin` would have to be a
             // pentagon
             return HEX_RANGE_K_SUBSEQUENCE;  // LCOV_EXCL_LINE
@@ -583,7 +597,7 @@ int H3_EXPORT(hexRing)(H3Index origin, int k, H3Index* out) {
         for (int pos = 0; pos < k; pos++) {
             origin =
                 h3NeighborRotations(origin, DIRECTIONS[direction], &rotations);
-            if (origin == 0) {
+            if (origin == 0) {  // LCOV_EXCL_BR_LINE
                 // Should not be possible because `origin` would have to be a
                 // pentagon
                 return HEX_RANGE_K_SUBSEQUENCE;  // LCOV_EXCL_LINE

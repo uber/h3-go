@@ -73,8 +73,14 @@ pushd "$H3_SRC_DIR" || badexit
     echo Copying source files into working directory
     pushd ./src/h3lib/lib/ || badexit
         for f in *.c; do
-            cp -- "$f" "$CWD/h3_$f" || badexit
+            sed -E 's/#include "(.*)"/#include "h3_\1"/' "$f" > "$CWD/h3_$f" || badexit
         done
     popd || badexit
-    cp -R ./src/h3lib/include/ "$CWD"
+
+    echo Copying header files into working directory
+    pushd ./src/h3lib/include/ || badexit
+        for f in *.h; do
+            sed -E 's/#include "(.*)"/#include "h3_\1"/' "$f" > "$CWD/h3_$f" || badexit
+        done
+    popd || badexit
 popd || badexit
