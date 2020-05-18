@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Uber Technologies, Inc.
+ * Copyright 2018-2019 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,16 +19,15 @@
  * These functions try to provide a useful coordinate space in the vicinity of
  * an origin index.
  */
-#include <faceijk.h>
+#include <assert.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include "baseCells.h"
-#include "faceijk.h"
-#include "h3Index.h"
-#include "mathExtensions.h"
-#include "stackAlloc.h"
+#include "h3_baseCells.h"
+#include "h3_faceijk.h"
+#include "h3_h3Index.h"
+#include "h3_mathExtensions.h"
 
 /**
  * Origin leading digit -> index leading digit -> rotations 60 cw
@@ -87,24 +86,28 @@ const int PENTAGON_ROTATIONS_REVERSE_POLAR[7][7] = {
     {0, 1, 1, 0, 1, 1, 1},         // 6
 };
 
-// Simply prohibit many pentagon distortion cases rather than handling them.
-const bool FAILED_DIRECTIONS_II[7][7] = {
+/**
+ * Prohibited directions when unfolding a pentagon.
+ *
+ * Indexes by two directions, both relative to the pentagon base cell. The first
+ * is the direction of the origin index and the second is the direction of the
+ * index to unfold. Direction refers to the direction from base cell to base
+ * cell if the indexes are on different base cells, or the leading digit if
+ * within the pentagon base cell.
+ *
+ * This previously included a Class II/Class III check but these were removed
+ * due to failure cases. It's possible this could be restricted to a narrower
+ * set of a failure cases. Currently, the logic is any unfolding across more
+ * than one icosahedron face is not permitted.
+ */
+const bool FAILED_DIRECTIONS[7][7] = {
     {false, false, false, false, false, false, false},  // 0
     {false, false, false, false, false, false, false},  // 1
-    {false, false, false, false, true, false, false},   // 2
-    {false, false, false, false, false, false, true},   // 3
-    {false, false, false, true, false, false, false},   // 4
-    {false, false, true, false, false, false, false},   // 5
-    {false, false, false, false, false, true, false},   // 6
-};
-const bool FAILED_DIRECTIONS_III[7][7] = {
-    {false, false, false, false, false, false, false},  // 0
-    {false, false, false, false, false, false, false},  // 1
-    {false, false, false, false, false, true, false},   // 2
-    {false, false, false, false, true, false, false},   // 3
-    {false, false, true, false, false, false, false},   // 4
-    {false, false, false, false, false, false, true},   // 5
-    {false, false, false, true, false, false, false},   // 6
+    {false, false, false, false, true, true, false},    // 2
+    {false, false, false, false, true, false, true},    // 3
+    {false, false, true, true, false, false, false},    // 4
+    {false, false, true, false, false, false, true},    // 5
+    {false, false, false, true, false, true, false},    // 6
 };
 
 /**
@@ -135,8 +138,8 @@ int h3ToLocalIjk(H3Index origin, H3Index h3, CoordIJK* out) {
     int baseCell = H3_GET_BASE_CELL(h3);
 
     // Direction from origin base cell to index base cell
-    Direction dir = 0;
-    Direction revDir = 0;
+    Direction dir = CENTER_DIGIT;
+    Direction revDir = CENTER_DIGIT;
     if (originBaseCell != baseCell) {
         dir = _getBaseCellDirection(originBaseCell, baseCell);
         if (dir == INVALID_DIGIT) {
@@ -183,15 +186,10 @@ int h3ToLocalIjk(H3Index origin, H3Index h3, CoordIJK* out) {
         if (originOnPent) {
             int originLeadingDigit = _h3LeadingNonZeroDigit(origin);
 
-            // TODO: This previously included the Class III-based checks
-            // as in the index-on-pentagon case below, but these were
-            // removed due to some failure cases. It is possible that we
-            // could restrict this error to a narrower set of cases.
-            // https://github.com/uber/h3/issues/163
-            if (FAILED_DIRECTIONS_III[originLeadingDigit][dir] ||
-                FAILED_DIRECTIONS_II[originLeadingDigit][dir]) {
-                // TODO this part of the pentagon might not be unfolded
-                // correctly.
+            if (FAILED_DIRECTIONS[originLeadingDigit][dir]) {
+                // TODO: We may be unfolding the pentagon incorrectly in this
+                // case; return an error code until this is guaranteed to be
+                // correct.
                 return 3;
             }
 
@@ -200,12 +198,10 @@ int h3ToLocalIjk(H3Index origin, H3Index h3, CoordIJK* out) {
         } else if (indexOnPent) {
             int indexLeadingDigit = _h3LeadingNonZeroDigit(h3);
 
-            if ((isResClassIII(res) &&
-                 FAILED_DIRECTIONS_III[indexLeadingDigit][revDir]) ||
-                (!isResClassIII(res) &&
-                 FAILED_DIRECTIONS_II[indexLeadingDigit][revDir])) {
-                // TODO this part of the pentagon might not be unfolded
-                // correctly.
+            if (FAILED_DIRECTIONS[indexLeadingDigit][revDir]) {
+                // TODO: We may be unfolding the pentagon incorrectly in this
+                // case; return an error code until this is guaranteed to be
+                // correct.
                 return 4;
             }
 
@@ -248,10 +244,9 @@ int h3ToLocalIjk(H3Index origin, H3Index h3, CoordIJK* out) {
         int originLeadingDigit = _h3LeadingNonZeroDigit(origin);
         int indexLeadingDigit = _h3LeadingNonZeroDigit(h3);
 
-        if (FAILED_DIRECTIONS_III[originLeadingDigit][indexLeadingDigit] ||
-            FAILED_DIRECTIONS_II[originLeadingDigit][indexLeadingDigit]) {
-            // TODO this part of the pentagon might not be unfolded
-            // correctly.
+        if (FAILED_DIRECTIONS[originLeadingDigit][indexLeadingDigit]) {
+            // TODO: We may be unfolding the pentagon incorrectly in this case;
+            // return an error code until this is guaranteed to be correct.
             return 5;
         }
 
@@ -294,7 +289,7 @@ int localIjkToH3(H3Index origin, const CoordIJK* ijk, H3Index* out) {
 
     // check for res 0/base cell
     if (res == 0) {
-        if (ijk->i > 1 || ijk->i > 1 || ijk->i > 1) {
+        if (ijk->i > 1 || ijk->j > 1 || ijk->k > 1) {
             // out of range input
             return 1;
         }

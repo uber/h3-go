@@ -18,17 +18,17 @@
  *  coordinate systems.
  */
 
-#include "faceijk.h"
+#include "h3_faceijk.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "constants.h"
-#include "coordijk.h"
-#include "geoCoord.h"
-#include "h3Index.h"
-#include "vec3d.h"
+#include "h3_constants.h"
+#include "h3_coordijk.h"
+#include "h3_geoCoord.h"
+#include "h3_h3Index.h"
+#include "h3_vec3d.h"
 
 /** square root of 7 */
 #define M_SQRT7 2.6457513110645905905016157536392604257102L

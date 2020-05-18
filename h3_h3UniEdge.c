@@ -19,11 +19,11 @@
 
 #include <inttypes.h>
 #include <stdbool.h>
-#include "algos.h"
-#include "constants.h"
-#include "coordijk.h"
-#include "geoCoord.h"
-#include "h3Index.h"
+#include "h3_algos.h"
+#include "h3_constants.h"
+#include "h3_coordijk.h"
+#include "h3_geoCoord.h"
+#include "h3_h3Index.h"
 
 /**
  * Returns whether or not the provided H3Indexes are neighbors.

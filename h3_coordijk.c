@@ -18,14 +18,14 @@
  * lat/lon.
  */
 
-#include "coordijk.h"
+#include "h3_coordijk.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "constants.h"
-#include "geoCoord.h"
-#include "mathExtensions.h"
+#include "h3_constants.h"
+#include "h3_geoCoord.h"
+#include "h3_mathExtensions.h"
 
 /**
  * Sets an IJK coordinate to the specified component values.

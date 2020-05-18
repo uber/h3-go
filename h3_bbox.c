@@ -17,13 +17,13 @@
  * @brief   Geographic bounding box functions
  */
 
-#include "bbox.h"
+#include "h3_bbox.h"
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
-#include "constants.h"
-#include "geoCoord.h"
-#include "h3Index.h"
+#include "h3_constants.h"
+#include "h3_geoCoord.h"
+#include "h3_h3Index.h"
 
 /**
  * Whether the given bounding box crosses the antimeridian

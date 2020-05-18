@@ -21,11 +21,11 @@ package h3
 /*
 #cgo CFLAGS: -std=c99
 #cgo CFLAGS: -DH3_HAVE_VLA=1
-#cgo CFLAGS: -I ${SRCDIR}/include
+#cgo CFLAGS: -I ${SRCDIR}
 #cgo LDFLAGS: -lm
 #include <stdlib.h>
-#include <h3api.h>
-#include <h3Index.h>
+#include <h3_h3api.h>
+#include <h3_h3Index.h>
 */
 import "C"
 import (

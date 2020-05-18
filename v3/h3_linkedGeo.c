@@ -17,11 +17,11 @@
  * @brief   Linked data structure for geo data
  */
 
-#include "linkedGeo.h"
+#include "h3_linkedGeo.h"
 #include <assert.h>
 #include <stdlib.h>
-#include "geoCoord.h"
-#include "h3api.h"
+#include "h3_geoCoord.h"
+#include "h3_h3api.h"
 
 /**
  * Add a linked polygon to the current polygon
@@ -367,7 +367,7 @@ int normalizeMultiPolygon(LinkedGeoPolygon* root) {
 #define ITERATE ITERATE_LINKED_LOOP
 #define IS_EMPTY IS_EMPTY_LINKED_LOOP
 
-#include "polygonAlgos.h"
+#include "h3_polygonAlgos.h"
 
 #undef TYPE
 #undef IS_EMPTY

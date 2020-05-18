@@ -49,17 +49,11 @@ trap cleanup EXIT
 GIT_REMOTE=${1:-"https://github.com/uber/h3.git"}
 H3_SRC_DIR="src"
 
-# this must match the CGO include path in main.go
-H3_INC_DIR="include"
-
 # hold onto the current working directory to copy source files into.
 CWD=$(pwd)
 
 # clean up existing C source code.
 find . -name "*.c" -depth 1 -exec rm {} \;
-if [ -d "$H3_INC_DIR" ]; then
-    rm -rf "$H3_INC_DIR"
-fi
 
 echo Downloading H3 from "$GIT_REMOTE"
 
@@ -79,8 +73,14 @@ pushd "$H3_SRC_DIR" || badexit
     echo Copying source files into working directory
     pushd ./src/h3lib/lib/ || badexit
         for f in *.c; do
-            cp -- "$f" "$CWD/h3_$f" || badexit
+            sed -E 's/#include "(.*)"/#include "h3_\1"/' "$f" > "$CWD/h3_$f" || badexit
         done
     popd || badexit
-    cp -R ./src/h3lib/include/ "$CWD"/include
+
+    echo Copying header files into working directory
+    pushd ./src/h3lib/include/ || badexit
+        for f in *.h; do
+            sed -E 's/#include "(.*)"/#include "h3_\1"/' "$f" > "$CWD/h3_$f" || badexit
+        done
+    popd || badexit
 popd || badexit
