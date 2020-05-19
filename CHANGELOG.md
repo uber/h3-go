@@ -6,10 +6,12 @@ This project tracks the **major** and **minor** versions set by
 [`h3`](github.com/uber/h3), and introduces backwards-compatible updates and/or
 fixes via patches with patch version bumps.
 
-## Unreleased
+## 3.0.2
+
+### Fixed
+* `go mod vendor` now works correctly (#30, #32)
 
 ### Added
-
 * Some useful H3 constants (#22):
   * `MaxResolution`
   * `NumIcosaFaces`
