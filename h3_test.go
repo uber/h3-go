@@ -439,6 +439,15 @@ func TestPolyfill(t *testing.T) {
 	})
 }
 
+func TestLine(t *testing.T) {
+	start := validH3Rings1[0][0]
+	end := validH3Rings1[1][0]
+	line := Line(start, end)
+	assert.Equal(t, 2, len(line))
+	assert.Equal(t, start, line[0])
+	assert.Equal(t, end, line[1])
+}
+
 func almostEqual(t *testing.T, expected, actual interface{}, msgAndArgs ...interface{}) {
 	assert.InEpsilon(t, expected, actual, eps, msgAndArgs...)
 }
