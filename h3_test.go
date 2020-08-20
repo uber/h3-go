@@ -27,8 +27,12 @@ import (
 const eps = 1e-4
 
 // validH3Index resolution 5
-const validH3Index = H3Index(0x850dab63fffffff)
-const pentagonH3Index = H3Index(0x821c07fffffffff)
+const (
+	validH3Index        = H3Index(0x850dab63fffffff)
+	pentagonH3Index     = H3Index(0x821c07fffffffff)
+	validLineStartIndex = H3Index(0x89283082803ffff)
+	validLineEndIndex   = H3Index(0x8929a5653c3ffff)
+)
 
 var (
 	validH3Rings1 = [][]H3Index{
@@ -437,6 +441,16 @@ func TestPolyfill(t *testing.T) {
 		}
 		assert.ElementsMatch(t, expectedIndexes, indexes)
 	})
+}
+
+func TestLine(t *testing.T) {
+	t.Parallel()
+	line := Line(validLineStartIndex, validLineEndIndex)
+	assert.Equal(t, validLineStartIndex, line[0])
+	assert.Equal(t, validLineEndIndex, line[len(line)-1])
+	for i := 0; i < len(line)-1; i++ {
+		assert.True(t, AreNeighbors(line[i], line[i+1]))
+	}
 }
 
 func almostEqual(t *testing.T, expected, actual interface{}, msgAndArgs ...interface{}) {

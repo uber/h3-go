@@ -386,6 +386,14 @@ func UnidirectionalEdgeBoundary(edge H3Index) GeoBoundary {
 	return geoBndryFromC(gb)
 }
 
+// Line returns the line of h3 indexes connecting two indexes
+func Line(start, end H3Index) []H3Index {
+	n := C.h3LineSize(start, end)
+	cout := make([]C.H3Index, n)
+	C.h3Line(start, end, &cout[0])
+	return h3SliceFromC(cout)
+}
+
 func geoCoordFromC(cg C.GeoCoord) GeoCoord {
 	g := GeoCoord{}
 	g.Latitude = rad2deg * float64(cg.lat)
