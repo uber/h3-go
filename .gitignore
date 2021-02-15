@@ -29,3 +29,6 @@ _testmain.go
 
 # Intellij project files
 .idea
+
+# Test coverage file
+covprofile
