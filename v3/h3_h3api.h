@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Uber Technologies, Inc.
+ * Copyright 2016-2020 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -150,7 +150,7 @@ typedef struct {
  * Functions for geoToH3
  * @{
  */
-/** @brief find the H3 index of the resolution res cell containing the lat/lon g
+/** @brief find the H3 index of the resolution res cell containing the lat/lng
  */
 H3Index H3_EXPORT(geoToH3)(const GeoCoord *g, int res);
 /** @} */
@@ -183,8 +183,7 @@ int H3_EXPORT(hexRange)(H3Index origin, int k, H3Index *out);
 /** @} */
 
 /** @brief hexagons neighbors in all directions, assuming no pentagons,
- * reporting
- * distance from origin */
+ * reporting distance from origin */
 int H3_EXPORT(hexRangeDistances)(H3Index origin, int k, H3Index *out,
                                  int *distances);
 
@@ -252,33 +251,77 @@ double H3_EXPORT(degsToRads)(double degrees);
 double H3_EXPORT(radsToDegs)(double radians);
 /** @} */
 
+/** @defgroup pointDist pointDist
+ * Functions for pointDist
+ * @{
+ */
+/** @brief "great circle distance" between pairs of GeoCoord points in radians*/
+double H3_EXPORT(pointDistRads)(const GeoCoord *a, const GeoCoord *b);
+
+/** @brief "great circle distance" between pairs of GeoCoord points in
+ * kilometers*/
+double H3_EXPORT(pointDistKm)(const GeoCoord *a, const GeoCoord *b);
+
+/** @brief "great circle distance" between pairs of GeoCoord points in meters*/
+double H3_EXPORT(pointDistM)(const GeoCoord *a, const GeoCoord *b);
+/** @} */
+
 /** @defgroup hexArea hexArea
  * Functions for hexArea
  * @{
  */
-/** @brief hexagon area in square kilometers */
+/** @brief average hexagon area in square kilometers (excludes pentagons) */
 double H3_EXPORT(hexAreaKm2)(int res);
 
-/** @brief hexagon area in square meters */
+/** @brief average hexagon area in square meters (excludes pentagons) */
 double H3_EXPORT(hexAreaM2)(int res);
+/** @} */
+
+/** @defgroup cellArea cellArea
+ * Functions for cellArea
+ * @{
+ */
+/** @brief exact area for a specific cell (hexagon or pentagon) in radians^2 */
+double H3_EXPORT(cellAreaRads2)(H3Index h);
+
+/** @brief exact area for a specific cell (hexagon or pentagon) in kilometers^2
+ */
+double H3_EXPORT(cellAreaKm2)(H3Index h);
+
+/** @brief exact area for a specific cell (hexagon or pentagon) in meters^2 */
+double H3_EXPORT(cellAreaM2)(H3Index h);
 /** @} */
 
 /** @defgroup edgeLength edgeLength
  * Functions for edgeLength
  * @{
  */
-/** @brief hexagon edge length in kilometers */
+/** @brief average hexagon edge length in kilometers (excludes pentagons) */
 double H3_EXPORT(edgeLengthKm)(int res);
 
-/** @brief hexagon edge length in meters */
+/** @brief average hexagon edge length in meters (excludes pentagons) */
 double H3_EXPORT(edgeLengthM)(int res);
+/** @} */
+
+/** @defgroup exactEdgeLength exactEdgeLength
+ * Functions for exactEdgeLength
+ * @{
+ */
+/** @brief exact length for a specific unidirectional edge in radians*/
+double H3_EXPORT(exactEdgeLengthRads)(H3Index edge);
+
+/** @brief exact length for a specific unidirectional edge in kilometers*/
+double H3_EXPORT(exactEdgeLengthKm)(H3Index edge);
+
+/** @brief exact length for a specific unidirectional edge in meters*/
+double H3_EXPORT(exactEdgeLengthM)(H3Index edge);
 /** @} */
 
 /** @defgroup numHexagons numHexagons
  * Functions for numHexagons
  * @{
  */
-/** @brief number of hexagons for a given resolution */
+/** @brief number of cells (hexagons and pentagons) for a given resolution */
 int64_t H3_EXPORT(numHexagons)(int res);
 /** @} */
 
@@ -286,18 +329,30 @@ int64_t H3_EXPORT(numHexagons)(int res);
  * Functions for getRes0Indexes
  * @{
  */
-/** @brief returns the number of resolution 0 indexes */
+/** @brief returns the number of resolution 0 cells (hexagons and pentagons) */
 int H3_EXPORT(res0IndexCount)();
 
-/** @brief provides all base cells */
+/** @brief provides all base cells in H3Index format*/
 void H3_EXPORT(getRes0Indexes)(H3Index *out);
+/** @} */
+
+/** @defgroup getPentagonIndexes getPentagonIndexes
+ * Functions for getPentagonIndexes
+ * @{
+ */
+/** @brief returns the number of pentagons per resolution */
+int H3_EXPORT(pentagonIndexCount)();
+
+/** @brief generates all pentagons at the specified resolution */
+void H3_EXPORT(getPentagonIndexes)(int res, H3Index *out);
 /** @} */
 
 /** @defgroup h3GetResolution h3GetResolution
  * Functions for h3GetResolution
  * @{
  */
-/** @brief returns the resolution of the provided hexagon */
+/** @brief returns the resolution of the provided H3 index
+ * Works on both cells and unidirectional edges. */
 int H3_EXPORT(h3GetResolution)(H3Index h);
 /** @} */
 
@@ -305,7 +360,10 @@ int H3_EXPORT(h3GetResolution)(H3Index h);
  * Functions for h3GetBaseCell
  * @{
  */
-/** @brief returns the base cell of the provided hexagon */
+/** @brief returns the base cell "number" (0 to 121) of the provided H3 cell
+ *
+ * Note: Technically works on H3 edges, but will return base cell of the
+ * origin cell. */
 int H3_EXPORT(h3GetBaseCell)(H3Index h);
 /** @} */
 
@@ -329,7 +387,9 @@ void H3_EXPORT(h3ToString)(H3Index h, char *str, size_t sz);
  * Functions for h3IsValid
  * @{
  */
-/** @brief confirms if an H3Index is valid */
+/** @brief confirms if an H3Index is a valid cell (hexagon or pentagon)
+ * In particular, returns 0 (False) for H3 unidirectional edges or invalid data
+ */
 int H3_EXPORT(h3IsValid)(H3Index h);
 /** @} */
 
@@ -347,12 +407,20 @@ H3Index H3_EXPORT(h3ToParent)(H3Index h, int parentRes);
  * @{
  */
 /** @brief determines the maximum number of children (or grandchildren, etc)
- * that
- * could be returned for the given hexagon */
+ * that could be returned for the given hexagon */
 int H3_EXPORT(maxH3ToChildrenSize)(H3Index h, int childRes);
 
 /** @brief provides the children (or grandchildren, etc) of the given hexagon */
 void H3_EXPORT(h3ToChildren)(H3Index h, int childRes, H3Index *children);
+/** @} */
+
+/** @defgroup h3ToCenterChild h3ToCenterChild
+ * Functions for h3ToCenterChild
+ * @{
+ */
+/** @brief returns the center child of the given hexagon at the specified
+ * resolution */
+H3Index H3_EXPORT(h3ToCenterChild)(H3Index h, int childRes);
 /** @} */
 
 /** @defgroup compact compact
@@ -390,8 +458,19 @@ int H3_EXPORT(h3IsResClassIII)(H3Index h);
  * Functions for h3IsPentagon
  * @{
  */
-/** @brief determines if a hexagon is actually a pentagon */
+/** @brief determines if an H3 cell is a pentagon */
 int H3_EXPORT(h3IsPentagon)(H3Index h);
+/** @} */
+
+/** @defgroup h3GetFaces h3GetFaces
+ * Functions for h3GetFaces
+ * @{
+ */
+/** @brief Max number of icosahedron faces intersected by an index */
+int H3_EXPORT(maxFaceCount)(H3Index h3);
+
+/** @brief Find all icosahedron faces intersected by a given H3 index */
+void H3_EXPORT(h3GetFaces)(H3Index h3, int *out);
 /** @} */
 
 /** @defgroup h3IndexesAreNeighbors h3IndexesAreNeighbors

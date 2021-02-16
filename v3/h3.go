@@ -50,7 +50,7 @@ const (
 	NumBaseCells = C.NUM_BASE_CELLS
 
 	// InvalidH3Index is a sentinel value for an invalid H3 index.
-	InvalidH3Index = C.H3_INVALID_INDEX
+	InvalidH3Index = C.H3_NULL
 )
 
 var (
@@ -97,6 +97,23 @@ type GeoPolygon struct {
 
 	// Holes is a slice of interior boundary (holes) in the polygon
 	Holes [][]GeoCoord
+}
+
+type LinkedGeoCoord struct {
+	Vertex GeoCoord
+	Next   *LinkedGeoCoord
+}
+
+type LinkedGeoLoop struct {
+	First *LinkedGeoCoord
+	Last  *LinkedGeoCoord
+	Next  *LinkedGeoLoop
+}
+
+type LinkedGeoPolygon struct {
+	First *LinkedGeoLoop
+	Last  *LinkedGeoLoop
+	Next  *LinkedGeoPolygon
 }
 
 // --- INDEXING ---
@@ -331,6 +348,23 @@ func Polyfill(gp GeoPolygon, res int) []H3Index {
 	return h3SliceFromC(cout)
 }
 
+// SetToLinkedGeo returns a LinkedGeoPolygon describing the outlines of a set of hexagons
+func SetToLinkedGeo(in []H3Index) LinkedGeoPolygon {
+	if len(in) == 0 {
+		return LinkedGeoPolygon{}
+	}
+
+	cin := h3SliceToC(in)
+	csz := C.int(len(in))
+
+	cout := new(C.LinkedGeoPolygon)
+	defer C.destroyLinkedPolygon(cout)
+
+	C.h3SetToLinkedGeo(&cin[0], csz, cout)
+
+	return linkedGeoPolygonFromC(cout)
+}
+
 // --- UNIDIRECTIONAL EDGE FUNCTIONS ---
 
 // UnidirectionalEdge returns a unidirectional `H3Index` from `origin` to
@@ -386,6 +420,14 @@ func UnidirectionalEdgeBoundary(edge H3Index) GeoBoundary {
 	return geoBndryFromC(gb)
 }
 
+// Line returns the line of h3 indexes connecting two indexes
+func Line(start, end H3Index) []H3Index {
+	n := C.h3LineSize(start, end)
+	cout := make([]C.H3Index, n)
+	C.h3Line(start, end, &cout[0])
+	return h3SliceFromC(cout)
+}
+
 func geoCoordFromC(cg C.GeoCoord) GeoCoord {
 	g := GeoCoord{}
 	g.Latitude = rad2deg * float64(cg.lat)
@@ -431,6 +473,39 @@ func ringSize(k int) int {
 
 func rangeSize(k int) int {
 	return int(C.maxKringSize(C.int(k)))
+}
+
+func linkedGeoPolygonFromC(cg *C.LinkedGeoPolygon) LinkedGeoPolygon {
+	g := LinkedGeoPolygon{}
+	g.First = linkedGeoLoopFromC(cg.first)
+	g.Last = linkedGeoLoopFromC(cg.last)
+
+	return g
+}
+
+func linkedGeoLoopFromC(cg *C.LinkedGeoLoop) *LinkedGeoLoop {
+	g := LinkedGeoLoop{}
+	g.First = linkedGeoCoordFromC(cg.first)
+	g.Last = linkedGeoCoordFromC(cg.last)
+
+	if cg.next != nil {
+		next := linkedGeoLoopFromC(cg.next)
+		g.Next = next
+	}
+
+	return &g
+}
+
+func linkedGeoCoordFromC(cg *C.LinkedGeoCoord) *LinkedGeoCoord {
+	g := LinkedGeoCoord{}
+	g.Vertex = geoCoordFromC(cg.vertex)
+
+	if cg.next != nil {
+		next := linkedGeoCoordFromC(cg.next)
+		g.Next = next
+	}
+
+	return &g
 }
 
 // Convert slice of geocoordinates to an array of C geocoordinates (represented in C-style as a
