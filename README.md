@@ -1,6 +1,6 @@
 <img align="right" src="https://uber.github.io/img/h3Logo-color.svg" alt="H3 Logo" width="200">
 
-![Build Status](https://github.com/uber/h3-go/workflows/build/badge.svg)
+![Build](https://github.com/uber/h3-go/workflows/Build/badge.svg?branch=master)
 [![Coverage Status](https://coveralls.io/repos/github/uber/h3-go/badge.svg)](https://coveralls.io/github/uber/h3-go)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![GoDoc](http://img.shields.io/badge/go-doc-blue.svg)](https://godoc.org/github.com/uber/h3-go)
