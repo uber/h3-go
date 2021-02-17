@@ -6,7 +6,7 @@ This project tracks the **major** and **minor** versions set by
 [`h3`](github.com/uber/h3), and introduces backwards-compatible updates and/or
 fixes via patches with patch version bumps.
 
-## Unreleased
+## 3.7.0
 
 ### Added
 
