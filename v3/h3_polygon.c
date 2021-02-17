@@ -18,9 +18,11 @@
  */
 
 #include "h3_polygon.h"
+
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
+
 #include "h3_bbox.h"
 #include "h3_constants.h"
 #include "h3_geoCoord.h"

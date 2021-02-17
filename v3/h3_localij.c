@@ -24,6 +24,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "h3_baseCells.h"
 #include "h3_faceijk.h"
 #include "h3_h3Index.h"

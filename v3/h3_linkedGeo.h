@@ -21,6 +21,7 @@
 #define LINKED_GEO_H
 
 #include <stdlib.h>
+
 #include "h3_bbox.h"
 #include "h3_geoCoord.h"
 #include "h3_h3api.h"

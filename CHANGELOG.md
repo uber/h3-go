@@ -10,6 +10,7 @@ fixes via patches with patch version bumps.
 
 ### Added
 
+* SetToLinkedGeo function
 * Line function
 
 ## 3.0.2

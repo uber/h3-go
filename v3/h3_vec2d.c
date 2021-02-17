@@ -18,6 +18,7 @@
  */
 
 #include "h3_vec2d.h"
+
 #include <math.h>
 #include <stdio.h>
 
