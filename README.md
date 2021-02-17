@@ -4,7 +4,7 @@
 [![Coverage Status](https://coveralls.io/repos/github/uber/h3-go/badge.svg)](https://coveralls.io/github/uber/h3-go)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![GoDoc](http://img.shields.io/badge/go-doc-blue.svg)](https://godoc.org/github.com/uber/h3-go)
-[![H3 Version](https://img.shields.io/badge/h3-v3.4.0-blue.svg)](https://github.com/uber/h3/releases/tag/v3.4.0)
+[![H3 Version](https://img.shields.io/badge/h3-v3.7.0-blue.svg)](https://github.com/uber/h3/releases/tag/v3.7.0)
 
 # H3-Go
 
