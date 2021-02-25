@@ -57,7 +57,7 @@ glide install github.com/uber/h3-go
 ## Quickstart
 
 ```go
-import "github.com/uber/h3-go"
+import "github.com/uber/h3-go/v3"
 
 func ExampleFromGeo() {
 	geo := h3.GeoCoord{
