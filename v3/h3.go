@@ -43,10 +43,10 @@ const (
 	// MaxResolution is the maximum H3 resolution a GeoCoord can be indexed to.
 	MaxResolution = C.MAX_H3_RES
 
-	// The number of faces on an icosahedron
+	// NumIcosaFaces The number of faces on an icosahedron
 	NumIcosaFaces = C.NUM_ICOSA_FACES
 
-	// The number of H3 base cells
+	// NumBaseCells The number of H3 base cells
 	NumBaseCells = C.NUM_BASE_CELLS
 
 	// InvalidH3Index is a sentinel value for an invalid H3 index.
@@ -99,17 +99,20 @@ type GeoPolygon struct {
 	Holes [][]GeoCoord
 }
 
+// LinkedGeoCoord A coordinate node in a linked geo structure, part of a linked list
 type LinkedGeoCoord struct {
 	Vertex GeoCoord
 	Next   *LinkedGeoCoord
 }
 
+// LinkedGeoLoop A loop node in a linked geo structure, part of a linked list
 type LinkedGeoLoop struct {
 	First *LinkedGeoCoord
 	Last  *LinkedGeoCoord
 	Next  *LinkedGeoLoop
 }
 
+// LinkedGeoPolygon A polygon node in a linked geo structure, part of a linked list.
 type LinkedGeoPolygon struct {
 	First *LinkedGeoLoop
 	Last  *LinkedGeoLoop
