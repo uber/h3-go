@@ -428,6 +428,122 @@ func Line(start, end H3Index) []H3Index {
 	return h3SliceFromC(cout)
 }
 
+// HexAreaKm2 returns the average hexagon area in square kilometers at the given resolution.
+func HexAreaKm2(resolution int) float64 {
+	return float64(C.hexAreaKm2(C.int(resolution)))
+}
+
+// HexAreaM2 returns the average hexagon area in square meters at the given resolution.
+func HexAreaM2(resolution int) float64 {
+	return float64(C.hexAreaM2(C.int(resolution)))
+}
+
+// PointDistRads returns the "great circle" or "haversine" distance between pairs of GeoCoord points (lat/lng pairs) in radians.
+func PointDistRads(a, b GeoCoord) float64 {
+	return float64(C.pointDistRads(a.toCPtr(), b.toCPtr()))
+}
+
+// PointDistKm returns the "great circle" or "haversine" distance between pairs of GeoCoord points (lat/lng pairs) in kilometers.
+func PointDistKm(a, b GeoCoord) float64 {
+	return float64(C.pointDistKm(a.toCPtr(), b.toCPtr()))
+}
+
+// PointDistM returns the "great circle" or "haversine" distance between pairs of GeoCoord points (lat/lng pairs) in meters.
+func PointDistM(a, b GeoCoord) float64 {
+	return float64(C.pointDistM(a.toCPtr(), b.toCPtr()))
+}
+
+// CellAreaRads2 returns the exact area of specific cell in square radians.
+func CellAreaRads2(h H3Index) float64 {
+	return float64(C.cellAreaRads2(h))
+}
+
+// CellAreaKm2 returns the exact area of specific cell in square kilometers.
+func CellAreaKm2(h H3Index) float64 {
+	return float64(C.cellAreaKm2(h))
+}
+
+// CellAreaM2 returns the exact area of specific cell in square meters.
+func CellAreaM2(h H3Index) float64 {
+	return float64(C.cellAreaM2(h))
+}
+
+// EdgeLengthKm returns the average hexagon edge length in kilometers at the given resolution.
+func EdgeLengthKm(resolution int) float64 {
+	return float64(C.edgeLengthKm(C.int(resolution)))
+}
+
+// EdgeLengthM returns the average hexagon edge length in meters at the given resolution.
+func EdgeLengthM(resolution int) float64 {
+	return float64(C.edgeLengthM(C.int(resolution)))
+}
+
+// ExactEdgeLengthRads returns the exact edge length of specific unidirectional edge in radians.
+func ExactEdgeLengthRads(h H3Index) float64 {
+	return float64(C.exactEdgeLengthRads(h))
+}
+
+// ExactEdgeLengthKm returns the exact edge length of specific unidirectional edge in kilometers.
+func ExactEdgeLengthKm(h H3Index) float64 {
+	return float64(C.exactEdgeLengthKm(h))
+}
+
+// ExactEdgeLengthM returns the exact edge length of specific unidirectional edge in meters.
+func ExactEdgeLengthM(h H3Index) float64 {
+	return float64(C.exactEdgeLengthM(h))
+}
+
+// NumHexagons returns the number of unique H3 indexes at the given resolution.
+func NumHexagons(resolution int) int {
+	return int(C.numHexagons(C.int(resolution)))
+}
+
+// Res0IndexCount returns the number of resolution 0 H3 indexes.
+func Res0IndexCount() int {
+	return int(C.res0IndexCount())
+}
+
+// GetRes0Indexes returns all the resolution 0 H3 indexes.
+func GetRes0Indexes() []H3Index {
+	out := make([]C.H3Index, Res0IndexCount())
+	C.getRes0Indexes(&out[0])
+	return h3SliceFromC(out)
+}
+
+// DistanceBetween returns the distance in grid cells between the two indexes
+func DistanceBetween(origin, dest H3Index) int {
+	return int(C.h3Distance(origin, dest))
+}
+
+// ToCenterChild returns the center child (finer) index contained by h at resolution.
+func ToCenterChild(h H3Index, resolution int) H3Index {
+	return C.h3ToCenterChild(h, C.int(resolution))
+}
+
+// MaxFaceCount returns the maximum number of icosahedron faces the given H3 index may intersect.
+func MaxFaceCount(h H3Index) int {
+	return int(C.maxFaceCount(h))
+}
+
+// GetFaces returns all icosahedron faces intersected by a given H3 index
+func GetFaces(h H3Index) []int {
+	out := make([]C.int, MaxFaceCount(h))
+	C.h3GetFaces(h, &out[0])
+	return intSliceFromC(out)
+}
+
+// PentagonIndexCount returns the number of pentagon H3 indexes per resolution (This is always 12)
+func PentagonIndexCount() int {
+	return int(C.pentagonIndexCount())
+}
+
+// GetPentagonIndex returns all the pentagon H3 indexes at the specified resolution.
+func GetPentagonIndexes(resolution int) []H3Index {
+	out := make([]C.H3Index, PentagonIndexCount())
+	C.getPentagonIndexes(C.int(resolution), &out[0])
+	return h3SliceFromC(out)
+}
+
 func geoCoordFromC(cg C.GeoCoord) GeoCoord {
 	g := GeoCoord{}
 	g.Latitude = rad2deg * float64(cg.lat)
@@ -460,6 +576,19 @@ func h3SliceToC(hs []H3Index) []C.H3Index {
 	out := make([]C.H3Index, len(hs))
 	for i, h := range hs {
 		out[i] = h
+	}
+	return out
+}
+
+func intSliceFromC(chs []C.int) []int {
+	out := make([]int, 0, len(chs))
+	for _, ch := range chs {
+		// C API returns a sparse array of indexes in the event pentagons and
+		// deleted sequences are encountered.
+		if ch == -1 {
+			continue
+		}
+		out = append(out, int(ch))
 	}
 	return out
 }
