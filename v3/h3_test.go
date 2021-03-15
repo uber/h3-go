@@ -148,6 +148,13 @@ var (
 			0x872f5a329ffffff,
 		},
 	}
+
+	validGeoCoordB = GeoCoord{
+		Latitude:  37.775705522929044,
+		Longitude: -122.41812765598296,
+	}
+
+	validEdge = H3Index(0x1250dab73fffffff)
 )
 
 func TestFromGeo(t *testing.T) {
@@ -504,6 +511,251 @@ func TestLine(t *testing.T) {
 	for i := 0; i < len(line)-1; i++ {
 		assert.True(t, AreNeighbors(line[i], line[i+1]))
 	}
+}
+
+func TestHexAreaKm2(t *testing.T) {
+	t.Parallel()
+	t.Run("min resolution", func(t *testing.T) {
+		t.Parallel()
+		area := HexAreaKm2(0)
+
+		assert.Equal(t, float64(4250546.848), area)
+	})
+	t.Run("max resolution", func(t *testing.T) {
+		t.Parallel()
+		area := HexAreaKm2(15)
+
+		assert.Equal(t, float64(0.0000009), area)
+	})
+	t.Run("mid resolution", func(t *testing.T) {
+		t.Parallel()
+		area := HexAreaKm2(8)
+
+		assert.Equal(t, float64(0.7373276), area)
+	})
+}
+
+func TestHexAreaM2(t *testing.T) {
+	t.Parallel()
+	t.Run("min resolution", func(t *testing.T) {
+		t.Parallel()
+		area := HexAreaM2(0)
+
+		assert.Equal(t, float64(4250550000000), area)
+	})
+	t.Run("max resolution", func(t *testing.T) {
+		t.Parallel()
+		area := HexAreaM2(15)
+
+		assert.Equal(t, float64(0.9), area)
+	})
+	t.Run("mid resolution", func(t *testing.T) {
+		t.Parallel()
+		area := HexAreaM2(8)
+
+		assert.Equal(t, float64(737327.6), area)
+	})
+}
+
+func TestPointDistRads(t *testing.T) {
+	t.Parallel()
+	distance := PointDistRads(validGeoCoord, validGeoCoordB)
+	assert.Equal(t, float64(0.6796147656451452), distance)
+}
+
+func TestPointDistKm(t *testing.T) {
+	t.Parallel()
+	distance := PointDistKm(validGeoCoord, validGeoCoordB)
+	assert.Equal(t, float64(4329.830552183446), distance)
+}
+
+func TestPointDistM(t *testing.T) {
+	t.Parallel()
+	distance := PointDistM(validGeoCoord, validGeoCoordB)
+	assert.Equal(t, float64(4329830.5521834465), distance)
+}
+
+func TestCellAreaRads2(t *testing.T) {
+	t.Parallel()
+	distance := CellAreaRads2(validH3Index)
+	assert.Equal(t, float64(0.000006643967854567278), distance)
+}
+
+func TestCellAreaKm2(t *testing.T) {
+	t.Parallel()
+	distance := CellAreaKm2(validH3Index)
+	assert.Equal(t, float64(269.6768779509321), distance)
+}
+
+func TestCellAreaM2(t *testing.T) {
+	t.Parallel()
+	distance := CellAreaM2(validH3Index)
+	assert.Equal(t, float64(269676877.95093215), distance)
+}
+
+func TestEdgeLengthKm(t *testing.T) {
+	t.Parallel()
+	t.Run("min resolution", func(t *testing.T) {
+		t.Parallel()
+		area := EdgeLengthKm(0)
+
+		assert.Equal(t, float64(1107.712591), area)
+	})
+	t.Run("max resolution", func(t *testing.T) {
+		t.Parallel()
+		area := EdgeLengthKm(15)
+
+		assert.Equal(t, float64(0.000509713), area)
+	})
+	t.Run("mid resolution", func(t *testing.T) {
+		t.Parallel()
+		area := EdgeLengthKm(8)
+
+		assert.Equal(t, float64(0.461354684), area)
+	})
+}
+
+func TestEdgeLengthM(t *testing.T) {
+	t.Parallel()
+	t.Run("min resolution", func(t *testing.T) {
+		t.Parallel()
+		area := EdgeLengthM(0)
+
+		assert.Equal(t, float64(1107712.591), area)
+	})
+	t.Run("max resolution", func(t *testing.T) {
+		t.Parallel()
+		area := EdgeLengthM(15)
+
+		assert.Equal(t, float64(0.509713273), area)
+	})
+	t.Run("mid resolution", func(t *testing.T) {
+		t.Parallel()
+		area := EdgeLengthM(8)
+
+		assert.Equal(t, float64(461.3546837), area)
+	})
+}
+
+func TestExactEdgeLengthRads(t *testing.T) {
+	t.Parallel()
+
+	distance := ExactEdgeLengthRads(validEdge)
+	assert.Equal(t, float64(0.001569665746947077), distance)
+}
+
+func TestExactEdgeLengthKm(t *testing.T) {
+	t.Parallel()
+
+	distance := ExactEdgeLengthKm(validEdge)
+	assert.Equal(t, float64(10.00035174544159), distance)
+}
+
+func TestExactEdgeLengthM(t *testing.T) {
+	t.Parallel()
+
+	distance := ExactEdgeLengthM(validEdge)
+	assert.Equal(t, float64(10000.351745441589), distance)
+}
+
+func TestNumHexagons(t *testing.T) {
+	t.Parallel()
+	t.Run("min resolution", func(t *testing.T) {
+		t.Parallel()
+		count := NumHexagons(0)
+
+		assert.Equal(t, 122, count)
+	})
+	t.Run("max resolution", func(t *testing.T) {
+		t.Parallel()
+		count := NumHexagons(15)
+
+		assert.Equal(t, 569707381193162, count)
+	})
+	t.Run("mid resolution", func(t *testing.T) {
+		t.Parallel()
+		count := NumHexagons(8)
+
+		assert.Equal(t, 691776122, count)
+	})
+}
+
+func TestRes0IndexCount(t *testing.T) {
+	t.Parallel()
+	count := Res0IndexCount()
+
+	assert.Equal(t, 122, count)
+}
+
+func TestGetRes0Indexes(t *testing.T) {
+	t.Parallel()
+	indexes := GetRes0Indexes()
+
+	assert.Equal(t, 122, len(indexes))
+	assert.Equal(t, H3Index(0x8001fffffffffff), indexes[0])
+	assert.Equal(t, H3Index(0x80f3fffffffffff), indexes[121])
+}
+
+func TestDistanceBetween(t *testing.T) {
+	t.Parallel()
+	distance := DistanceBetween(validLineStartIndex, validLineEndIndex)
+
+	assert.Equal(t, 1823, distance)
+}
+
+func TestToCenterChild(t *testing.T) {
+	t.Parallel()
+
+	child := ToCenterChild(validH3Index, 15)
+
+	assert.Equal(t, H3Index(0x8f0dab600000000), child)
+}
+
+func TestMaxFaceCount(t *testing.T) {
+	t.Parallel()
+
+	faces := MaxFaceCount(validH3Index)
+
+	assert.Equal(t, 2, faces)
+}
+
+func TestGetFaces(t *testing.T) {
+	t.Parallel()
+
+	faces := GetFaces(validH3Rings1[1][1])
+
+	assert.Equal(t, 1, len(faces))
+	assert.Equal(t, 1, faces[0])
+}
+
+func TestPentagonIndexCount(t *testing.T) {
+	t.Parallel()
+
+	pentagonCount := PentagonIndexCount()
+
+	assert.Equal(t, 12, pentagonCount)
+}
+
+func TestGetPentagonIndexes(t *testing.T) {
+	t.Parallel()
+	t.Run("min resolution", func(t *testing.T) {
+		t.Parallel()
+		pentagons := GetPentagonIndexes(0)
+
+		assert.Equal(t, 12, len(pentagons))
+	})
+	t.Run("max resolution", func(t *testing.T) {
+		t.Parallel()
+		pentagons := GetPentagonIndexes(15)
+
+		assert.Equal(t, 12, len(pentagons))
+	})
+	t.Run("mid resolution", func(t *testing.T) {
+		t.Parallel()
+		pentagons := GetPentagonIndexes(8)
+
+		assert.Equal(t, 12, len(pentagons))
+	})
 }
 
 func almostEqual(t *testing.T, expected, actual interface{}, msgAndArgs ...interface{}) {
