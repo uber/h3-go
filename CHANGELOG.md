@@ -4,13 +4,13 @@ format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 This project tracks the **major** and **minor** versions set by
 [`h3`](github.com/uber/h3), and introduces backwards-compatible updates and/or
-fixes via patches with patch version bumps.
+fixes via **patches** with patch version bumps.
 
-## Unreleased
+## 3.7.1
 
 ### Added
 
-* Functions to cover full functionality
+* Functions to cover full functionality (#46)
   * `Res0IndexCount`
   * `GetRes0Indexes`
   * `DistanceBetween`
@@ -38,8 +38,8 @@ fixes via patches with patch version bumps.
 
 ### Added
 
-* SetToLinkedGeo function
-* Line function
+* `SetToLinkedGeo` function (#41)
+* `Line` function (#37)
 
 ## 3.0.2
 
@@ -57,7 +57,7 @@ fixes via patches with patch version bumps.
 
 ### Added
 
-* Polyfill function (#19).
+* `Polyfill` function (#19).
 
 ### Changed
 
