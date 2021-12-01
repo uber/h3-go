@@ -609,6 +609,11 @@ func linkedGeoPolygonFromC(cg *C.LinkedGeoPolygon) LinkedGeoPolygon {
 	g.First = linkedGeoLoopFromC(cg.first)
 	g.Last = linkedGeoLoopFromC(cg.last)
 
+	if cg.next != nil {
+		next := linkedGeoPolygonFromC(cg.next)
+		g.Next = &next
+	}
+
 	return g
 }
 

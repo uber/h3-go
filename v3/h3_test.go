@@ -147,6 +147,32 @@ var (
 			0x872f5a374ffffff,
 			0x872f5a329ffffff,
 		},
+		{
+			0x89194ad36a3ffff,
+			0x89194ad3263ffff,
+			0x89194ad326fffff,
+			0x89194ad149bffff,
+			0x89194ad1493ffff,
+			0x89194ad322bffff,
+			0x89194ad3277ffff,
+			0x89194ad338bffff,
+			0x89194ad3313ffff,
+			0x89194ad3317ffff,
+			0x89194ad33bbffff,
+			0x89194ad3387ffff,
+			0x89194ad3383ffff,
+			0x89194ad3397ffff,
+			0x89194ad33b3ffff,
+			0x89194ad314fffff,
+			0x89194ad3143ffff,
+			0x89194ad315bffff,
+			0x88194ad369fffff,
+			0x88194ad361fffff,
+			0x88194ad363fffff,
+			0x88194ad30dfffff,
+			0x88194ad347fffff,
+			0x88194ad345fffff,
+		},
 	}
 
 	validGeoCoordB = GeoCoord{
@@ -500,6 +526,23 @@ func TestSetToLinkedGeo(t *testing.T) {
 
 		assert.Equal(t, float64(35.68805899195678), polygon.Last.First.Vertex.Latitude)
 		assert.Equal(t, float64(139.7268573711303), polygon.Last.First.Vertex.Longitude)
+	})
+	t.Run("Multipolygon", func(t *testing.T) {
+		t.Parallel()
+		polygon := SetToLinkedGeo(validLinkedIndexes[2])
+
+		assert.NotNil(t, polygon.First)
+		assert.NotNil(t, polygon.Last)
+		assert.NotNil(t, polygon.Next)
+
+		assert.Equal(t, float64(51.49710134101195), polygon.First.First.Vertex.Latitude)
+		assert.Equal(t, float64(-0.09036943363144687), polygon.First.First.Vertex.Longitude)
+
+		assert.Equal(t, float64(51.49794867871118), polygon.Last.First.Vertex.Latitude)
+		assert.Equal(t, float64(-0.07191264615040037), polygon.Last.First.Vertex.Longitude)
+
+		assert.Equal(t, float64(51.53058149905774), polygon.Next.First.First.Vertex.Latitude)
+		assert.Equal(t, float64(-0.07297959470277668), polygon.Next.First.First.Vertex.Longitude)
 	})
 }
 
