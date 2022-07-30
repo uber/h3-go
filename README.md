@@ -6,6 +6,8 @@
 [![GoDoc](http://img.shields.io/badge/go-doc-blue.svg)](https://godoc.org/github.com/uber/h3-go)
 [![H3 Version](https://img.shields.io/badge/h3-v3.7.0-blue.svg)](https://github.com/uber/h3/releases/tag/v3.7.0)
 
+<h1 align="center">H3-Go is looking for a maintainer familiar with Go, C, and H3. Volunteers welcome! Please get in touch with us on the <a href="https://join.slack.com/t/h3-core/shared_invite/zt-g6u5r1hf-W_~uVJmfeiWtMQuBGc1NNg">H3 Slack</a>.</h1>
+
 # H3-Go
 
 This library provides Golang bindings for the
