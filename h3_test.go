@@ -167,6 +167,7 @@ func TestIsValid(t *testing.T) {
 func TestRoundtrip(t *testing.T) {
 	t.Parallel()
 	t.Run("latlng", func(t *testing.T) {
+		t.Parallel()
 		expectedGeo := LatLng{Lat: 1, Lng: 2}
 		c := LatLngToCell(expectedGeo, MaxResolution)
 		actualGeo := CellToLatLng(c)
@@ -174,6 +175,7 @@ func TestRoundtrip(t *testing.T) {
 		assertEqualLatLng(t, expectedGeo, expectedGeo.Cell(MaxResolution).LatLng())
 	})
 	t.Run("cell", func(t *testing.T) {
+		t.Parallel()
 		geo := CellToLatLng(validCell)
 		actualCell := LatLngToCell(geo, Resolution(validCell))
 		assertEqual(t, validCell, actualCell)
@@ -761,13 +763,13 @@ func assertNoPanic(t *testing.T, f func()) {
 	f()
 }
 
-func assertFalse(t *testing.T, b bool, msgAndArgs ...interface{}) {
+func assertFalse(t *testing.T, b bool) {
 	t.Helper()
-	assertEqual(t, false, b, msgAndArgs...)
+	assertEqual(t, false, b)
 }
-func assertTrue(t *testing.T, b bool, msgAndArgs ...interface{}) {
+func assertTrue(t *testing.T, b bool) {
 	t.Helper()
-	assertEqual(t, true, b, msgAndArgs...)
+	assertEqual(t, true, b)
 }
 
 func sortIndices[T Index](s []T) []T {
