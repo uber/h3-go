@@ -66,12 +66,6 @@ const (
 	RadsToDegs = 180.0 / math.Pi
 )
 
-// Index is an H3 index, a 64-bit unsigned integer that uniquely identifies
-// a single hexagon cell, and directed edges between two neighbor hexagons.
-// Cell and DirectedEdge are developer-friendly abstractions around this
-// type.
-type Index interface{ Cell | DirectedEdge }
-
 type (
 
 	// Cell is an Index that identifies a single hexagon cell at a resolution.
@@ -393,17 +387,12 @@ func Pentagons(resolution int) []Cell {
 	return cellsFromC(out, false, false)
 }
 
-// Resolution returns the resolution of h.
-func Resolution[T Index](h T) int {
-	return int(C.getResolution(C.H3Index(h)))
-}
-
 func (c Cell) Resolution() int {
-	return Resolution(c)
+	return int(C.getResolution(C.H3Index(c)))
 }
 
 func (e DirectedEdge) Resolution() int {
-	return Resolution(e)
+	return int(C.getResolution(C.H3Index(e)))
 }
 
 // BaseCellNumber returns the integer ID (0-121) of the base cell the H3Index h

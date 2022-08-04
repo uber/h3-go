@@ -177,7 +177,7 @@ func TestRoundtrip(t *testing.T) {
 	t.Run("cell", func(t *testing.T) {
 		t.Parallel()
 		geo := CellToLatLng(validCell)
-		actualCell := LatLngToCell(geo, Resolution(validCell))
+		actualCell := LatLngToCell(geo, validCell.Resolution())
 		assertEqual(t, validCell, actualCell)
 	})
 }
@@ -187,7 +187,7 @@ func TestResolution(t *testing.T) {
 
 	for i := 1; i <= MaxResolution; i++ {
 		c := LatLngToCell(validLatLng1, i)
-		assertEqual(t, i, Resolution(c))
+		assertEqual(t, i, c.Resolution())
 	}
 
 	for _, e := range validCell.DirectedEdges() {
@@ -209,7 +209,7 @@ func TestParent(t *testing.T) {
 	// get the children at the resolution of the original index
 	children := parent.ImmediateChildren()
 
-	assertIndexIn(t, validCell, children)
+	assertCellIn(t, validCell, children)
 }
 
 func TestCompactCells(t *testing.T) {
@@ -228,7 +228,7 @@ func TestUncompactCells(t *testing.T) {
 	// get the index's parent by requesting that index's resolution+1
 	parent := validCell.ImmediateParent()
 	out := UncompactCells([]Cell{parent}, parent.Resolution()+1)
-	assertIndexIn(t, validCell, out)
+	assertCellIn(t, validCell, out)
 }
 
 func TestIsResClassIII(t *testing.T) {
@@ -662,8 +662,8 @@ func assertEqualCells(t *testing.T, expected, actual []Cell, msgAndArgs ...inter
 		return
 	}
 
-	expected = sortIndices(copySlice(expected))
-	actual = sortIndices(copySlice(actual))
+	expected = sortCells(copySlice(expected))
+	actual = sortCells(copySlice(actual))
 
 	count := 0
 
@@ -698,8 +698,8 @@ func assertEqualDiskDistances(t *testing.T, expected, actual [][]Cell) {
 			return
 		}
 
-		expected[i] = sortIndices(copySlice(expected[i]))
-		actual[i] = sortIndices(copySlice(actual[i]))
+		expected[i] = sortCells(copySlice(expected[i]))
+		actual[i] = sortCells(copySlice(actual[i]))
 
 		for j, cell := range expected[i] {
 			if cell != actual[i][j] {
@@ -718,8 +718,8 @@ func assertEqualDisks(t *testing.T, expected, actual []Cell) {
 		return
 	}
 
-	expected = sortIndices(copySlice(expected))
-	actual = sortIndices(copySlice(actual))
+	expected = sortCells(copySlice(expected))
+	actual = sortCells(copySlice(actual))
 
 	count := 0
 
@@ -736,7 +736,7 @@ func assertEqualDisks(t *testing.T, expected, actual []Cell) {
 	}
 }
 
-func assertIndexIn[T Index](t *testing.T, needle T, haystack []T) {
+func assertCellIn(t *testing.T, needle Cell, haystack []Cell) {
 	t.Helper()
 
 	var found bool
@@ -772,7 +772,7 @@ func assertTrue(t *testing.T, b bool) {
 	assertEqual(t, true, b)
 }
 
-func sortIndices[T Index](s []T) []T {
+func sortCells(s []Cell) []Cell {
 	sort.SliceStable(s, func(i, j int) bool {
 		return s[i] < s[j]
 	})
