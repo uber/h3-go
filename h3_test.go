@@ -17,27 +17,25 @@ package h3
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const eps = 1e-4
 
-// validH3Index resolution 5
+// validH3Index resolution 5.
 const (
-	validH3Index        = H3Index(0x850dab63fffffff)
-	pentagonH3Index     = H3Index(0x821c07fffffffff)
-	validLineStartIndex = H3Index(0x89283082803ffff)
-	validLineEndIndex   = H3Index(0x8929a5653c3ffff)
+	validCell     = Cell(0x850dab63fffffff)
+	pentagonCell  = Cell(0x821c07fffffffff)
+	lineStartCell = Cell(0x89283082803ffff)
+	lineEndCell   = Cell(0x8929a5653c3ffff)
 )
 
 var (
-	validH3Rings1 = [][]H3Index{
+	validDiskDist3_1 = [][]Cell{
 		{
-			validH3Index,
+			validCell,
 		},
 		{
 			0x850dab73fffffff,
@@ -62,361 +60,287 @@ var (
 			0x850dab0ffffffff,
 		},
 	}
-	validH3Rings2 = [][]H3Index{
-		{
-			0x8928308280fffff,
-		}, {
-			0x8928308280bffff,
-			0x89283082873ffff,
-			0x89283082877ffff,
-			0x8928308283bffff,
-			0x89283082807ffff,
-			0x89283082803ffff,
-		},
-		{
-			0x8928308281bffff,
-			0x89283082857ffff,
-			0x89283082847ffff,
-			0x8928308287bffff,
-			0x89283082863ffff,
-			0x89283082867ffff,
-			0x8928308282bffff,
-			0x89283082823ffff,
-			0x89283082833ffff,
-			0x892830828abffff,
-			0x89283082817ffff,
-			0x89283082813ffff,
-		},
+
+	validLatLng1 = LatLng{
+		Lat: 67.1509268640,
+		Lng: -168.3908885810,
+	}
+	validLatLng2 = LatLng{
+		Lat: 37.775705522929044,
+		Lng: -122.41812765598296,
 	}
 
-	validGeoCoord = GeoCoord{
-		Latitude:  67.1509268640,
-		Longitude: -168.3908885810,
+	// validGeoLoop is the boundary of validCell_1.
+	validGeoLoop = GeoLoop{
+		{Lat: 67.224749856, Lng: -168.523006585},
+		{Lat: 67.140938355, Lng: -168.626914333},
+		{Lat: 67.067252558, Lng: -168.494913285},
+		{Lat: 67.077062918, Lng: -168.259695931},
+		{Lat: 67.160561948, Lng: -168.154801171},
+		{Lat: 67.234563187, Lng: -168.286102782},
 	}
 
-	validGeofence = GeoBoundary{
-		{Latitude: 67.224749856, Longitude: -168.523006585},
-		{Latitude: 67.140938355, Longitude: -168.626914333},
-		{Latitude: 67.067252558, Longitude: -168.494913285},
-		{Latitude: 67.077062918, Longitude: -168.259695931},
-		{Latitude: 67.160561948, Longitude: -168.154801171},
-		{Latitude: 67.234563187, Longitude: -168.286102782},
+	validHole1 = GeoLoop{
+		{Lat: 67.2, Lng: -168.4},
+		{Lat: 67.1, Lng: -168.4},
+		{Lat: 67.1, Lng: -168.3},
+		{Lat: 67.2, Lng: -168.3},
 	}
 
-	validGeofenceHole1 = GeoBoundary{
-		{Latitude: 67.2, Longitude: -168.4},
-		{Latitude: 67.1, Longitude: -168.4},
-		{Latitude: 67.1, Longitude: -168.3},
-		{Latitude: 67.2, Longitude: -168.3},
+	validHole2 = GeoLoop{
+		{Lat: 67.21, Lng: -168.41},
+		{Lat: 67.22, Lng: -168.41},
+		{Lat: 67.22, Lng: -168.42},
 	}
 
-	validGeofenceHole2 = GeoBoundary{
-		{Latitude: 67.21, Longitude: -168.41},
-		{Latitude: 67.22, Longitude: -168.41},
-		{Latitude: 67.22, Longitude: -168.42},
-	}
+	validGeoPolygonNoHoles = GeoPolygon{GeoLoop: validGeoLoop}
 
-	validGeopolygonWithoutHoles = GeoPolygon{
-		Geofence: validGeofence,
-	}
-
-	validGeopolygonWithHoles = GeoPolygon{
-		Geofence: validGeofence,
-		Holes: [][]GeoCoord{
-			validGeofenceHole1,
-			validGeofenceHole2,
+	validGeoPolygonHoles = GeoPolygon{
+		GeoLoop: validGeoLoop,
+		Holes: []GeoLoop{
+			validHole1,
+			validHole2,
 		},
 	}
 
-	validGeoRing = []GeoCoord{{}}
+	validEdge = DirectedEdge(0x1250dab73fffffff)
 )
 
-func TestFromGeo(t *testing.T) {
+func TestLatLngToCell(t *testing.T) {
 	t.Parallel()
-	h := FromGeo(GeoCoord{
-		Latitude:  67.194013596,
-		Longitude: 191.598258018,
-	}, 5)
-	assert.Equal(t, validH3Index, h, "expected %x but got %x", validH3Index, h)
-	assert.Equal(t, validH3Index, h)
+	c := LatLngToCell(validLatLng1, 5)
+	assertEqual(t, validCell, c)
 }
 
-func TestToGeo(t *testing.T) {
+func TestCellToLatLng(t *testing.T) {
 	t.Parallel()
-	g := ToGeo(validH3Index)
-	assertGeoCoord(t, validGeoCoord, g)
+	g := CellToLatLng(validCell)
+	assertEqualLatLng(t, validLatLng1, g)
 }
 
-func TestToGeoBoundary(t *testing.T) {
+func TestToCellBoundary(t *testing.T) {
 	t.Parallel()
-	boundary := ToGeoBoundary(validH3Index)
-	assertGeoCoords(t, validGeofence[:], boundary[:])
+	boundary := validCell.Boundary()
+	assertEqualLatLngs(t, validGeoLoop[:], boundary[:])
 }
 
-func TestHexRing(t *testing.T) {
-	t.Parallel()
-	for k, expected := range validH3Rings1 {
-		t.Run(fmt.Sprintf("ring size %d", k), func(t *testing.T) {
-			actual, err := HexRing(validH3Index, k)
-			require.NoError(t, err)
-			assert.ElementsMatch(t, expected, actual)
-		})
-	}
-	t.Run("pentagon err", func(t *testing.T) {
-		t.Parallel()
-		_, err := HexRing(pentagonH3Index, 1)
-		assert.Error(t, err)
-	})
-}
-
-func TestKRing(t *testing.T) {
+func TestGridDisk(t *testing.T) {
 	t.Parallel()
 	t.Run("no pentagon", func(t *testing.T) {
 		t.Parallel()
-		assertHexRange(t, validH3Rings1, KRing(validH3Index, len(validH3Rings1)-1))
+		assertEqualDisks(t,
+			flattenDisks(validDiskDist3_1),
+			validCell.GridDisk(len(validDiskDist3_1)-1))
 	})
 	t.Run("pentagon ok", func(t *testing.T) {
 		t.Parallel()
-		assert.NotPanics(t, func() {
-			KRing(pentagonH3Index, len(validH3Rings1)-1)
+		assertNoPanic(t, func() {
+			disk := GridDisk(pentagonCell, 1)
+			assertEqual(t, 6, len(disk), "expected pentagon disk to have 6 cells")
 		})
 	})
 }
 
-func TestKRingDistances(t *testing.T) {
+func TestGridDiskDistances(t *testing.T) {
 	t.Parallel()
 	t.Run("no pentagon", func(t *testing.T) {
 		t.Parallel()
-		rings := KRingDistances(validH3Index, len(validH3Rings1)-1)
-		for i, ring := range validH3Rings1 {
-			assert.ElementsMatch(t, ring, rings[i])
-		}
+		rings := validCell.GridDiskDistances(len(validDiskDist3_1) - 1)
+		assertEqualDiskDistances(t, validDiskDist3_1, rings)
 	})
-	t.Run("pentagon ok", func(t *testing.T) {
+	t.Run("pentagon centered", func(t *testing.T) {
 		t.Parallel()
-		assert.NotPanics(t, func() {
-			KRingDistances(pentagonH3Index, len(validH3Rings1)-1)
+		assertNoPanic(t, func() {
+			rings := GridDiskDistances(pentagonCell, 1)
+			assertEqual(t, 2, len(rings), "expected 2 rings")
+			assertEqual(t, 5, len(rings[1]), "expected 5 cells in second ring")
 		})
-	})
-}
-
-func TestHexRange(t *testing.T) {
-	t.Parallel()
-	t.Run("no pentagon", func(t *testing.T) {
-		t.Parallel()
-		hexes, err := HexRange(validH3Index, len(validH3Rings1)-1)
-		require.NoError(t, err)
-		assertHexRange(t, validH3Rings1, hexes)
-	})
-	t.Run("pentagon err", func(t *testing.T) {
-		t.Parallel()
-		_, err := HexRange(pentagonH3Index, len(validH3Rings1)-1)
-		assert.Error(t, err)
-	})
-}
-
-func TestHexRangeDistances(t *testing.T) {
-	t.Parallel()
-	t.Run("no pentagon", func(t *testing.T) {
-		t.Parallel()
-		rings, err := HexRangeDistances(validH3Index, len(validH3Rings1)-1)
-		require.NoError(t, err)
-		for i, ring := range validH3Rings1 {
-			assert.ElementsMatch(t, ring, rings[i])
-		}
-	})
-	t.Run("pentagon err", func(t *testing.T) {
-		t.Parallel()
-		_, err := HexRangeDistances(pentagonH3Index, len(validH3Rings1)-1)
-		assert.Error(t, err)
-	})
-}
-
-func TestHexRanges(t *testing.T) {
-	t.Parallel()
-	t.Run("no pentagon", func(t *testing.T) {
-		t.Parallel()
-		hexranges, err := HexRanges(
-			[]H3Index{
-				validH3Rings1[0][0],
-				validH3Rings2[0][0],
-			}, len(validH3Rings2)-1)
-		require.NoError(t, err)
-		require.Len(t, hexranges, 2)
-		assertHexRange(t, validH3Rings1, hexranges[0])
-		assertHexRange(t, validH3Rings2, hexranges[1])
-	})
-	t.Run("pentagon err", func(t *testing.T) {
-		_, err := HexRanges(
-			[]H3Index{
-				validH3Rings1[0][0],
-				pentagonH3Index,
-			}, len(validH3Rings2)-1)
-		assert.Error(t, err)
-		t.Parallel()
 	})
 }
 
 func TestIsValid(t *testing.T) {
 	t.Parallel()
-	assert.True(t, IsValid(validH3Index))
-	assert.False(t, IsValid(0))
+	assertTrue(t, validCell.IsValid())
+	assertFalse(t, Cell(0).IsValid())
 }
 
-func TestFromGeoToGeo(t *testing.T) {
+func TestRoundtrip(t *testing.T) {
 	t.Parallel()
-	expectedGeo := GeoCoord{Latitude: 1, Longitude: 2}
-	h := FromGeo(expectedGeo, 15)
-	actualGeo := ToGeo(h)
-	assertGeoCoord(t, expectedGeo, actualGeo)
+	t.Run("latlng", func(t *testing.T) {
+		expectedGeo := LatLng{Lat: 1, Lng: 2}
+		c := LatLngToCell(expectedGeo, MaxResolution)
+		actualGeo := CellToLatLng(c)
+		assertEqualLatLng(t, expectedGeo, actualGeo)
+		assertEqualLatLng(t, expectedGeo, expectedGeo.Cell(MaxResolution).LatLng())
+	})
+	t.Run("cell", func(t *testing.T) {
+		geo := CellToLatLng(validCell)
+		actualCell := LatLngToCell(geo, Resolution(validCell))
+		assertEqual(t, validCell, actualCell)
+	})
 }
 
 func TestResolution(t *testing.T) {
 	t.Parallel()
-	for i := 1; i <= 15; i++ {
-		h := FromGeo(validGeoCoord, i)
-		assert.Equal(t, i, Resolution(h))
+
+	for i := 1; i <= MaxResolution; i++ {
+		c := LatLngToCell(validLatLng1, i)
+		assertEqual(t, i, Resolution(c))
+	}
+
+	for _, e := range validCell.DirectedEdges() {
+		assertEqual(t, validCell.Resolution(), e.Resolution())
 	}
 }
 
-func TestBaseCell(t *testing.T) {
+func TestBaseCellNumber(t *testing.T) {
 	t.Parallel()
-	bcID := BaseCell(validH3Index)
-	assert.Equal(t, 6, bcID)
+	bcID := validCell.BaseCellNumber()
+	assertEqual(t, 6, bcID)
 }
 
-func TestToParent(t *testing.T) {
+func TestParent(t *testing.T) {
 	t.Parallel()
 	// get the index's parent by requesting that index's resolution+1
-	parent := ToParent(validH3Index, Resolution(validH3Index)-1)
+	parent := validCell.ImmediateParent()
 
 	// get the children at the resolution of the original index
-	children := ToChildren(parent, Resolution(validH3Index))
+	children := parent.ImmediateChildren()
 
-	assertHexIn(t, validH3Index, children)
+	assertIndexIn(t, validCell, children)
 }
 
-func TestCompact(t *testing.T) {
+func TestCompactCells(t *testing.T) {
 	t.Parallel()
-	in := append([]H3Index{}, validH3Rings1[0][0])
-	in = append(in, validH3Rings1[1]...)
-	out := Compact(in)
-	require.Len(t, out, 1)
-	assert.Equal(t, ToParent(validH3Rings1[0][0], Resolution(validH3Rings1[0][0])-1), out[0])
+
+	in := flattenDisks(validDiskDist3_1[:2])
+	t.Logf("in: %v", in)
+	out := CompactCells(in)
+	t.Logf("out: %v", in)
+	assertEqual(t, 1, len(out))
+	assertEqual(t, validDiskDist3_1[0][0].ImmediateParent(), out[0])
 }
 
-func TestUncompact(t *testing.T) {
+func TestUncompactCells(t *testing.T) {
 	t.Parallel()
 	// get the index's parent by requesting that index's resolution+1
-	res := Resolution(validH3Index) - 1
-	parent := ToParent(validH3Index, res)
-
-	out, err := Uncompact([]H3Index{parent}, res+1)
-	assert.NoError(t, err)
-	assertHexIn(t, validH3Index, out)
-}
-
-func TestUncompactError(t *testing.T) {
-	t.Parallel()
-	res := Resolution(validH3Index) - 1
-	parent := ToParent(validH3Index, res)
-
-	// use a resolution that is too small
-	out, err := Uncompact([]H3Index{parent}, res-1)
-	assert.Nil(t, out)
-	assert.Equal(t, ErrInvalidResolution, err)
+	parent := validCell.ImmediateParent()
+	out := UncompactCells([]Cell{parent}, parent.Resolution()+1)
+	assertIndexIn(t, validCell, out)
 }
 
 func TestIsResClassIII(t *testing.T) {
 	t.Parallel()
-	res := Resolution(validH3Index) - 1
-	parent := ToParent(validH3Index, res)
 
-	assert.True(t, IsResClassIII(validH3Index))
-	assert.False(t, IsResClassIII(parent))
+	assertTrue(t, validCell.IsResClassIII())
+	assertFalse(t, validCell.ImmediateParent().IsResClassIII())
 }
 
 func TestIsPentagon(t *testing.T) {
 	t.Parallel()
-	assert.False(t, IsPentagon(validH3Index))
-	assert.True(t, IsPentagon(pentagonH3Index))
+	assertFalse(t, validCell.IsPentagon())
+	assertTrue(t, pentagonCell.IsPentagon())
 }
 
-func TestAreNeighbors(t *testing.T) {
+func TestIsNeighbor(t *testing.T) {
 	t.Parallel()
-	assert.False(t, AreNeighbors(pentagonH3Index, validH3Index))
-	assert.True(t, AreNeighbors(validH3Rings1[1][0], validH3Rings1[1][1]))
+	assertFalse(t, validCell.IsNeighbor(pentagonCell))
+	assertTrue(t, validCell.DirectedEdges()[0].Destination().IsNeighbor(validCell))
 }
 
-func TestUnidirectionalEdge(t *testing.T) {
+func TestDirectedEdge(t *testing.T) {
 	t.Parallel()
-	origin := validH3Rings1[1][0]
-	destination := validH3Rings1[1][1]
-	edge := UnidirectionalEdge(origin, destination)
+
+	origin := validDiskDist3_1[1][0]
+	destination := origin.DirectedEdges()[0].Destination()
+	edge := origin.DirectedEdge(destination)
 
 	t.Run("is valid", func(t *testing.T) {
 		t.Parallel()
-		assert.True(t, UnidirectionalEdgeIsValid(edge))
-		assert.False(t, UnidirectionalEdgeIsValid(validH3Index))
+		assertTrue(t, edge.IsValid())
+		assertFalse(t, DirectedEdge(validCell).IsValid())
 	})
+
 	t.Run("get origin/destination from edge", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, origin, OriginFromUnidirectionalEdge(edge))
-		assert.Equal(t, destination, DestinationFromUnidirectionalEdge(edge))
+		assertEqual(t, origin, edge.Origin())
+		assertEqual(t, destination, edge.Destination())
 
 		// shadow origin/destination
-		origin, destination := FromUnidirectionalEdge(edge)
-		assert.Equal(t, origin, OriginFromUnidirectionalEdge(edge))
-		assert.Equal(t, destination, DestinationFromUnidirectionalEdge(edge))
+		cells := edge.Cells()
+		origin, destination := cells[0], cells[1]
+		assertEqual(t, origin, edge.Origin())
+		assertEqual(t, destination, edge.Destination())
 	})
+
 	t.Run("get edges from hexagon", func(t *testing.T) {
 		t.Parallel()
-		edges := ToUnidirectionalEdges(validH3Index)
-		assert.Len(t, edges, 6, "hexagon has 6 edges")
+		edges := validCell.DirectedEdges()
+		assertEqual(t, 6, len(edges), "hexagon has 6 edges")
 	})
+
 	t.Run("get edges from pentagon", func(t *testing.T) {
 		t.Parallel()
-		edges := ToUnidirectionalEdges(pentagonH3Index)
-		require.Len(t, edges, 5, "pentagon has 5 edges")
+		edges := pentagonCell.DirectedEdges()
+		assertEqual(t, 5, len(edges), "pentagon has 5 edges")
 	})
+
 	t.Run("get boundary from edge", func(t *testing.T) {
 		t.Parallel()
-		gb := UnidirectionalEdgeBoundary(edge)
-		assert.Len(t, gb, 2)
+		gb := edge.Boundary()
+		assertEqual(t, 2, len(gb), "edge has 2 boundary cells")
 	})
 }
 
-func TestString(t *testing.T) {
+func TestStrings(t *testing.T) {
 	t.Parallel()
+
 	t.Run("bad string", func(t *testing.T) {
 		t.Parallel()
-		h := FromString("oops")
-		assert.Equal(t, H3Index(0), h)
+		i := IndexFromString("oops")
+		assertEqual(t, 0, i)
 	})
+
 	t.Run("good string round trip", func(t *testing.T) {
 		t.Parallel()
-		h := FromString(ToString(validH3Index))
-		assert.Equal(t, validH3Index, h)
+		i := IndexFromString(validCell.String())
+		assertEqual(t, validCell, Cell(i))
 	})
+
 	t.Run("no 0x prefix", func(t *testing.T) {
 		t.Parallel()
-		h3addr := ToString(validH3Index)
-		assert.Equal(t, "850dab63fffffff", h3addr)
+		h3addr := validCell.String()
+		assertEqual(t, "850dab63fffffff", h3addr)
+	})
+
+	t.Run("marshalling text", func(t *testing.T) {
+		t.Parallel()
+		c := Cell(0)
+		text, err := validCell.MarshalText()
+		assertNoErr(t, err)
+
+		err = c.UnmarshalText([]byte("0x" + string(text)))
+		assertNoErr(t, err)
+		assertEqual(t, validCell, c)
+
+		err = c.UnmarshalText([]byte(""))
+		assertErr(t, err)
 	})
 }
 
-func TestPolyfill(t *testing.T) {
+func TestPolygonToCells(t *testing.T) {
 	t.Parallel()
+
 	t.Run("empty", func(t *testing.T) {
 		t.Parallel()
-		indexes := Polyfill(GeoPolygon{}, 6)
-		assert.Len(t, indexes, 0)
+		cells := PolygonToCells(GeoPolygon{}, 6)
+		assertEqual(t, 0, len(cells))
 	})
+
 	t.Run("without holes", func(t *testing.T) {
 		t.Parallel()
-		indexes := Polyfill(validGeopolygonWithoutHoles, 6)
-		assert.Len(t, indexes, 7)
-		expectedIndexes := []H3Index{
+		cells := validGeoPolygonNoHoles.Cells(6)
+		expectedIndexes := []Cell{
 			0x860dab607ffffff,
 			0x860dab60fffffff,
 			0x860dab617ffffff,
@@ -425,13 +349,13 @@ func TestPolyfill(t *testing.T) {
 			0x860dab62fffffff,
 			0x860dab637ffffff,
 		}
-		assert.ElementsMatch(t, expectedIndexes, indexes)
+		assertEqualCells(t, expectedIndexes, cells)
 	})
+
 	t.Run("with hole", func(t *testing.T) {
 		t.Parallel()
-		indexes := Polyfill(validGeopolygonWithHoles, 6)
-		assert.Len(t, indexes, 6)
-		expectedIndexes := []H3Index{
+		cells := validGeoPolygonHoles.Cells(6)
+		expectedIndexes := []Cell{
 			0x860dab60fffffff,
 			0x860dab617ffffff,
 			0x860dab61fffffff,
@@ -439,46 +363,380 @@ func TestPolyfill(t *testing.T) {
 			0x860dab62fffffff,
 			0x860dab637ffffff,
 		}
-		assert.ElementsMatch(t, expectedIndexes, indexes)
+		assertEqualCells(t, expectedIndexes, cells)
 	})
 }
 
-func TestLine(t *testing.T) {
+func TestGridPath(t *testing.T) {
 	t.Parallel()
-	line := Line(validLineStartIndex, validLineEndIndex)
-	assert.Equal(t, validLineStartIndex, line[0])
-	assert.Equal(t, validLineEndIndex, line[len(line)-1])
-	for i := 0; i < len(line)-1; i++ {
-		assert.True(t, AreNeighbors(line[i], line[i+1]))
+	path := lineStartCell.GridPath(lineEndCell)
+
+	assertEqual(t, lineStartCell, path[0])
+	assertEqual(t, lineEndCell, path[len(path)-1])
+
+	for i := 0; i < len(path)-1; i++ {
+		assertTrue(t, path[i].IsNeighbor(path[i+1]))
 	}
 }
 
-func almostEqual(t *testing.T, expected, actual interface{}, msgAndArgs ...interface{}) {
-	assert.InEpsilon(t, expected, actual, eps, msgAndArgs...)
+func TestHexAreaKm2(t *testing.T) {
+	t.Parallel()
+	t.Run("min resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqualEps(t, float64(4357449.4161), HexagonAreaAvgKm2(0))
+	})
+	t.Run("max resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqualEps(t, float64(0.0000009), HexagonAreaAvgKm2(15))
+	})
+	t.Run("mid resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqualEps(t, float64(0.7373276), HexagonAreaAvgKm2(8))
+	})
 }
 
-func assertGeoCoord(t *testing.T, expected, actual GeoCoord) {
-	almostEqual(t, expected.Latitude, actual.Latitude, "latitude mismatch")
-	almostEqual(t, expected.Longitude, actual.Longitude, "longitude mismatch")
+func TestHexAreaM2(t *testing.T) {
+	t.Parallel()
+	t.Run("min resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqualEps(t, float64(4357449416078.3901), HexagonAreaAvgM2(0))
+	})
+	t.Run("max resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqualEps(t, float64(0.8953), HexagonAreaAvgM2(15))
+	})
+	t.Run("mid resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqualEps(t, float64(737327.5976), HexagonAreaAvgM2(8))
+	})
 }
 
-func assertGeoCoords(t *testing.T, expected, actual []GeoCoord) {
-	for i, gc := range expected {
-		assertGeoCoord(t, gc, actual[i])
+func TestPointDistRads(t *testing.T) {
+	t.Parallel()
+	distance := GreatCircleDistanceRads(validLatLng1, validLatLng2)
+	assertEqualEps(t, float64(0.6796147656451452), distance)
+}
+
+func TestPointDistKm(t *testing.T) {
+	t.Parallel()
+	distance := GreatCircleDistanceKm(validLatLng1, validLatLng2)
+	assertEqualEps(t, float64(4329.830552183446), distance)
+}
+
+func TestPointDistM(t *testing.T) {
+	t.Parallel()
+	distance := GreatCircleDistanceM(validLatLng1, validLatLng2)
+	assertEqualEps(t, float64(4329830.5521834465), distance)
+}
+
+func TestCellAreaRads2(t *testing.T) {
+	t.Parallel()
+	assertEqualEps(t, float64(0.000006643967854567278), CellAreaRads2(validCell))
+}
+
+func TestCellAreaKm2(t *testing.T) {
+	t.Parallel()
+	assertEqualEps(t, float64(269.6768779509321), CellAreaKm2(validCell))
+}
+
+func TestCellAreaM2(t *testing.T) {
+	t.Parallel()
+	assertEqualEps(t, float64(269676877.95093215), CellAreaM2(validCell))
+}
+
+func TestHexagonEdgeLengthKm(t *testing.T) {
+	t.Parallel()
+	t.Run("min resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqual(t, float64(1107.712591), HexagonEdgeLengthAvgKm(0))
+	})
+	t.Run("max resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqual(t, float64(0.000509713), HexagonEdgeLengthAvgKm(15))
+	})
+	t.Run("mid resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqual(t, float64(0.461354684), HexagonEdgeLengthAvgKm(8))
+	})
+}
+
+func TestHexagonEdgeLengthM(t *testing.T) {
+	t.Parallel()
+	t.Run("min resolution", func(t *testing.T) {
+		t.Parallel()
+		area := HexagonEdgeLengthAvgM(0)
+		assertEqual(t, float64(1107712.591), area)
+	})
+	t.Run("max resolution", func(t *testing.T) {
+		t.Parallel()
+		area := HexagonEdgeLengthAvgM(15)
+		assertEqual(t, float64(0.509713273), area)
+	})
+	t.Run("mid resolution", func(t *testing.T) {
+		t.Parallel()
+		area := HexagonEdgeLengthAvgM(8)
+		assertEqual(t, float64(461.3546837), area)
+	})
+}
+
+func TestExactEdgeLengthRads(t *testing.T) {
+	t.Parallel()
+	assertEqualEps(t, float64(0.001569665746947077), ExactEdgeLengthRads(validEdge))
+}
+
+func TestExactEdgeLengthKm(t *testing.T) {
+	t.Parallel()
+
+	distance := ExactEdgeLengthKm(validEdge)
+	assertEqualEps(t, float64(10.00035174544159), distance)
+}
+
+func TestExactEdgeLengthM(t *testing.T) {
+	t.Parallel()
+
+	distance := ExactEdgeLengthM(validEdge)
+	assertEqualEps(t, float64(10000.351745441589), distance)
+}
+
+func TestNumCells(t *testing.T) {
+	t.Parallel()
+	t.Run("min resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqual(t, 122, NumCells(0))
+	})
+	t.Run("max resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqual(t, 569707381193162, NumCells(15))
+	})
+	t.Run("mid resolution", func(t *testing.T) {
+		t.Parallel()
+		assertEqual(t, 691776122, NumCells(8))
+	})
+}
+
+func TestRes0Cells(t *testing.T) {
+	t.Parallel()
+	cells := Res0Cells()
+
+	assertEqual(t, 122, len(cells))
+	assertEqual(t, Cell(0x8001fffffffffff), cells[0])
+	assertEqual(t, Cell(0x80f3fffffffffff), cells[121])
+}
+
+func TestGridDistance(t *testing.T) {
+	t.Parallel()
+	assertEqual(t, 1823, lineStartCell.GridDistance(lineEndCell))
+}
+
+func TestCenterChild(t *testing.T) {
+	t.Parallel()
+
+	child := validCell.CenterChild(15)
+	assertEqual(t, Cell(0x8f0dab600000000), child)
+}
+
+func TestIcosahedronFaces(t *testing.T) {
+	t.Parallel()
+
+	faces := validDiskDist3_1[1][1].IcosahedronFaces()
+
+	assertEqual(t, 1, len(faces))
+	assertEqual(t, 1, faces[0])
+}
+
+func TestPentagons(t *testing.T) {
+	t.Parallel()
+
+	for _, res := range []int{0, 8, 15} {
+		t.Run(fmt.Sprintf("res=%d", res), func(t *testing.T) {
+			t.Parallel()
+			pentagons := Pentagons(res)
+			assertEqual(t, 12, len(pentagons))
+			for _, pentagon := range pentagons {
+				assertTrue(t, pentagon.IsPentagon())
+				assertEqual(t, res, pentagon.Resolution())
+			}
+		})
 	}
 }
 
-func assertHexRange(t *testing.T, expected [][]H3Index, actual []H3Index) {
-	for i, ring := range expected {
-		// each ring should be sorted by value because the order of a ring is
-		// undefined.
-		lower := rangeSize(i) - ringSize(i)
-		upper := rangeSize(i)
-		assert.ElementsMatch(t, ring, actual[lower:upper])
+func equalEps(expected, actual float64) bool {
+	return math.Abs(expected-actual) < eps
+}
+
+func assertErr(t *testing.T, err error) {
+	t.Helper()
+
+	if err == nil {
+		t.Errorf("expected error, got nil")
 	}
 }
 
-func assertHexIn(t *testing.T, needle H3Index, haystack []H3Index) {
+func assertNoErr(t *testing.T, err error) {
+	t.Helper()
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func assertEqual[T comparable](t *testing.T, expected, actual T, msgAndArgs ...interface{}) {
+	t.Helper()
+
+	if expected != actual {
+		var (
+			expStr, actStr string
+
+			e, a interface{} = expected, actual
+		)
+
+		switch e.(type) {
+		case Cell:
+			expStr = fmt.Sprintf("%s (res=%d)", e.(Cell), e.(Cell).Resolution())
+			actStr = fmt.Sprintf("%s (res=%d)", a.(Cell), a.(Cell).Resolution())
+		default:
+			expStr = fmt.Sprintf("%v", e)
+			actStr = fmt.Sprintf("%v", a)
+		}
+		t.Errorf("%v != %v", expStr, actStr)
+		logMsgAndArgs(t, msgAndArgs...)
+	}
+}
+
+func assertEqualEps(t *testing.T, expected, actual float64, msgAndArgs ...interface{}) {
+	t.Helper()
+
+	if !equalEps(expected, actual) {
+		t.Errorf("%0.4f > %v (%0.4f - %0.4f)", math.Abs(expected-actual), eps, expected, actual)
+		logMsgAndArgs(t, msgAndArgs...)
+	}
+}
+
+func assertEqualLatLng(t *testing.T, expected, actual LatLng) {
+	t.Helper()
+	assertEqualEps(t, expected.Lat, actual.Lat, "latitude mismatch")
+	assertEqualEps(t, expected.Lng, actual.Lng, "longitude mismatch")
+}
+
+func assertEqualLatLngs(t *testing.T, expected, actual []LatLng, msgAndArgs ...interface{}) {
+	t.Helper()
+
+	if len(expected) != len(actual) {
+		t.Errorf("length mismatch: %v != %v", len(expected), len(actual))
+		logMsgAndArgs(t, msgAndArgs...)
+
+		return
+	}
+
+	count := 0
+
+	for i, ll := range expected {
+		equalLat := equalEps(ll.Lat, actual[i].Lat)
+		equalLng := equalEps(ll.Lng, actual[i].Lng)
+
+		if !equalLat || !equalLng {
+			latStr := tern(equalLat, fmt.Sprintf("%v", ll.Lat), fmt.Sprintf("%v != %v", ll.Lat, actual[i].Lat))
+			lngStr := tern(equalLng, fmt.Sprintf("%v", ll.Lng), fmt.Sprintf("%v != %v", ll.Lng, actual[i].Lng))
+
+			t.Errorf("LatLngs[%d]: (%s, %s)", i, latStr, lngStr)
+			logMsgAndArgs(t, msgAndArgs...)
+			count++
+
+			if count > 10 {
+				t.Log("...and more")
+				break
+			}
+		}
+	}
+}
+
+func assertEqualCells(t *testing.T, expected, actual []Cell, msgAndArgs ...interface{}) {
+	t.Helper()
+
+	if len(expected) != len(actual) {
+		t.Errorf("length mismatch: %v != %v", len(expected), len(actual))
+		logMsgAndArgs(t, msgAndArgs...)
+
+		return
+	}
+
+	expected = sortIndices(copySlice(expected))
+	actual = sortIndices(copySlice(actual))
+
+	count := 0
+
+	for i, c := range expected {
+		if c != actual[i] {
+			t.Errorf("Cells[%d]: %v != %v", i, c, actual[i])
+			logMsgAndArgs(t, msgAndArgs...)
+			count++
+
+			if count > 10 {
+				t.Log("...and more")
+				break
+			}
+		}
+	}
+}
+
+func assertEqualDiskDistances(t *testing.T, expected, actual [][]Cell) {
+	t.Helper()
+
+	if len(expected) != len(actual) {
+		t.Errorf("number of rings mismatch: %v != %v", len(expected), len(actual))
+		return
+	}
+
+	expected = copySlice(expected)
+	actual = copySlice(actual)
+
+	for i := range expected {
+		if len(expected[i]) != len(actual[i]) {
+			t.Errorf("ring[%d] length mismatch: %v != %v", i, len(expected[i]), len(actual[i]))
+			return
+		}
+
+		expected[i] = sortIndices(copySlice(expected[i]))
+		actual[i] = sortIndices(copySlice(actual[i]))
+
+		for j, cell := range expected[i] {
+			if cell != actual[i][j] {
+				t.Errorf("ring[%d][%d] mismatch: %v != %v", i, j, cell, actual[i][j])
+				return
+			}
+		}
+	}
+}
+
+func assertEqualDisks(t *testing.T, expected, actual []Cell) {
+	t.Helper()
+
+	if len(expected) != len(actual) {
+		t.Errorf("disk size mismatch: %v != %v", len(expected), len(actual))
+		return
+	}
+
+	expected = sortIndices(copySlice(expected))
+	actual = sortIndices(copySlice(actual))
+
+	count := 0
+
+	for i, cell := range expected {
+		if cell != actual[i] {
+			t.Errorf("cell[%d]: %v != %v", i, cell, actual[i])
+			count++
+
+			if count > 5 {
+				t.Logf("... and more")
+				break
+			}
+		}
+	}
+}
+
+func assertIndexIn[T Index](t *testing.T, needle T, haystack []T) {
+	t.Helper()
+
 	var found bool
 	for _, h := range haystack {
 		found = needle == h
@@ -486,29 +744,72 @@ func assertHexIn(t *testing.T, needle H3Index, haystack []H3Index) {
 			break
 		}
 	}
-	assert.True(t, found,
-		"expected %+v in %+v",
-		needle, haystack)
-}
 
-func validHexRange() []H3Index {
-	out := []H3Index{}
-	for _, ring := range validH3Rings1 {
-		out = append(out, ring...)
+	if !found {
+		t.Errorf("%v not found in %+v", needle, haystack)
 	}
-	return out
 }
 
-func sortHexes(s []H3Index) []H3Index {
+func assertNoPanic(t *testing.T, f func()) {
+	t.Helper()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("panic: %v", r)
+		}
+	}()
+	f()
+}
+
+func assertFalse(t *testing.T, b bool, msgAndArgs ...interface{}) {
+	t.Helper()
+	assertEqual(t, false, b, msgAndArgs...)
+}
+func assertTrue(t *testing.T, b bool, msgAndArgs ...interface{}) {
+	t.Helper()
+	assertEqual(t, true, b, msgAndArgs...)
+}
+
+func sortIndices[T Index](s []T) []T {
 	sort.SliceStable(s, func(i, j int) bool {
 		return s[i] < s[j]
 	})
+
 	return s
 }
 
-func max(x, y int) int {
-	if x > y {
+func logMsgAndArgs(t *testing.T, msgAndArgs ...interface{}) {
+	t.Helper()
+
+	if len(msgAndArgs) > 0 {
+		t.Logf(msgAndArgs[0].(string), msgAndArgs[1:]...)
+	}
+}
+
+func flattenDisks(diskDist [][]Cell) []Cell {
+	if len(diskDist) == 0 {
+		return nil
+	}
+
+	flat := make([]Cell, 0, maxGridDiskSize(len(diskDist)-1))
+	for _, disk := range diskDist {
+		flat = append(flat, append([]Cell{}, disk...)...)
+	}
+
+	return flat
+}
+
+func tern[T any](b bool, x, y T) T {
+	if b {
 		return x
 	}
+
 	return y
+}
+
+func copySlice[T any](s []T) []T {
+	c := make([]T, len(s))
+	copy(c, s)
+
+	return c
 }

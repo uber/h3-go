@@ -54,6 +54,8 @@ CWD=$(pwd)
 
 # clean up existing C source code.
 find . -name "*.c" -depth 1 -exec rm {} \;
+# clean up existing C headers.
+find . -name "*.h" -depth 1 -exec rm {} \;
 
 echo Downloading H3 from "$GIT_REMOTE"
 
@@ -73,7 +75,7 @@ pushd "$H3_SRC_DIR" || badexit
     echo Copying source files into working directory
     pushd ./src/h3lib/lib/ || badexit
         for f in *.c; do
-            sed -E 's/#include "(.*)"/#include "h3_\1"/' "$f" > "$CWD/h3_$f" || badexit
+            sed -E 's/#include "(.*)"/#include "h3_\1"/; s/#include <faceijk.h>/ /' "$f" > "$CWD/h3_$f" || badexit
         done
     popd || badexit
 
@@ -82,5 +84,10 @@ pushd "$H3_SRC_DIR" || badexit
         for f in *.h; do
             sed -E 's/#include "(.*)"/#include "h3_\1"/' "$f" > "$CWD/h3_$f" || badexit
         done
+    popd || badexit
+
+    echo Copying api header file into working directory
+    pushd ./src/h3lib/include/ || badexit
+        sed -E 's/#include "(.*)"/#include "h3_\1"/' "h3api.h.in" > "$CWD/h3_h3api.h" || badexit
     popd || badexit
 popd || badexit

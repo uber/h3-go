@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2017 Uber Technologies, Inc.
+ * Copyright 2016-2021 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,22 +19,24 @@
  */
 
 #include "h3_faceijk.h"
+
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "h3_constants.h"
 #include "h3_coordijk.h"
-#include "h3_geoCoord.h"
 #include "h3_h3Index.h"
+#include "h3_latLng.h"
 #include "h3_vec3d.h"
 
 /** square root of 7 */
 #define M_SQRT7 2.6457513110645905905016157536392604257102L
 
-/** @brief icosahedron face centers in lat/lon radians */
-const GeoCoord faceCenterGeo[NUM_ICOSA_FACES] = {
+/** @brief icosahedron face centers in lat/lng radians */
+const LatLng faceCenterGeo[NUM_ICOSA_FACES] = {
     {0.803582649718989942, 1.248397419617396099},    // face  0
     {1.307747883455638156, 2.536945009877921159},    // face  1
     {1.054751253523952054, -1.347517358900396623},   // face  2
@@ -366,7 +368,7 @@ static const int unitScaleByCIIres[] = {
  * @param res The desired H3 resolution for the encoding.
  * @param h The FaceIJK address of the containing cell at resolution res.
  */
-void _geoToFaceIjk(const GeoCoord* g, int res, FaceIJK* h) {
+void _geoToFaceIjk(const LatLng *g, int res, FaceIJK *h) {
     // first convert to hex2d
     Vec2d v;
     _geoToHex2d(g, res, &h->face, &v);
@@ -384,20 +386,10 @@ void _geoToFaceIjk(const GeoCoord* g, int res, FaceIJK* h) {
  * @param face The icosahedral face containing the spherical coordinates.
  * @param v The 2D hex coordinates of the cell containing the point.
  */
-void _geoToHex2d(const GeoCoord* g, int res, int* face, Vec2d* v) {
-    Vec3d v3d;
-    _geoToVec3d(g, &v3d);
-
+void _geoToHex2d(const LatLng *g, int res, int *face, Vec2d *v) {
     // determine the icosahedron face
-    *face = 0;
-    double sqd = _pointSquareDist(&faceCenterPoint[0], &v3d);
-    for (int f = 1; f < NUM_ICOSA_FACES; f++) {
-        double sqdT = _pointSquareDist(&faceCenterPoint[f], &v3d);
-        if (sqdT < sqd) {
-            *face = f;
-            sqd = sqdT;
-        }
-    }
+    double sqd;
+    _geoToClosestFace(g, face, &sqd);
 
     // cos(r) = 1 - 2 * sin^2(r/2) = 1 - 2 * (sqd / 4) = 1 - sqd/2
     double r = acos(1 - sqd / 2);
@@ -413,7 +405,8 @@ void _geoToHex2d(const GeoCoord* g, int res, int* face, Vec2d* v) {
                       _posAngleRads(_geoAzimuthRads(&faceCenterGeo[*face], g)));
 
     // adjust theta for Class III (odd resolutions)
-    if (isResClassIII(res)) theta = _posAngleRads(theta - M_AP7_ROT_RADS);
+    if (isResolutionClassIII(res))
+        theta = _posAngleRads(theta - M_AP7_ROT_RADS);
 
     // perform gnomonic scaling of r
     r = tan(r);
@@ -441,8 +434,7 @@ void _geoToHex2d(const GeoCoord* g, int res, int* face, Vec2d* v) {
  *        grid relative to the specified resolution.
  * @param g The spherical coordinates of the cell center point.
  */
-void _hex2dToGeo(const Vec2d* v, int face, int res, int substrate,
-                 GeoCoord* g) {
+void _hex2dToGeo(const Vec2d *v, int face, int res, int substrate, LatLng *g) {
     // calculate (r, theta) in hex2d
     double r = _v2dMag(v);
 
@@ -459,7 +451,7 @@ void _hex2dToGeo(const Vec2d* v, int face, int res, int substrate,
     // scale accordingly if this is a substrate grid
     if (substrate) {
         r /= 3.0;
-        if (isResClassIII(res)) r /= M_SQRT7;
+        if (isResolutionClassIII(res)) r /= M_SQRT7;
     }
 
     r *= RES0_U_GNOMONIC;
@@ -469,7 +461,7 @@ void _hex2dToGeo(const Vec2d* v, int face, int res, int substrate,
 
     // adjust theta for Class III
     // if a substrate grid, then it's already been adjusted for Class III
-    if (!substrate && isResClassIII(res))
+    if (!substrate && isResolutionClassIII(res))
         theta = _posAngleRads(theta + M_AP7_ROT_RADS);
 
     // find theta as an azimuth
@@ -487,7 +479,7 @@ void _hex2dToGeo(const Vec2d* v, int face, int res, int substrate,
  * @param res The H3 resolution of the cell.
  * @param g The spherical coordinates of the cell center point.
  */
-void _faceIjkToGeo(const FaceIJK* h, int res, GeoCoord* g) {
+void _faceIjkToGeo(const FaceIJK *h, int res, LatLng *g) {
     Vec2d v;
     _ijkToHex2d(&h->coord, &v);
     _hex2dToGeo(&v, h->face, res, 0, g);
@@ -499,9 +491,120 @@ void _faceIjkToGeo(const FaceIJK* h, int res, GeoCoord* g) {
  *
  * @param h The FaceIJK address of the pentagonal cell.
  * @param res The H3 resolution of the cell.
+ * @param start The first topological vertex to return.
+ * @param length The number of topological vertexes to return.
  * @param g The spherical coordinates of the cell boundary.
  */
-void _faceIjkPentToGeoBoundary(const FaceIJK* h, int res, GeoBoundary* g) {
+void _faceIjkPentToCellBoundary(const FaceIJK *h, int res, int start,
+                                int length, CellBoundary *g) {
+    int adjRes = res;
+    FaceIJK centerIJK = *h;
+    FaceIJK fijkVerts[NUM_PENT_VERTS];
+    _faceIjkPentToVerts(&centerIJK, &adjRes, fijkVerts);
+
+    // If we're returning the entire loop, we need one more iteration in case
+    // of a distortion vertex on the last edge
+    int additionalIteration = length == NUM_PENT_VERTS ? 1 : 0;
+
+    // convert each vertex to lat/lng
+    // adjust the face of each vertex as appropriate and introduce
+    // edge-crossing vertices as needed
+    g->numVerts = 0;
+    FaceIJK lastFijk;
+    for (int vert = start; vert < start + length + additionalIteration;
+         vert++) {
+        int v = vert % NUM_PENT_VERTS;
+
+        FaceIJK fijk = fijkVerts[v];
+
+        _adjustPentVertOverage(&fijk, adjRes);
+
+        // all Class III pentagon edges cross icosa edges
+        // note that Class II pentagons have vertices on the edge,
+        // not edge intersections
+        if (isResolutionClassIII(res) && vert > start) {
+            // find hex2d of the two vertexes on the last face
+
+            FaceIJK tmpFijk = fijk;
+
+            Vec2d orig2d0;
+            _ijkToHex2d(&lastFijk.coord, &orig2d0);
+
+            int currentToLastDir = adjacentFaceDir[tmpFijk.face][lastFijk.face];
+
+            const FaceOrientIJK *fijkOrient =
+                &faceNeighbors[tmpFijk.face][currentToLastDir];
+
+            tmpFijk.face = fijkOrient->face;
+            CoordIJK *ijk = &tmpFijk.coord;
+
+            // rotate and translate for adjacent face
+            for (int i = 0; i < fijkOrient->ccwRot60; i++) _ijkRotate60ccw(ijk);
+
+            CoordIJK transVec = fijkOrient->translate;
+            _ijkScale(&transVec, unitScaleByCIIres[adjRes] * 3);
+            _ijkAdd(ijk, &transVec, ijk);
+            _ijkNormalize(ijk);
+
+            Vec2d orig2d1;
+            _ijkToHex2d(ijk, &orig2d1);
+
+            // find the appropriate icosa face edge vertexes
+            int maxDim = maxDimByCIIres[adjRes];
+            Vec2d v0 = {3.0 * maxDim, 0.0};
+            Vec2d v1 = {-1.5 * maxDim, 3.0 * M_SQRT3_2 * maxDim};
+            Vec2d v2 = {-1.5 * maxDim, -3.0 * M_SQRT3_2 * maxDim};
+
+            Vec2d *edge0;
+            Vec2d *edge1;
+            switch (adjacentFaceDir[tmpFijk.face][fijk.face]) {
+                case IJ:
+                    edge0 = &v0;
+                    edge1 = &v1;
+                    break;
+                case JK:
+                    edge0 = &v1;
+                    edge1 = &v2;
+                    break;
+                case KI:
+                default:
+                    assert(adjacentFaceDir[tmpFijk.face][fijk.face] == KI);
+                    edge0 = &v2;
+                    edge1 = &v0;
+                    break;
+            }
+
+            // find the intersection and add the lat/lng point to the result
+            Vec2d inter;
+            _v2dIntersect(&orig2d0, &orig2d1, edge0, edge1, &inter);
+            _hex2dToGeo(&inter, tmpFijk.face, adjRes, 1,
+                        &g->verts[g->numVerts]);
+            g->numVerts++;
+        }
+
+        // convert vertex to lat/lng and add to the result
+        // vert == start + NUM_PENT_VERTS is only used to test for possible
+        // intersection on last edge
+        if (vert < start + NUM_PENT_VERTS) {
+            Vec2d vec;
+            _ijkToHex2d(&fijk.coord, &vec);
+            _hex2dToGeo(&vec, fijk.face, adjRes, 1, &g->verts[g->numVerts]);
+            g->numVerts++;
+        }
+
+        lastFijk = fijk;
+    }
+}
+
+/**
+ * Get the vertices of a pentagon cell as substrate FaceIJK addresses
+ *
+ * @param fijk The FaceIJK address of the cell.
+ * @param res The H3 resolution of the cell. This may be adjusted if
+ *            necessary for the substrate grid resolution.
+ * @param fijkVerts Output array for the vertices
+ */
+void _faceIjkPentToVerts(FaceIJK *fijk, int *res, FaceIJK *fijkVerts) {
     // the vertexes of an origin-centered pentagon in a Class II resolution on a
     // substrate grid with aperture sequence 33r. The aperture 3 gets us the
     // vertices, and the 3r gets us back to Class II.
@@ -527,131 +630,31 @@ void _faceIjkPentToGeoBoundary(const FaceIJK* h, int res, GeoBoundary* g) {
     };
 
     // get the correct set of substrate vertices for this resolution
-    CoordIJK* verts;
-    if (isResClassIII(res))
+    CoordIJK *verts;
+    if (isResolutionClassIII(*res))
         verts = vertsCIII;
     else
         verts = vertsCII;
 
     // adjust the center point to be in an aperture 33r substrate grid
     // these should be composed for speed
-    FaceIJK centerIJK = *h;
-    _downAp3(&centerIJK.coord);
-    _downAp3r(&centerIJK.coord);
+    _downAp3(&fijk->coord);
+    _downAp3r(&fijk->coord);
 
     // if res is Class III we need to add a cw aperture 7 to get to
     // icosahedral Class II
-    int adjRes = res;
-    if (isResClassIII(res)) {
-        _downAp7r(&centerIJK.coord);
-        adjRes++;
+    if (isResolutionClassIII(*res)) {
+        _downAp7r(&fijk->coord);
+        *res += 1;
     }
 
     // The center point is now in the same substrate grid as the origin
     // cell vertices. Add the center point substate coordinates
     // to each vertex to translate the vertices to that cell.
-    FaceIJK fijkVerts[NUM_PENT_VERTS];
     for (int v = 0; v < NUM_PENT_VERTS; v++) {
-        fijkVerts[v].face = centerIJK.face;
-        _ijkAdd(&centerIJK.coord, &verts[v], &fijkVerts[v].coord);
+        fijkVerts[v].face = fijk->face;
+        _ijkAdd(&fijk->coord, &verts[v], &fijkVerts[v].coord);
         _ijkNormalize(&fijkVerts[v].coord);
-    }
-
-    // convert each vertex to lat/lon
-    // adjust the face of each vertex as appropriate and introduce
-    // edge-crossing vertices as needed
-    g->numVerts = 0;
-    FaceIJK lastFijk;
-    for (int vert = 0; vert < NUM_PENT_VERTS + 1; vert++) {
-        int v = vert % NUM_PENT_VERTS;
-
-        FaceIJK fijk = fijkVerts[v];
-
-        int pentLeading4 = 0;
-        int overage = _adjustOverageClassII(&fijk, adjRes, pentLeading4, 1);
-        if (overage == 2)  // in a different triangle
-        {
-            while (1) {
-                overage = _adjustOverageClassII(&fijk, adjRes, pentLeading4, 1);
-                if (overage != 2)  // not in a different triangle
-                    break;
-            }
-        }
-
-        // all Class III pentagon edges cross icosa edges
-        // note that Class II pentagons have vertices on the edge,
-        // not edge intersections
-        if (isResClassIII(res) && vert > 0) {
-            // find hex2d of the two vertexes on the last face
-
-            FaceIJK tmpFijk = fijk;
-
-            Vec2d orig2d0;
-            _ijkToHex2d(&lastFijk.coord, &orig2d0);
-
-            int currentToLastDir = adjacentFaceDir[tmpFijk.face][lastFijk.face];
-
-            const FaceOrientIJK* fijkOrient =
-                &faceNeighbors[tmpFijk.face][currentToLastDir];
-
-            tmpFijk.face = fijkOrient->face;
-            CoordIJK* ijk = &tmpFijk.coord;
-
-            // rotate and translate for adjacent face
-            for (int i = 0; i < fijkOrient->ccwRot60; i++) _ijkRotate60ccw(ijk);
-
-            CoordIJK transVec = fijkOrient->translate;
-            _ijkScale(&transVec, unitScaleByCIIres[adjRes] * 3);
-            _ijkAdd(ijk, &transVec, ijk);
-            _ijkNormalize(ijk);
-
-            Vec2d orig2d1;
-            _ijkToHex2d(ijk, &orig2d1);
-
-            // find the appropriate icosa face edge vertexes
-            int maxDim = maxDimByCIIres[adjRes];
-            Vec2d v0 = {3.0 * maxDim, 0.0};
-            Vec2d v1 = {-1.5 * maxDim, 3.0 * M_SQRT3_2 * maxDim};
-            Vec2d v2 = {-1.5 * maxDim, -3.0 * M_SQRT3_2 * maxDim};
-
-            Vec2d* edge0;
-            Vec2d* edge1;
-            switch (adjacentFaceDir[tmpFijk.face][fijk.face]) {
-                case IJ:
-                    edge0 = &v0;
-                    edge1 = &v1;
-                    break;
-                case JK:
-                    edge0 = &v1;
-                    edge1 = &v2;
-                    break;
-                case KI:
-                default:
-                    assert(adjacentFaceDir[tmpFijk.face][fijk.face] == KI);
-                    edge0 = &v2;
-                    edge1 = &v0;
-                    break;
-            }
-
-            // find the intersection and add the lat/lon point to the result
-            Vec2d inter;
-            _v2dIntersect(&orig2d0, &orig2d1, edge0, edge1, &inter);
-            _hex2dToGeo(&inter, tmpFijk.face, adjRes, 1,
-                        &g->verts[g->numVerts]);
-            g->numVerts++;
-        }
-
-        // convert vertex to lat/lon and add to the result
-        // vert == NUM_PENT_VERTS is only used to test for possible intersection
-        // on last edge
-        if (vert < NUM_PENT_VERTS) {
-            Vec2d vec;
-            _ijkToHex2d(&fijk.coord, &vec);
-            _hex2dToGeo(&vec, fijk.face, adjRes, 1, &g->verts[g->numVerts]);
-            g->numVerts++;
-        }
-
-        lastFijk = fijk;
     }
 }
 
@@ -661,16 +664,122 @@ void _faceIjkPentToGeoBoundary(const FaceIJK* h, int res, GeoBoundary* g) {
  *
  * @param h The FaceIJK address of the cell.
  * @param res The H3 resolution of the cell.
- * @param isPentagon Whether or not the cell is a pentagon.
+ * @param start The first topological vertex to return.
+ * @param length The number of topological vertexes to return.
  * @param g The spherical coordinates of the cell boundary.
  */
-void _faceIjkToGeoBoundary(const FaceIJK* h, int res, int isPentagon,
-                           GeoBoundary* g) {
-    if (isPentagon) {
-        _faceIjkPentToGeoBoundary(h, res, g);
-        return;
-    }
+void _faceIjkToCellBoundary(const FaceIJK *h, int res, int start, int length,
+                            CellBoundary *g) {
+    int adjRes = res;
+    FaceIJK centerIJK = *h;
+    FaceIJK fijkVerts[NUM_HEX_VERTS];
+    _faceIjkToVerts(&centerIJK, &adjRes, fijkVerts);
 
+    // If we're returning the entire loop, we need one more iteration in case
+    // of a distortion vertex on the last edge
+    int additionalIteration = length == NUM_HEX_VERTS ? 1 : 0;
+
+    // convert each vertex to lat/lng
+    // adjust the face of each vertex as appropriate and introduce
+    // edge-crossing vertices as needed
+    g->numVerts = 0;
+    int lastFace = -1;
+    Overage lastOverage = NO_OVERAGE;
+    for (int vert = start; vert < start + length + additionalIteration;
+         vert++) {
+        int v = vert % NUM_HEX_VERTS;
+
+        FaceIJK fijk = fijkVerts[v];
+
+        const int pentLeading4 = 0;
+        Overage overage = _adjustOverageClassII(&fijk, adjRes, pentLeading4, 1);
+
+        /*
+        Check for edge-crossing. Each face of the underlying icosahedron is a
+        different projection plane. So if an edge of the hexagon crosses an
+        icosahedron edge, an additional vertex must be introduced at that
+        intersection point. Then each half of the cell edge can be projected
+        to geographic coordinates using the appropriate icosahedron face
+        projection. Note that Class II cell edges have vertices on the face
+        edge, with no edge line intersections.
+        */
+        if (isResolutionClassIII(res) && vert > start &&
+            fijk.face != lastFace && lastOverage != FACE_EDGE) {
+            // find hex2d of the two vertexes on original face
+            int lastV = (v + 5) % NUM_HEX_VERTS;
+            Vec2d orig2d0;
+            _ijkToHex2d(&fijkVerts[lastV].coord, &orig2d0);
+
+            Vec2d orig2d1;
+            _ijkToHex2d(&fijkVerts[v].coord, &orig2d1);
+
+            // find the appropriate icosa face edge vertexes
+            int maxDim = maxDimByCIIres[adjRes];
+            Vec2d v0 = {3.0 * maxDim, 0.0};
+            Vec2d v1 = {-1.5 * maxDim, 3.0 * M_SQRT3_2 * maxDim};
+            Vec2d v2 = {-1.5 * maxDim, -3.0 * M_SQRT3_2 * maxDim};
+
+            int face2 = ((lastFace == centerIJK.face) ? fijk.face : lastFace);
+            Vec2d *edge0;
+            Vec2d *edge1;
+            switch (adjacentFaceDir[centerIJK.face][face2]) {
+                case IJ:
+                    edge0 = &v0;
+                    edge1 = &v1;
+                    break;
+                case JK:
+                    edge0 = &v1;
+                    edge1 = &v2;
+                    break;
+                // case KI:
+                default:
+                    assert(adjacentFaceDir[centerIJK.face][face2] == KI);
+                    edge0 = &v2;
+                    edge1 = &v0;
+                    break;
+            }
+
+            // find the intersection and add the lat/lng point to the result
+            Vec2d inter;
+            _v2dIntersect(&orig2d0, &orig2d1, edge0, edge1, &inter);
+            /*
+            If a point of intersection occurs at a hexagon vertex, then each
+            adjacent hexagon edge will lie completely on a single icosahedron
+            face, and no additional vertex is required.
+            */
+            bool isIntersectionAtVertex =
+                _v2dEquals(&orig2d0, &inter) || _v2dEquals(&orig2d1, &inter);
+            if (!isIntersectionAtVertex) {
+                _hex2dToGeo(&inter, centerIJK.face, adjRes, 1,
+                            &g->verts[g->numVerts]);
+                g->numVerts++;
+            }
+        }
+
+        // convert vertex to lat/lng and add to the result
+        // vert == start + NUM_HEX_VERTS is only used to test for possible
+        // intersection on last edge
+        if (vert < start + NUM_HEX_VERTS) {
+            Vec2d vec;
+            _ijkToHex2d(&fijk.coord, &vec);
+            _hex2dToGeo(&vec, fijk.face, adjRes, 1, &g->verts[g->numVerts]);
+            g->numVerts++;
+        }
+
+        lastFace = fijk.face;
+        lastOverage = overage;
+    }
+}
+
+/**
+ * Get the vertices of a cell as substrate FaceIJK addresses
+ *
+ * @param fijk The FaceIJK address of the cell.
+ * @param res The H3 resolution of the cell. This may be adjusted if
+ *            necessary for the substrate grid resolution.
+ * @param fijkVerts Output array for the vertices
+ */
+void _faceIjkToVerts(FaceIJK *fijk, int *res, FaceIJK *fijkVerts) {
     // the vertexes of an origin-centered cell in a Class II resolution on a
     // substrate grid with aperture sequence 33r. The aperture 3 gets us the
     // vertices, and the 3r gets us back to Class II.
@@ -698,124 +807,31 @@ void _faceIjkToGeoBoundary(const FaceIJK* h, int res, int isPentagon,
     };
 
     // get the correct set of substrate vertices for this resolution
-    CoordIJK* verts;
-    if (isResClassIII(res))
+    CoordIJK *verts;
+    if (isResolutionClassIII(*res))
         verts = vertsCIII;
     else
         verts = vertsCII;
 
     // adjust the center point to be in an aperture 33r substrate grid
     // these should be composed for speed
-    FaceIJK centerIJK = *h;
-    _downAp3(&centerIJK.coord);
-    _downAp3r(&centerIJK.coord);
+    _downAp3(&fijk->coord);
+    _downAp3r(&fijk->coord);
 
     // if res is Class III we need to add a cw aperture 7 to get to
     // icosahedral Class II
-    int adjRes = res;
-    if (isResClassIII(res)) {
-        _downAp7r(&centerIJK.coord);
-        adjRes++;
+    if (isResolutionClassIII(*res)) {
+        _downAp7r(&fijk->coord);
+        *res += 1;
     }
 
     // The center point is now in the same substrate grid as the origin
     // cell vertices. Add the center point substate coordinates
     // to each vertex to translate the vertices to that cell.
-    FaceIJK fijkVerts[NUM_HEX_VERTS];
     for (int v = 0; v < NUM_HEX_VERTS; v++) {
-        fijkVerts[v].face = centerIJK.face;
-        _ijkAdd(&centerIJK.coord, &verts[v], &fijkVerts[v].coord);
+        fijkVerts[v].face = fijk->face;
+        _ijkAdd(&fijk->coord, &verts[v], &fijkVerts[v].coord);
         _ijkNormalize(&fijkVerts[v].coord);
-    }
-
-    // convert each vertex to lat/lon
-    // adjust the face of each vertex as appropriate and introduce
-    // edge-crossing vertices as needed
-    g->numVerts = 0;
-    int lastFace = -1;
-    int lastOverage = 0;  // 0: none; 1: edge; 2: overage
-    for (int vert = 0; vert < NUM_HEX_VERTS + 1; vert++) {
-        int v = vert % NUM_HEX_VERTS;
-
-        FaceIJK fijk = fijkVerts[v];
-
-        int pentLeading4 = 0;
-        int overage = _adjustOverageClassII(&fijk, adjRes, pentLeading4, 1);
-
-        /*
-        Check for edge-crossing. Each face of the underlying icosahedron is a
-        different projection plane. So if an edge of the hexagon crosses an
-        icosahedron edge, an additional vertex must be introduced at that
-        intersection point. Then each half of the cell edge can be projected
-        to geographic coordinates using the appropriate icosahedron face
-        projection. Note that Class II cell edges have vertices on the face
-        edge, with no edge line intersections.
-        */
-        if (isResClassIII(res) && vert > 0 && fijk.face != lastFace &&
-            lastOverage != 1) {
-            // find hex2d of the two vertexes on original face
-            int lastV = (v + 5) % NUM_HEX_VERTS;
-            Vec2d orig2d0;
-            _ijkToHex2d(&fijkVerts[lastV].coord, &orig2d0);
-
-            Vec2d orig2d1;
-            _ijkToHex2d(&fijkVerts[v].coord, &orig2d1);
-
-            // find the appropriate icosa face edge vertexes
-            int maxDim = maxDimByCIIres[adjRes];
-            Vec2d v0 = {3.0 * maxDim, 0.0};
-            Vec2d v1 = {-1.5 * maxDim, 3.0 * M_SQRT3_2 * maxDim};
-            Vec2d v2 = {-1.5 * maxDim, -3.0 * M_SQRT3_2 * maxDim};
-
-            int face2 = ((lastFace == centerIJK.face) ? fijk.face : lastFace);
-            Vec2d* edge0;
-            Vec2d* edge1;
-            switch (adjacentFaceDir[centerIJK.face][face2]) {
-                case IJ:
-                    edge0 = &v0;
-                    edge1 = &v1;
-                    break;
-                case JK:
-                    edge0 = &v1;
-                    edge1 = &v2;
-                    break;
-                case KI:
-                default:
-                    assert(adjacentFaceDir[centerIJK.face][face2] == KI);
-                    edge0 = &v2;
-                    edge1 = &v0;
-                    break;
-            }
-
-            // find the intersection and add the lat/lon point to the result
-            Vec2d inter;
-            _v2dIntersect(&orig2d0, &orig2d1, edge0, edge1, &inter);
-            /*
-            If a point of intersection occurs at a hexagon vertex, then each
-            adjacent hexagon edge will lie completely on a single icosahedron
-            face, and no additional vertex is required.
-            */
-            bool isIntersectionAtVertex =
-                _v2dEquals(&orig2d0, &inter) || _v2dEquals(&orig2d1, &inter);
-            if (!isIntersectionAtVertex) {
-                _hex2dToGeo(&inter, centerIJK.face, adjRes, 1,
-                            &g->verts[g->numVerts]);
-                g->numVerts++;
-            }
-        }
-
-        // convert vertex to lat/lon and add to the result
-        // vert == NUM_HEX_VERTS is only used to test for possible intersection
-        // on last edge
-        if (vert < NUM_HEX_VERTS) {
-            Vec2d vec;
-            _ijkToHex2d(&fijk.coord, &vec);
-            _hex2dToGeo(&vec, fijk.face, adjRes, 1, &g->verts[g->numVerts]);
-            g->numVerts++;
-        }
-
-        lastFace = fijk.face;
-        lastOverage = overage;
     }
 }
 
@@ -831,11 +847,11 @@ void _faceIjkToGeoBoundary(const FaceIJK* h, int res, int isPentagon,
  * @return 0 if on original face (no overage); 1 if on face edge (only occurs
  *         on substrate grids); 2 if overage on new face interior
  */
-int _adjustOverageClassII(FaceIJK* fijk, int res, int pentLeading4,
-                          int substrate) {
-    int overage = 0;
+Overage _adjustOverageClassII(FaceIJK *fijk, int res, int pentLeading4,
+                              int substrate) {
+    Overage overage = NO_OVERAGE;
 
-    CoordIJK* ijk = &fijk->coord;
+    CoordIJK *ijk = &fijk->coord;
 
     // get the maximum dimension value; scale if a substrate grid
     int maxDim = maxDimByCIIres[res];
@@ -843,12 +859,12 @@ int _adjustOverageClassII(FaceIJK* fijk, int res, int pentLeading4,
 
     // check for overage
     if (substrate && ijk->i + ijk->j + ijk->k == maxDim)  // on edge
-        overage = 1;
+        overage = FACE_EDGE;
     else if (ijk->i + ijk->j + ijk->k > maxDim)  // overage
     {
-        overage = 2;
+        overage = NEW_FACE;
 
-        const FaceOrientIJK* fijkOrient;
+        const FaceOrientIJK *fijkOrient;
         if (ijk->k > 0) {
             if (ijk->j > 0)  // jk "quadrant"
                 fijkOrient = &faceNeighbors[fijk->face][JK];
@@ -886,8 +902,51 @@ int _adjustOverageClassII(FaceIJK* fijk, int res, int pentLeading4,
 
         // overage points on pentagon boundaries can end up on edges
         if (substrate && ijk->i + ijk->j + ijk->k == maxDim)  // on edge
-            overage = 1;
+            overage = FACE_EDGE;
     }
 
     return overage;
+}
+
+/**
+ * Adjusts a FaceIJK address for a pentagon vertex in a substrate grid in
+ * place so that the resulting cell address is relative to the correct
+ * icosahedral face.
+ *
+ * @param fijk The FaceIJK address of the cell.
+ * @param res The H3 resolution of the cell.
+ */
+Overage _adjustPentVertOverage(FaceIJK *fijk, int res) {
+    int pentLeading4 = 0;
+    Overage overage;
+    do {
+        overage = _adjustOverageClassII(fijk, res, pentLeading4, 1);
+    } while (overage == NEW_FACE);
+    return overage;
+}
+
+/**
+ * Encodes a coordinate on the sphere to the corresponding icosahedral face and
+ * containing the squared euclidean distance to that face center.
+ *
+ * @param g The spherical coordinates to encode.
+ * @param face The icosahedral face containing the spherical coordinates.
+ * @param sqd The squared euclidean distance to its icosahedral face center.
+ */
+void _geoToClosestFace(const LatLng *g, int *face, double *sqd) {
+    Vec3d v3d;
+    _geoToVec3d(g, &v3d);
+
+    // determine the icosahedron face
+    *face = 0;
+    // The distance between two farthest points is 2.0, therefore the square of
+    // the distance between two points should always be less or equal than 4.0 .
+    *sqd = 5.0;
+    for (int f = 0; f < NUM_ICOSA_FACES; ++f) {
+        double sqdT = _pointSquareDist(&faceCenterPoint[f], &v3d);
+        if (sqdT < *sqd) {
+            *face = f;
+            *sqd = sqdT;
+        }
+    }
 }

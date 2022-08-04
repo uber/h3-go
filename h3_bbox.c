@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2017 Uber Technologies, Inc.
+ * Copyright 2016-2021 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,30 +18,32 @@
  */
 
 #include "h3_bbox.h"
+
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
+
 #include "h3_constants.h"
-#include "h3_geoCoord.h"
 #include "h3_h3Index.h"
+#include "h3_latLng.h"
 
 /**
  * Whether the given bounding box crosses the antimeridian
  * @param  bbox Bounding box to inspect
  * @return      is transmeridian
  */
-bool bboxIsTransmeridian(const BBox* bbox) { return bbox->east < bbox->west; }
+bool bboxIsTransmeridian(const BBox *bbox) { return bbox->east < bbox->west; }
 
 /**
  * Get the center of a bounding box
  * @param bbox   Input bounding box
  * @param center Output center coordinate
  */
-void bboxCenter(const BBox* bbox, GeoCoord* center) {
+void bboxCenter(const BBox *bbox, LatLng *center) {
     center->lat = (bbox->north + bbox->south) / 2.0;
     // If the bbox crosses the antimeridian, shift east 360 degrees
     double east = bboxIsTransmeridian(bbox) ? bbox->east + M_2PI : bbox->east;
-    center->lon = constrainLng((east + bbox->west) / 2.0);
+    center->lng = constrainLng((east + bbox->west) / 2.0);
 }
 
 /**
@@ -50,14 +52,14 @@ void bboxCenter(const BBox* bbox, GeoCoord* center) {
  * @param  point Point to test
  * @return       Whether the point is contained
  */
-bool bboxContains(const BBox* bbox, const GeoCoord* point) {
+bool bboxContains(const BBox *bbox, const LatLng *point) {
     return point->lat >= bbox->south && point->lat <= bbox->north &&
            (bboxIsTransmeridian(bbox) ?
                                       // transmeridian case
-                (point->lon >= bbox->west || point->lon <= bbox->east)
+                (point->lng >= bbox->west || point->lng <= bbox->east)
                                       :
                                       // standard case
-                (point->lon >= bbox->west && point->lon <= bbox->east));
+                (point->lng >= bbox->west && point->lng <= bbox->east));
 }
 
 /**
@@ -66,7 +68,7 @@ bool bboxContains(const BBox* bbox, const GeoCoord* point) {
  * @param  b2 Bounding box 2
  * @return    Whether the boxes are equal
  */
-bool bboxEquals(const BBox* b1, const BBox* b2) {
+bool bboxEquals(const BBox *b1, const BBox *b2) {
     return b1->north == b2->north && b1->south == b2->south &&
            b1->east == b2->east && b1->west == b2->west;
 }
@@ -80,42 +82,71 @@ bool bboxEquals(const BBox* b1, const BBox* b2) {
 double _hexRadiusKm(H3Index h3Index) {
     // There is probably a cheaper way to determine the radius of a
     // hexagon, but this way is conceptually simple
-    GeoCoord h3Center;
-    GeoBoundary h3Boundary;
-    H3_EXPORT(h3ToGeo)(h3Index, &h3Center);
-    H3_EXPORT(h3ToGeoBoundary)(h3Index, &h3Boundary);
-    return _geoDistKm(&h3Center, h3Boundary.verts);
+    LatLng h3Center;
+    CellBoundary h3Boundary;
+    H3_EXPORT(cellToLatLng)(h3Index, &h3Center);
+    H3_EXPORT(cellToBoundary)(h3Index, &h3Boundary);
+    return H3_EXPORT(greatCircleDistanceKm)(&h3Center, h3Boundary.verts);
 }
 
 /**
- * Get the radius of the bbox in hexagons - i.e. the radius of a k-ring centered
- * on the bbox center and covering the entire bbox.
- * @param  bbox Bounding box to measure
- * @param  res  Resolution of hexagons to use in measurement
- * @return      Radius in hexagons
+ * bboxHexEstimate returns an estimated number of hexagons that fit
+ *                 within the cartesian-projected bounding box
+ *
+ * @param bbox the bounding box to estimate the hexagon fill level
+ * @param res the resolution of the H3 hexagons to fill the bounding box
+ * @return the estimated number of hexagons to fill the bounding box
  */
-int bboxHexRadius(const BBox* bbox, int res) {
-    // Determine the center of the bounding box
-    GeoCoord center;
-    bboxCenter(bbox, &center);
+int64_t bboxHexEstimate(const BBox *bbox, int res) {
+    // Get the area of the pentagon as the maximally-distorted area possible
+    H3Index pentagons[12] = {0};
+    // TODO: Return error here
+    H3_EXPORT(getPentagons)(res, pentagons);
+    double pentagonRadiusKm = _hexRadiusKm(pentagons[0]);
+    // Area of a regular hexagon is 3/2*sqrt(3) * r * r
+    // The pentagon has the most distortion (smallest edges) and shares its
+    // edges with hexagons, so the most-distorted hexagons have this area,
+    // shrunk by 20% off chance that the bounding box perfectly bounds a
+    // pentagon.
+    double pentagonAreaKm2 =
+        0.8 * (2.59807621135 * pentagonRadiusKm * pentagonRadiusKm);
 
-    // Use a vertex on the side closest to the equator, to ensure the longest
-    // radius in cases with significant distortion. East/west is arbitrary.
-    double lat =
-        fabs(bbox->north) > fabs(bbox->south) ? bbox->south : bbox->north;
-    GeoCoord vertex = {lat, bbox->east};
+    // Then get the area of the bounding box of the geoloop in question
+    LatLng p1, p2;
+    p1.lat = bbox->north;
+    p1.lng = bbox->east;
+    p2.lat = bbox->south;
+    p2.lng = bbox->west;
+    double d = H3_EXPORT(greatCircleDistanceKm)(&p1, &p2);
+    // Derived constant based on: https://math.stackexchange.com/a/1921940
+    // Clamped to 3 as higher values tend to rapidly drag the estimate to zero.
+    double a = d * d / fmin(3.0, fabs((p1.lng - p2.lng) / (p1.lat - p2.lat)));
 
-    // Determine the length of the bounding box "radius" to then use
-    // as a circle on the earth that the k-rings must be greater than
-    double bboxRadiusKm = _geoDistKm(&center, &vertex);
+    // Divide the two to get an estimate of the number of hexagons needed
+    int64_t estimate = (int64_t)ceil(a / pentagonAreaKm2);
+    if (estimate == 0) estimate = 1;
+    return estimate;
+}
 
-    // Determine the radius of the center hexagon
-    double centerHexRadiusKm = _hexRadiusKm(H3_EXPORT(geoToH3)(&center, res));
+/**
+ * lineHexEstimate returns an estimated number of hexagons that trace
+ *                 the cartesian-projected line
+ *
+ *  @param origin the origin coordinates
+ *  @param destination the destination coordinates
+ *  @param res the resolution of the H3 hexagons to trace the line
+ *  @return the estimated number of hexagons required to trace the line
+ */
+int64_t lineHexEstimate(const LatLng *origin, const LatLng *destination,
+                        int res) {
+    // Get the area of the pentagon as the maximally-distorted area possible
+    H3Index pentagons[12] = {0};
+    // TODO: Return error here
+    H3_EXPORT(getPentagons)(res, pentagons);
+    double pentagonRadiusKm = _hexRadiusKm(pentagons[0]);
 
-    // The closest point along a hexagon drawn through the center points
-    // of a k-ring aggregation is exactly 1.5 radii of the hexagon. For
-    // any orientation of the GeoJSON encased in a circle defined by the
-    // bounding box radius and center, it is guaranteed to fit in this k-ring
-    // Rounded *up* to guarantee containment
-    return (int)ceil(bboxRadiusKm / (1.5 * centerHexRadiusKm));
+    double dist = H3_EXPORT(greatCircleDistanceKm)(origin, destination);
+    int64_t estimate = (int64_t)ceil(dist / (2 * pentagonRadiusKm));
+    if (estimate == 0) estimate = 1;
+    return estimate;
 }

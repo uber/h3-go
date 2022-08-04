@@ -1,3 +1,0 @@
-# treat C source and header files as binary as they are script managed
-*.c binary
-*.h binary

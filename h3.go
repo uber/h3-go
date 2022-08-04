@@ -1,3 +1,7 @@
+// Package h3 is the go binding for Uber's H3 Geo Index system.
+// It uses cgo to link with a statically compiled h3 library
+package h3
+
 /*
  * Copyright 2018 Uber Technologies, Inc.
  *
@@ -14,14 +18,9 @@
  * limitations under the License.
  */
 
-// Package h3 is the go binding for Uber's H3 Geo Index system.
-// It uses cgo to link with a statically compiled h3 library
-package h3
-
 /*
 #cgo CFLAGS: -std=c99
 #cgo CFLAGS: -DH3_HAVE_VLA=1
-#cgo CFLAGS: -I ${SRCDIR}
 #cgo LDFLAGS: -lm
 #include <stdlib.h>
 #include <h3_h3api.h>
@@ -30,8 +29,10 @@ package h3
 import "C"
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"unsafe"
 )
 
@@ -40,7 +41,7 @@ const (
 	// to represent the shape of a cell.
 	MaxCellBndryVerts = C.MAX_CELL_BNDRY_VERTS
 
-	// MaxResolution is the maximum H3 resolution a GeoCoord can be indexed to.
+	// MaxResolution is the maximum H3 resolution a LatLng can be indexed to.
 	MaxResolution = C.MAX_H3_RES
 
 	// The number of faces on an icosahedron
@@ -49,450 +50,693 @@ const (
 	// The number of H3 base cells
 	NumBaseCells = C.NUM_BASE_CELLS
 
+	// The number of H3 pentagon cells (same at every resolution)
+	NumPentagons = C.NUM_PENTAGONS
+
 	// InvalidH3Index is a sentinel value for an invalid H3 index.
-	InvalidH3Index = C.H3_INVALID_INDEX
+	InvalidH3Index = C.H3_NULL
+
+	base16  = 16
+	bitSize = 64
+
+	numCellEdges = 6
+	numEdgeCells = 2
+
+	DegsToRads = math.Pi / 180.0
+	RadsToDegs = 180.0 / math.Pi
 )
 
-var (
-	// ErrPentagonEncountered is returned by functions that encounter a pentagon
-	// and cannot handle it.
-	ErrPentagonEncountered = errors.New("pentagon encountered")
+// Index is an H3 index, a 64-bit unsigned integer that uniquely identifies
+// a single hexagon cell, and directed edges between two neighbor hexagons.
+// Cell and DirectedEdge are developer-friendly abstractions around this
+// type.
+type Index interface{ Cell | DirectedEdge }
 
-	// ErrInvalidResolution is returned when the requested resolution is not valid
-	ErrInvalidResolution = errors.New("resolution invalid")
+type (
 
-	// conversion units for faster maths
-	deg2rad = math.Pi / 180.0
-	rad2deg = 180.0 / math.Pi
-)
+	// Cell is an Index that identifies a single hexagon cell at a resolution.
+	Cell int64
 
-// H3Index is a type alias for the C type `H3Index`.  Effectively H3Index is a
-// `uint64`.
-type H3Index = C.H3Index
+	// DirectedEdge is an Index that identifies a directed edge between two cells.
+	DirectedEdge int64
 
-// GeoBoundary is a slice of `GeoCoord`.  Note, `len(GeoBoundary)` will never
-// exceed `MaxCellBndryVerts`.
-type GeoBoundary []GeoCoord
-
-// GeoCoord is a struct for geographic coordinates.
-type GeoCoord struct {
-	Latitude, Longitude float64
-}
-
-func (g GeoCoord) toCPtr() *C.GeoCoord {
-	return &C.GeoCoord{
-		lat: C.double(deg2rad * g.Latitude),
-		lon: C.double(deg2rad * g.Longitude),
+	CoordIJ struct {
+		I, J int
 	}
+
+	// CellBoundary is a slice of LatLng.  Note, len(CellBoundary) will never
+	// exceed MaxCellBndryVerts.
+	CellBoundary []LatLng
+
+	// GeoLoop is a slice of LatLng points that make up a loop.
+	GeoLoop []LatLng
+
+	// LatLng is a struct for geographic coordinates in degrees.
+	LatLng struct {
+		Lat, Lng float64
+	}
+
+	// GeoPolygon is a GeoLoop with 0 or more GeoLoop holes.
+	GeoPolygon struct {
+		GeoLoop GeoLoop
+		Holes   []GeoLoop
+	}
+
+	// LinkedGeoPolygon is a linked-list of GeoPolygons.
+	// TODO: not implemented.
+	LinkedGeoPolygon struct{}
+)
+
+func NewLatLng(lat, lng float64) LatLng {
+	return LatLng{lat, lng}
 }
 
-func (g GeoCoord) toC() C.GeoCoord {
-	return *g.toCPtr()
+// LatLngToCell returns the Cell at resolution for a geographic coordinate.
+func LatLngToCell(latLng LatLng, resolution int) Cell {
+	var i C.H3Index
+
+	C.latLngToCell(latLng.toCPtr(), C.int(resolution), &i)
+
+	return Cell(i)
 }
 
-// GeoPolygon is a geofence with 0 or more geofence holes
-type GeoPolygon struct {
-	// Geofence is the exterior boundary of the polygon
-	Geofence []GeoCoord
-
-	// Holes is a slice of interior boundary (holes) in the polygon
-	Holes [][]GeoCoord
+// Cell returns the Cell at resolution for a geographic coordinate.
+func (g LatLng) Cell(resolution int) Cell {
+	return LatLngToCell(g, resolution)
 }
 
-// --- INDEXING ---
+// CellToLatLng returns the geographic centerpoint of a Cell.
+func CellToLatLng(c Cell) LatLng {
+	var g C.LatLng
+
+	C.cellToLatLng(C.H3Index(c), &g)
+
+	return latLngFromC(g)
+}
+
+// LatLng returns the Cell at resolution for a geographic coordinate.
+func (c Cell) LatLng() LatLng {
+	return CellToLatLng(c)
+}
+
+// CellToBoundary returns a CellBoundary of the Cell.
+func CellToBoundary(c Cell) CellBoundary {
+	var cb C.CellBoundary
+
+	C.cellToBoundary(C.H3Index(c), &cb)
+
+	return cellBndryFromC(&cb)
+}
+
+// Boundary returns a CellBoundary of the Cell.
+func (c Cell) Boundary() CellBoundary {
+	return CellToBoundary(c)
+}
+
+// GridDisk produces cells within grid distance k of the origin cell.
 //
-// This section defines bindings for H3 indexing functions.
-// Additional documentation available at
-// https://uber.github.io/h3/#/documentation/api-reference/indexing
-
-// FromGeo returns the H3Index at resolution `res` for a geographic coordinate.
-func FromGeo(geoCoord GeoCoord, res int) H3Index {
-	return H3Index(C.geoToH3(geoCoord.toCPtr(), C.int(res)))
+// k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+// all neighboring cells, and so on.
+//
+// Output is placed in an array in no particular order. Elements of the output
+// array may be left zero, as can happen when crossing a pentagon.
+func GridDisk(origin Cell, k int) []Cell {
+	out := make([]C.H3Index, maxGridDiskSize(k))
+	C.gridDisk(C.H3Index(origin), C.int(k), &out[0])
+	// QUESTION: should we prune zeroes from the output?
+	return cellsFromC(out, true, false)
 }
 
-// ToGeo returns the geographic centerpoint of an H3Index `h`.
-func ToGeo(h H3Index) GeoCoord {
-	g := C.GeoCoord{}
-	C.h3ToGeo(h, &g)
-	return geoCoordFromC(g)
+// GridDisk produces cells within grid distance k of the origin cell.
+//
+// k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+// all neighboring cells, and so on.
+//
+// Output is placed in an array in no particular order. Elements of the output
+// array may be left zero, as can happen when crossing a pentagon.
+func (c Cell) GridDisk(k int) []Cell {
+	return GridDisk(c, k)
 }
 
-// ToGeoBoundary returns a `GeoBoundary` of the H3Index `h`.
-func ToGeoBoundary(h H3Index) GeoBoundary {
-	gb := new(C.GeoBoundary)
-	C.h3ToGeoBoundary(h, gb)
-	return geoBndryFromC(gb)
-}
-
-// --- INSPECTION ---
-// This section defines bindings for H3 inspection functions.
-// Additional documentation available at
-// https://uber.github.io/h3/#/documentation/api-reference/inspection
-
-// Resolution returns the resolution of `h`.
-func Resolution(h H3Index) int {
-	return int(C.h3GetResolution(h))
-}
-
-// BaseCell returns the integer ID of the base cell the H3Index `h` belongs to.
-func BaseCell(h H3Index) int {
-	return int(C.h3GetBaseCell(h))
-}
-
-// FromString returns an H3Index parsed from a string.
-func FromString(hStr string) H3Index {
-	h, err := strconv.ParseUint(hStr, 16, 64)
-	if err != nil {
-		return 0
-	}
-	return H3Index(h)
-}
-
-// ToString returns a string representation of an H3Index.
-func ToString(h H3Index) string {
-	return strconv.FormatUint(uint64(h), 16)
-}
-
-// IsValid returns true if `h` is valid.
-func IsValid(h H3Index) bool {
-	return C.h3IsValid(h) == 1
-}
-
-// IsResClassIII returns true if `h` is a class III index. If false, `h` is a
-// class II index.
-func IsResClassIII(h H3Index) bool {
-	return C.h3IsResClassIII(h) == 1
-}
-
-// IsPentagon returns true if `h` is a pentagon.
-func IsPentagon(h H3Index) bool {
-	return C.h3IsPentagon(h) == 1
-}
-
-// --- NEIGHBORS ---
-// This section defines bindings for H3 neighbor traversal functions.
-// Additional documentation available at
-// https://uber.github.io/h3/#/documentation/api-reference/neighbors
-
-// KRing implements the C function `kRing`.
-func KRing(origin H3Index, k int) []H3Index {
-	out := make([]C.H3Index, rangeSize(k))
-	C.kRing(origin, C.int(k), &out[0])
-	return h3SliceFromC(out)
-}
-
-// KRingDistances implements the C function `kRingDistances`.
-func KRingDistances(origin H3Index, k int) [][]H3Index {
-	rsz := rangeSize(k)
+// GridDiskDistances produces cells within grid distance k of the origin cell.
+//
+// k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+// all neighboring cells, and so on.
+//
+// Outer slice is ordered from origin outwards. Inner slices are in no
+// particular order. Elements of the output array may be left zero, as can
+// happen when crossing a pentagon.
+func GridDiskDistances(origin Cell, k int) [][]Cell {
+	rsz := maxGridDiskSize(k)
 	outHexes := make([]C.H3Index, rsz)
 	outDists := make([]C.int, rsz)
-	C.kRingDistances(origin, C.int(k), &outHexes[0], &outDists[0])
+	C.gridDiskDistances(C.H3Index(origin), C.int(k), &outHexes[0], &outDists[0])
 
-	ret := make([][]H3Index, k+1)
+	ret := make([][]Cell, k+1)
 	for i := 0; i <= k; i++ {
-		ret[i] = make([]H3Index, 0, ringSize(i))
+		ret[i] = make([]Cell, 0, ringSize(i))
 	}
 
 	for i, d := range outDists {
-		ret[d] = append(ret[d], H3Index(outHexes[i]))
+		ret[d] = append(ret[d], Cell(outHexes[i]))
 	}
+
 	return ret
 }
 
-// HexRange implements the C function `hexRange`.
-func HexRange(origin H3Index, k int) ([]H3Index, error) {
-	out := make([]C.H3Index, rangeSize(k))
-	if rv := C.hexRange(origin, C.int(k), &out[0]); rv != 0 {
-		return nil, ErrPentagonEncountered
-	}
-	return h3SliceFromC(out), nil
+// GridDiskDistances produces cells within grid distance k of the origin cell.
+//
+// k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+// all neighboring cells, and so on.
+//
+// Outer slice is ordered from origin outwards. Inner slices are in no
+// particular order. Elements of the output array may be left zero, as can
+// happen when crossing a pentagon.
+func (c Cell) GridDiskDistances(k int) [][]Cell {
+	return GridDiskDistances(c, k)
 }
 
-// HexRangeDistances implements the C function `hexRangeDistances`.
-func HexRangeDistances(origin H3Index, k int) ([][]H3Index, error) {
-	rsz := rangeSize(k)
-	outHexes := make([]C.H3Index, rsz)
-	outDists := make([]C.int, rsz)
-	rv := C.hexRangeDistances(origin, C.int(k), &outHexes[0], &outDists[0])
-	if rv != 0 {
-		return nil, ErrPentagonEncountered
+// PolygonToCells takes a given GeoJSON-like data structure fills it with the
+// hexagon cells that are contained by the GeoJSON-like data structure.
+//
+// This implementation traces the GeoJSON geoloop(s) in cartesian space with
+// hexagons, tests them and their neighbors to be contained by the geoloop(s),
+// and then any newly found hexagons are used to test again until no new
+// hexagons are found.
+func PolygonToCells(polygon GeoPolygon, resolution int) []Cell {
+	if len(polygon.GeoLoop) == 0 {
+		return nil
 	}
+	cpoly := allocCGeoPolygon(polygon)
 
-	ret := make([][]H3Index, k+1)
-	for i := 0; i <= k; i++ {
-		ret[i] = make([]H3Index, 0, ringSize(i))
-	}
+	defer freeCGeoPolygon(&cpoly)
 
-	for i, d := range outDists {
-		ret[d] = append(ret[d], H3Index(outHexes[i]))
-	}
-	return ret, nil
+	maxLen := new(C.int64_t)
+	C.maxPolygonToCellsSize(&cpoly, C.int(resolution), 0, maxLen)
+
+	out := make([]C.H3Index, *maxLen)
+	C.polygonToCells(&cpoly, C.int(resolution), 0, &out[0])
+
+	return cellsFromC(out, true, false)
 }
 
-// HexRanges implements the C function `hexRanges`.
-func HexRanges(origins []H3Index, k int) ([][]H3Index, error) {
-	rsz := rangeSize(k)
-	outHexes := make([]C.H3Index, rsz*len(origins))
-	inHexes := h3SliceToC(origins)
-	rv := C.hexRanges(&inHexes[0], C.int(len(origins)), C.int(k), &outHexes[0])
-	if rv != 0 {
-		return nil, ErrPentagonEncountered
+// PolygonToCells takes a given GeoJSON-like data structure fills it with the
+// hexagon cells that are contained by the GeoJSON-like data structure.
+//
+// This implementation traces the GeoJSON geoloop(s) in cartesian space with
+// hexagons, tests them and their neighbors to be contained by the geoloop(s),
+// and then any newly found hexagons are used to test again until no new
+// hexagons are found.
+func (p GeoPolygon) Cells(resolution int) []Cell {
+	return PolygonToCells(p, resolution)
+}
+
+func CellsToMultiPolygon(cells []Cell) *LinkedGeoPolygon {
+	panic("not implemented")
+}
+
+// PointDistRads returns the "great circle" or "haversine" distance between
+// pairs of LatLng points (lat/lng pairs) in radians.
+func GreatCircleDistanceRads(a, b LatLng) float64 {
+	return float64(C.greatCircleDistanceRads(a.toCPtr(), b.toCPtr()))
+}
+
+// PointDistKm returns the "great circle" or "haversine" distance between pairs
+// of LatLng points (lat/lng pairs) in kilometers.
+func GreatCircleDistanceKm(a, b LatLng) float64 {
+	return float64(C.greatCircleDistanceKm(a.toCPtr(), b.toCPtr()))
+}
+
+// PointDistM returns the "great circle" or "haversine" distance between pairs
+// of LatLng points (lat/lng pairs) in meters.
+func GreatCircleDistanceM(a, b LatLng) float64 {
+	return float64(C.greatCircleDistanceM(a.toCPtr(), b.toCPtr()))
+}
+
+// HexAreaKm2 returns the average hexagon area in square kilometers at the given
+// resolution.
+func HexagonAreaAvgKm2(resolution int) float64 {
+	var out C.double
+
+	C.getHexagonAreaAvgKm2(C.int(resolution), &out)
+
+	return float64(out)
+}
+
+// HexAreaM2 returns the average hexagon area in square meters at the given
+// resolution.
+func HexagonAreaAvgM2(resolution int) float64 {
+	var out C.double
+
+	C.getHexagonAreaAvgM2(C.int(resolution), &out)
+
+	return float64(out)
+}
+
+// CellAreaRads2 returns the exact area of specific cell in square radians.
+func CellAreaRads2(c Cell) float64 {
+	var out C.double
+
+	C.cellAreaRads2(C.H3Index(c), &out)
+
+	return float64(out)
+}
+
+// CellAreaKm2 returns the exact area of specific cell in square kilometers.
+func CellAreaKm2(c Cell) float64 {
+	var out C.double
+
+	C.cellAreaKm2(C.H3Index(c), &out)
+
+	return float64(out)
+}
+
+// CellAreaM2 returns the exact area of specific cell in square meters.
+func CellAreaM2(c Cell) float64 {
+	var out C.double
+
+	C.cellAreaM2(C.H3Index(c), &out)
+
+	return float64(out)
+}
+
+// HexagonEdgeLengthAvgKm returns the average hexagon edge length in kilometers
+// at the given resolution.
+func HexagonEdgeLengthAvgKm(resolution int) float64 {
+	var out C.double
+
+	C.getHexagonEdgeLengthAvgKm(C.int(resolution), &out)
+
+	return float64(out)
+}
+
+// HexagonEdgeLengthAvgM returns the average hexagon edge length in meters at
+// the given resolution.
+func HexagonEdgeLengthAvgM(resolution int) float64 {
+	var out C.double
+
+	C.getHexagonEdgeLengthAvgM(C.int(resolution), &out)
+
+	return float64(out)
+}
+
+// ExactEdgeLengthRads returns the exact edge length of specific unidirectional
+// edge in radians.
+func ExactEdgeLengthRads(e DirectedEdge) float64 {
+	var out C.double
+
+	C.exactEdgeLengthRads(C.H3Index(e), &out)
+
+	return float64(out)
+}
+
+// ExactEdgeLengthKm returns the exact edge length of specific unidirectional
+// edge in kilometers.
+func ExactEdgeLengthKm(e DirectedEdge) float64 {
+	var out C.double
+
+	C.exactEdgeLengthKm(C.H3Index(e), &out)
+
+	return float64(out)
+}
+
+// ExactEdgeLengthM returns the exact edge length of specific unidirectional
+// edge in meters.
+func ExactEdgeLengthM(e DirectedEdge) float64 {
+	var out C.double
+
+	C.exactEdgeLengthM(C.H3Index(e), &out)
+
+	return float64(out)
+}
+
+// NumCells returns the number of cells at the given resolution.
+func NumCells(resolution int) int {
+	// NOTE: this is a mathematical operation, no need to call into H3 library.
+	// See h3api.h for formula derivation.
+	return 2 + 120*intPow(7, (resolution)) //nolint:gomnd // math formula
+}
+
+// Res0Cells returns all the cells at resolution 0.
+func Res0Cells() []Cell {
+	out := make([]C.H3Index, C.res0CellCount())
+	C.getRes0Cells(&out[0])
+
+	return cellsFromC(out, false, false)
+}
+
+// Pentagons returns all the pentagons at resolution.
+func Pentagons(resolution int) []Cell {
+	out := make([]C.H3Index, NumPentagons)
+	C.getPentagons(C.int(resolution), &out[0])
+
+	return cellsFromC(out, false, false)
+}
+
+// Resolution returns the resolution of h.
+func Resolution[T Index](h T) int {
+	return int(C.getResolution(C.H3Index(h)))
+}
+
+func (c Cell) Resolution() int {
+	return Resolution(c)
+}
+
+func (e DirectedEdge) Resolution() int {
+	return Resolution(e)
+}
+
+// BaseCellNumber returns the integer ID (0-121) of the base cell the H3Index h
+// belongs to.
+func BaseCellNumber(h Cell) int {
+	return int(C.getBaseCellNumber(C.H3Index(h)))
+}
+
+// BaseCellNumber returns the integer ID (0-121) of the base cell the H3Index h
+// belongs to.
+func (c Cell) BaseCellNumber() int {
+	return BaseCellNumber(c)
+}
+
+// IndexFromString returns a Cell from a string. Should call c.IsValid() to check
+// if the Cell is valid before using it.
+func IndexFromString(s string) uint64 {
+	if len(s) > 2 && strings.ToLower(s[:2]) == "0x" {
+		s = s[2:]
+	}
+	c, _ := strconv.ParseUint(s, base16, bitSize)
+
+	return c
+}
+
+// IndexToString returns a Cell from a string. Should call c.IsValid() to check
+// if the Cell is valid before using it.
+func IndexToString(i uint64) string {
+	return strconv.FormatUint(i, base16)
+}
+
+// String returns the string representation of the H3Index h.
+func (c Cell) String() string {
+	return IndexToString(uint64(c))
+}
+
+// MarshalText implements the encoding.TextMarshaler interface.
+func (c Cell) MarshalText() ([]byte, error) {
+	return []byte(c.String()), nil
+}
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+func (c *Cell) UnmarshalText(text []byte) error {
+	*c = Cell(IndexFromString(string(text)))
+	if !c.IsValid() {
+		return errors.New("invalid cell index")
 	}
 
-	ret := make([][]H3Index, len(origins))
-	for i := 0; i < len(origins); i++ {
-		ret[i] = make([]H3Index, rsz)
-		for j := 0; j < rsz; j++ {
-			ret[i][j] = H3Index(outHexes[i*rsz+j])
-		}
-	}
-	return ret, nil
+	return nil
 }
 
-// HexRing implements the C function `hexRing`.
-func HexRing(origin H3Index, k int) ([]H3Index, error) {
-	out := make([]C.H3Index, ringSize(k))
-	if rv := C.hexRing(origin, C.int(k), &out[0]); rv != 0 {
-		return nil, ErrPentagonEncountered
-	}
-	return h3SliceFromC(out), nil
+// IsValid returns if a Cell is a valid cell (hexagon or pentagon).
+func (c Cell) IsValid() bool {
+	return c != 0 && C.isValidCell(C.H3Index(c)) == 1
 }
 
-// AreNeighbors returns true if `h1` and `h2` are neighbors.  Two
-// indexes are neighbors if they share an edge.
-func AreNeighbors(h1, h2 H3Index) bool {
-	return C.h3IndexesAreNeighbors(h1, h2) == 1
+// Parent returns the parent or grandparent Cell of this Cell.
+func (c Cell) Parent(resolution int) Cell {
+	var out C.H3Index
+
+	C.cellToParent(C.H3Index(c), C.int(resolution), &out)
+
+	return Cell(out)
 }
 
-// --- HIERARCHY ---
-// This section defines bindings for H3 hierarchical functions.
-// Additional documentation available at
-// https://uber.github.io/h3/#/documentation/api-reference/hierarchy
-
-// ToParent returns the `H3Index` of the cell that contains `child` at
-// resolution `parentRes`.  `parentRes` must be less than the resolution of
-// `child`.
-func ToParent(child H3Index, parentRes int) (parent H3Index) {
-	return H3Index(C.h3ToParent(C.H3Index(child), C.int(parentRes)))
+// Parent returns the parent or grandparent Cell of this Cell.
+func (c Cell) ImmediateParent() Cell {
+	return c.Parent(c.Resolution() - 1)
 }
 
-// ToChildren returns all the `H3Index`es of `parent` at resolution `childRes`.
-// `childRes` must be larger than the resolution of `parent`.
-func ToChildren(parent H3Index, childRes int) []H3Index {
-	p := C.H3Index(parent)
-	csz := C.int(childRes)
-	out := make([]C.H3Index, int(C.maxH3ToChildrenSize(p, csz)))
-	C.h3ToChildren(p, csz, &out[0])
-	return h3SliceFromC(out)
+// Children returns the children or grandchildren cells of this Cell.
+func (c Cell) Children(resolution int) []Cell {
+	var outsz C.int64_t
+
+	C.cellToChildrenSize(C.H3Index(c), C.int(resolution), &outsz)
+	out := make([]C.H3Index, outsz)
+
+	C.cellToChildren(C.H3Index(c), C.int(resolution), &out[0])
+
+	return cellsFromC(out, false, false)
 }
 
-// Compact merges full sets of children into their parent `H3Index`
+// ImmediateChildren returns the children or grandchildren cells of this Cell.
+func (c Cell) ImmediateChildren() []Cell {
+	return c.Children(c.Resolution() + 1)
+}
+
+// CenterChild returns the center child Cell of this Cell.
+func (c Cell) CenterChild(resolution int) Cell {
+	var out C.H3Index
+
+	C.cellToCenterChild(C.H3Index(c), C.int(resolution), &out)
+
+	return Cell(out)
+}
+
+// IsResClassIII returns true if this is a class III index. If false, this is a
+// class II index.
+func (c Cell) IsResClassIII() bool {
+	return C.isResClassIII(C.H3Index(c)) == 1
+}
+
+// IsPentagon returns true if this is a pentagon.
+func (c Cell) IsPentagon() bool {
+	return C.isPentagon(C.H3Index(c)) == 1
+}
+
+// IcosahedronFaces finds all icosahedron faces (0-19) intersected by this Cell.
+func (c Cell) IcosahedronFaces() []int {
+	var outsz C.int
+
+	C.maxFaceCount(C.H3Index(c), &outsz)
+	out := make([]C.int, outsz)
+
+	C.getIcosahedronFaces(C.H3Index(c), &out[0])
+
+	return intsFromC(out)
+}
+
+// IsNeighbor returns true if this Cell is a neighbor of the other Cell.
+func (c Cell) IsNeighbor(other Cell) bool {
+	var out C.int
+	C.areNeighborCells(C.H3Index(c), C.H3Index(other), &out)
+
+	return out == 1
+}
+
+// DirectedEdge returns a DirectedEdge from this Cell to other.
+func (c Cell) DirectedEdge(other Cell) DirectedEdge {
+	var out C.H3Index
+	C.cellsToDirectedEdge(C.H3Index(c), C.H3Index(other), &out)
+
+	return DirectedEdge(out)
+}
+
+// DirectedEdges returns 6 directed edges with h as the origin.
+func (c Cell) DirectedEdges() []DirectedEdge {
+	out := make([]C.H3Index, numCellEdges) // always 6 directed edges
+	C.originToDirectedEdges(C.H3Index(c), &out[0])
+
+	return edgesFromC(out)
+}
+
+func (e DirectedEdge) IsValid() bool {
+	return C.isValidDirectedEdge(C.H3Index(e)) == 1
+}
+
+// Origin returns the origin cell of this directed edge.
+func (e DirectedEdge) Origin() Cell {
+	var out C.H3Index
+	C.getDirectedEdgeOrigin(C.H3Index(e), &out)
+
+	return Cell(out)
+}
+
+// Destination returns the destination cell of this directed edge.
+func (e DirectedEdge) Destination() Cell {
+	var out C.H3Index
+	C.getDirectedEdgeDestination(C.H3Index(e), &out)
+
+	return Cell(out)
+}
+
+// Cells returns the origin and destination cells in that order.
+func (e DirectedEdge) Cells() []Cell {
+	out := make([]C.H3Index, numEdgeCells)
+	C.directedEdgeToCells(C.H3Index(e), &out[0])
+
+	return cellsFromC(out, false, false)
+}
+
+// Boundary provides the coordinates of the boundary of the directed edge. Note,
+// the type returned is CellBoundary, but the coordinates will be from the
+// center of the origin to the center of the destination. There may be more than
+// 2 coordinates to account for crossing faces.
+func (e DirectedEdge) Boundary() CellBoundary {
+	var out C.CellBoundary
+	C.directedEdgeToBoundary(C.H3Index(e), &out)
+
+	return cellBndryFromC(&out)
+}
+
+// CompactCells merges full sets of children into their parent H3Index
 // recursively, until no more merges are possible.
-func Compact(in []H3Index) []H3Index {
-	cin := h3SliceToC(in)
-	csz := C.int(len(in))
+func CompactCells(in []Cell) []Cell {
+	cin := cellsToC(in)
+	csz := C.int64_t(len(in))
 	// worst case no compaction so we need a set **at least** as large as the
 	// input
 	cout := make([]C.H3Index, csz)
-	C.compact(&cin[0], &cout[0], csz)
-	return h3SliceFromC(cout)
+	C.compactCells(&cin[0], &cout[0], csz)
+
+	return cellsFromC(cout, false, true)
 }
 
-// Uncompact splits every `H3Index` in `in` if its resolution is greater than
-// `res` recursively. Returns all the `H3Index`es at resolution `res`.
-func Uncompact(in []H3Index, res int) ([]H3Index, error) {
-	cin := h3SliceToC(in)
-	maxUncompactSz := C.maxUncompactSize(&cin[0], C.int(len(in)), C.int(res))
-	if maxUncompactSz < 0 {
-		// A size of less than zero indicates an error uncompacting such as the
-		// requested resolution being less than the resolution of the hexagons.
-		return nil, ErrInvalidResolution
-	}
-	cout := make([]C.H3Index, maxUncompactSz)
-	C.uncompact(
-		&cin[0], C.int(len(in)),
-		&cout[0], maxUncompactSz,
-		C.int(res))
-	return h3SliceFromC(cout), nil
+// UncompactCells splits every H3Index in in if its resolution is greater
+// than resolution recursively. Returns all the H3Indexes at resolution resolution.
+func UncompactCells(in []Cell, resolution int) []Cell {
+	cin := cellsToC(in)
+	var csz C.int64_t
+	C.uncompactCellsSize(&cin[0], C.int64_t(len(cin)), C.int(resolution), &csz)
+
+	cout := make([]C.H3Index, csz)
+	C.uncompactCells(
+		&cin[0], C.int64_t(len(in)),
+		&cout[0], csz,
+		C.int(resolution))
+
+	return cellsFromC(cout, false, true)
 }
 
-// --- REGIONS ---
+func GridDistance(a, b Cell) int {
+	var out C.int64_t
+	C.gridDistance(C.H3Index(a), C.H3Index(b), &out)
 
-// Polyfill returns the hexagons at the given resolution whose centers are within the
-// geofences given in the GeoPolygon struct.
-func Polyfill(gp GeoPolygon, res int) []H3Index {
-	cgp := geoPolygonToC(gp)
-	defer freeCGeoPolygon(&cgp)
-
-	maxSize := C.maxPolyfillSize(&cgp, C.int(res))
-	cout := make([]C.H3Index, maxSize)
-	C.polyfill(&cgp, C.int(res), &cout[0])
-
-	return h3SliceFromC(cout)
+	return int(out)
 }
 
-// --- UNIDIRECTIONAL EDGE FUNCTIONS ---
-
-// UnidirectionalEdge returns a unidirectional `H3Index` from `origin` to
-// `destination`.
-func UnidirectionalEdge(origin, destination H3Index) H3Index {
-	return H3Index(C.getH3UnidirectionalEdge(origin, destination))
+func (c Cell) GridDistance(other Cell) int {
+	return GridDistance(c, other)
 }
 
-// UnidirectionalEdgeIsValid returns true if `edge` is a valid unidirectional
-// edge index.
-func UnidirectionalEdgeIsValid(edge H3Index) bool {
-	return C.h3UnidirectionalEdgeIsValid(edge) == 1
+func GridPath(a, b Cell) []Cell {
+	var outsz C.int64_t
+	C.gridPathCellsSize(C.H3Index(a), C.H3Index(b), &outsz)
+
+	out := make([]C.H3Index, outsz)
+	C.gridPathCells(C.H3Index(a), C.H3Index(b), &out[0])
+
+	return cellsFromC(out, false, false)
 }
 
-// OriginFromUnidirectionalEdge returns the origin of a unidirectional
-// edge.
-func OriginFromUnidirectionalEdge(edge H3Index) H3Index {
-	return H3Index(C.getOriginH3IndexFromUnidirectionalEdge(edge))
+func (c Cell) GridPath(other Cell) []Cell {
+	return GridPath(c, other)
 }
 
-// DestinationFromUnidirectionalEdge returns the destination of a
-// unidirectional edge.
-func DestinationFromUnidirectionalEdge(edge H3Index) H3Index {
-	return H3Index(C.getDestinationH3IndexFromUnidirectionalEdge(edge))
+func CellToLocalIJ(origin, cell Cell) CoordIJ {
+	var out C.CoordIJ
+	C.cellToLocalIj(C.H3Index(origin), C.H3Index(cell), 0, &out)
+
+	return CoordIJ{int(out.i), int(out.j)}
 }
 
-// FromUnidirectionalEdge returns the origin and destination from a
-// unidirectional edge.
-func FromUnidirectionalEdge(
-	edge H3Index,
-) (origin, destination H3Index) {
-	cout := make([]C.H3Index, 2)
-	C.getH3IndexesFromUnidirectionalEdge(edge, &cout[0])
-	origin = H3Index(cout[0])
-	destination = H3Index(cout[1])
-	return
+func LocalIJToCell(origin Cell, ij CoordIJ) Cell {
+	var out C.H3Index
+	C.localIjToCell(C.H3Index(origin), ij.toCPtr(), 0, &out)
+
+	return Cell(out)
 }
 
-// ToUnidirectionalEdges returns the six (or five if pentagon) unidirectional
-// edges from `h` to each of `h`'s neighbors.
-func ToUnidirectionalEdges(h H3Index) []H3Index {
-	// allocating max size, `h3SliceFromC` will adjust cap
-	cout := make([]C.H3Index, 6)
-	C.getH3UnidirectionalEdgesFromHexagon(h, &cout[0])
-	return h3SliceFromC(cout)
+func maxGridDiskSize(k int) int {
+	return 3*k*(k+1) + 1
 }
 
-// UnidirectionalEdgeBoundary returns the geocoordinates of a unidirectional
-// edge boundary.
-func UnidirectionalEdgeBoundary(edge H3Index) GeoBoundary {
-	gb := new(C.GeoBoundary)
-	C.getH3UnidirectionalEdgeBoundary(edge, gb)
-	return geoBndryFromC(gb)
-}
+func latLngFromC(cg C.LatLng) LatLng {
+	g := LatLng{}
+	g.Lat = RadsToDegs * float64(cg.lat)
+	g.Lng = RadsToDegs * float64(cg.lng)
 
-// Line returns the line of h3 indexes connecting two indexes
-func Line(start, end H3Index) []H3Index {
-	n := C.h3LineSize(start, end)
-	cout := make([]C.H3Index, n)
-	C.h3Line(start, end, &cout[0])
-	return h3SliceFromC(cout)
-}
-
-func geoCoordFromC(cg C.GeoCoord) GeoCoord {
-	g := GeoCoord{}
-	g.Latitude = rad2deg * float64(cg.lat)
-	g.Longitude = rad2deg * float64(cg.lon)
 	return g
 }
 
-func geoBndryFromC(cb *C.GeoBoundary) GeoBoundary {
-	g := make(GeoBoundary, 0, MaxCellBndryVerts)
+func cellBndryFromC(cb *C.CellBoundary) CellBoundary {
+	g := make(CellBoundary, 0, MaxCellBndryVerts)
 	for i := C.int(0); i < cb.numVerts; i++ {
-		g = append(g, geoCoordFromC(cb.verts[i]))
+		g = append(g, latLngFromC(cb.verts[i]))
 	}
+
 	return g
-}
-
-func h3SliceFromC(chs []C.H3Index) []H3Index {
-	out := make([]H3Index, 0, len(chs))
-	for _, ch := range chs {
-		// C API returns a sparse array of indexes in the event pentagons and
-		// deleted sequences are encountered.
-		if ch == InvalidH3Index {
-			continue
-		}
-		out = append(out, H3Index(ch))
-	}
-	return out
-}
-
-func h3SliceToC(hs []H3Index) []C.H3Index {
-	out := make([]C.H3Index, len(hs))
-	for i, h := range hs {
-		out[i] = h
-	}
-	return out
 }
 
 func ringSize(k int) int {
 	if k == 0 {
 		return 1
 	}
-	return 6 * k
+
+	return 6 * k //nolint:gomnd // math formula
 }
 
-func rangeSize(k int) int {
-	return int(C.maxKringSize(C.int(k)))
-}
-
-// Convert slice of geocoordinates to an array of C geocoordinates (represented in C-style as a
-// pointer to the first item in the array). The caller must free the returned pointer when
-// finished with it.
-func geoCoordsToC(coords []GeoCoord) *C.GeoCoord {
+// Convert slice of LatLngs to an array of C LatLngs (represented in C-style as
+// a pointer to the first item in the array). The caller must free the returned
+// pointer when finished with it.
+func latLngsToC(coords []LatLng) *C.LatLng {
 	if len(coords) == 0 {
 		return nil
 	}
 
 	// Use malloc to construct a C-style struct array for the output
-	cverts := C.malloc(C.size_t(C.sizeof_GeoCoord * len(coords)))
+	cverts := C.malloc(C.size_t(C.sizeof_LatLng * len(coords)))
 	pv := cverts
+
 	for _, gc := range coords {
-		*((*C.GeoCoord)(pv)) = gc.toC()
-		pv = unsafe.Pointer(uintptr(pv) + C.sizeof_GeoCoord)
+		*((*C.LatLng)(pv)) = *gc.toCPtr()
+		pv = unsafe.Pointer(uintptr(pv) + C.sizeof_LatLng)
 	}
 
-	return (*C.GeoCoord)(cverts)
+	return (*C.LatLng)(cverts)
 }
 
-// Convert geofences (slices of slices of geocoordinates) to C geofences (represented in C-style as
+// Convert geofences (slices of slices of LatLnginates) to C geofences (represented in C-style as
 // a pointer to the first item in the array). The caller must free the returned pointer and any
 // pointer on the verts field when finished using it.
-func geofencesToC(geofences [][]GeoCoord) *C.Geofence {
+func geoLoopsToC(geofences []GeoLoop) *C.GeoLoop {
 	if len(geofences) == 0 {
 		return nil
 	}
 
 	// Use malloc to construct a C-style struct array for the output
-	cgeofences := C.malloc(C.size_t(C.sizeof_Geofence * len(geofences)))
+	cgeofences := C.malloc(C.size_t(C.sizeof_GeoLoop * len(geofences)))
 
 	pcgeofences := cgeofences
-	for _, coords := range geofences {
-		cverts := geoCoordsToC(coords)
 
-		*((*C.Geofence)(pcgeofences)) = C.Geofence{
+	for _, coords := range geofences {
+		cverts := latLngsToC(coords)
+
+		*((*C.GeoLoop)(pcgeofences)) = C.GeoLoop{
 			verts:    cverts,
 			numVerts: C.int(len(coords)),
 		}
-		pcgeofences = unsafe.Pointer(uintptr(pcgeofences) + C.sizeof_Geofence)
+		pcgeofences = unsafe.Pointer(uintptr(pcgeofences) + C.sizeof_GeoLoop)
 	}
 
-	return (*C.Geofence)(cgeofences)
+	return (*C.GeoLoop)(cgeofences)
 }
 
 // Convert GeoPolygon struct to C equivalent struct.
-func geoPolygonToC(gp GeoPolygon) C.GeoPolygon {
-	cverts := geoCoordsToC(gp.Geofence)
-	choles := geofencesToC(gp.Holes)
+func allocCGeoPolygon(gp GeoPolygon) C.GeoPolygon {
+	cverts := latLngsToC(gp.GeoLoop)
+	choles := geoLoopsToC(gp.Holes)
 
 	return C.GeoPolygon{
-		geofence: C.Geofence{
-			numVerts: C.int(len(gp.Geofence)),
+		geoloop: C.GeoLoop{
+			numVerts: C.int(len(gp.GeoLoop)),
 			verts:    cverts,
 		},
 		numHoles: C.int(len(gp.Holes)),
@@ -502,16 +746,114 @@ func geoPolygonToC(gp GeoPolygon) C.GeoPolygon {
 
 // Free pointer values on a C GeoPolygon struct
 func freeCGeoPolygon(cgp *C.GeoPolygon) {
-	C.free(unsafe.Pointer(cgp.geofence.verts))
-	cgp.geofence.verts = nil
+	C.free(unsafe.Pointer(cgp.geoloop.verts))
+	cgp.geoloop.verts = nil
 
 	ph := unsafe.Pointer(cgp.holes)
+
 	for i := C.int(0); i < cgp.numHoles; i++ {
-		C.free(unsafe.Pointer((*C.Geofence)(ph).verts))
-		(*C.Geofence)(ph).verts = nil
-		ph = unsafe.Pointer(uintptr(ph) + uintptr(C.sizeof_Geofence))
+		C.free(unsafe.Pointer((*C.GeoLoop)(ph).verts))
+		(*C.GeoLoop)(ph).verts = nil
+		ph = unsafe.Pointer(uintptr(ph) + uintptr(C.sizeof_GeoLoop))
 	}
 
 	C.free(unsafe.Pointer(cgp.holes))
 	cgp.holes = nil
+}
+
+// https://stackoverflow.com/questions/64108933/how-to-use-math-pow-with-integers-in-golang
+func intPow(n, m int) int {
+	if m == 0 {
+		return 1
+	}
+	result := n
+
+	for i := 2; i <= m; i++ {
+		result *= n
+	}
+
+	return result
+}
+
+func cellsFromC(chs []C.H3Index, prune, refit bool) []Cell {
+	// OPT: This could be more efficient if we unsafely cast the C array to a
+	// []H3Index.
+	out := make([]Cell, 0, len(chs))
+
+	for i := range chs {
+		if prune && chs[i] <= 0 {
+			continue
+		}
+
+		out = append(out, Cell(chs[i]))
+	}
+
+	if refit {
+		// Some algorithms require a maximum sized array, but only use a subset
+		// of the memory.  refit sizes the slice to the last non-empty element.
+		for i := len(out) - 1; i >= 0; i-- {
+			if out[i] == 0 {
+				out = out[:i]
+			}
+		}
+	}
+
+	return out
+}
+
+func edgesFromC(chs []C.H3Index) []DirectedEdge {
+	out := make([]DirectedEdge, 0, len(chs))
+
+	for i := range chs {
+		if chs[i] <= 0 {
+			continue
+		}
+
+		out = append(out, DirectedEdge(chs[i]))
+	}
+
+	return out
+}
+
+func cellsToC(chs []Cell) []C.H3Index {
+	// OPT: This could be more efficient if we unsafely cast the array to a
+	// []C.H3Index.
+	out := make([]C.H3Index, len(chs))
+	for i := range chs {
+		out[i] = C.H3Index(chs[i])
+	}
+
+	return out
+}
+
+func intsFromC(chs []C.int) []int {
+	out := make([]int, 0, len(chs))
+
+	for i := range chs {
+		// C API returns a sparse array of indexes in the event pentagons and
+		// deleted sequences are encountered.
+		if chs[i] != -1 {
+			out = append(out, int(chs[i]))
+		}
+	}
+
+	return out
+}
+
+func (g LatLng) String() string {
+	return fmt.Sprintf("(%.5f, %.5f)", g.Lat, g.Lng)
+}
+
+func (g LatLng) toCPtr() *C.LatLng {
+	return &C.LatLng{
+		lat: C.double(DegsToRads * g.Lat),
+		lng: C.double(DegsToRads * g.Lng),
+	}
+}
+
+func (ij CoordIJ) toCPtr() *C.CoordIJ {
+	return &C.CoordIJ{
+		i: C.int(ij.I),
+		j: C.int(ij.J),
+	}
 }

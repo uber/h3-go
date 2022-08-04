@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Uber Technologies, Inc.
+ * Copyright 2018-2021 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,23 @@
  * limitations under the License.
  */
 /** @file polygon.c
- * @brief Polygon (Geofence) algorithms
+ * @brief Polygon (GeoLoop) algorithms
  */
 
 #include "h3_polygon.h"
-#include <assert.h>
+
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
+
 #include "h3_bbox.h"
 #include "h3_constants.h"
-#include "h3_geoCoord.h"
 #include "h3_h3api.h"
+#include "h3_latLng.h"
 #include "h3_linkedGeo.h"
 
-// Define macros used in polygon algos for Geofence
-#define TYPE Geofence
+// Define macros used in polygon algos for GeoLoop
+#define TYPE GeoLoop
 #define INIT_ITERATION INIT_ITERATION_GEOFENCE
 #define ITERATE ITERATE_GEOFENCE
 #define IS_EMPTY IS_EMPTY_GEOFENCE
@@ -46,10 +47,10 @@
  * @param polygon Input GeoPolygon
  * @param bboxes  Output bboxes, one for the outer loop and one for each hole
  */
-void bboxesFromGeoPolygon(const GeoPolygon* polygon, BBox* bboxes) {
-    bboxFromGeofence(&polygon->geofence, &bboxes[0]);
+void bboxesFromGeoPolygon(const GeoPolygon *polygon, BBox *bboxes) {
+    bboxFromGeoLoop(&polygon->geoloop, &bboxes[0]);
     for (int i = 0; i < polygon->numHoles; i++) {
-        bboxFromGeofence(&polygon->holes[i], &bboxes[i + 1]);
+        bboxFromGeoLoop(&polygon->holes[i], &bboxes[i + 1]);
     }
 }
 
@@ -57,24 +58,24 @@ void bboxesFromGeoPolygon(const GeoPolygon* polygon, BBox* bboxes) {
  * pointInsidePolygon takes a given GeoPolygon data structure and
  * checks if it contains a given geo coordinate.
  *
- * @param geoPolygon The geofence and holes defining the relevant area
- * @param bboxes     The bboxes for the main geofence and each of its holes
+ * @param geoPolygon The geoloop and holes defining the relevant area
+ * @param bboxes     The bboxes for the main geoloop and each of its holes
  * @param coord      The coordinate to check
  * @return           Whether the point is contained
  */
-bool pointInsidePolygon(const GeoPolygon* geoPolygon, const BBox* bboxes,
-                        const GeoCoord* coord) {
-    // Start with contains state of primary geofence
+bool pointInsidePolygon(const GeoPolygon *geoPolygon, const BBox *bboxes,
+                        const LatLng *coord) {
+    // Start with contains state of primary geoloop
     bool contains =
-        pointInsideGeofence(&(geoPolygon->geofence), &bboxes[0], coord);
+        pointInsideGeoLoop(&(geoPolygon->geoloop), &bboxes[0], coord);
 
-    // If the point is contained in the primary geofence, but there are holes in
-    // the geofence iterate through all holes and return false if the point is
+    // If the point is contained in the primary geoloop, but there are holes in
+    // the geoloop iterate through all holes and return false if the point is
     // contained in any hole
     if (contains && geoPolygon->numHoles > 0) {
         for (int i = 0; i < geoPolygon->numHoles; i++) {
-            if (pointInsideGeofence(&(geoPolygon->holes[i]), &bboxes[i + 1],
-                                    coord)) {
+            if (pointInsideGeoLoop(&(geoPolygon->holes[i]), &bboxes[i + 1],
+                                   coord)) {
                 return false;
             }
         }
