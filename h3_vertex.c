@@ -304,7 +304,7 @@ H3Error H3_EXPORT(cellToVertexes)(H3Index cell, H3Index *vertexes) {
 }
 
 /**
- * Get the LatLnginates of an H3 vertex
+ * Get the geocoordinates of an H3 vertex
  * @param vertex H3 index describing a vertex
  * @param coord  Output geo coordinate
  */
