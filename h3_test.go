@@ -662,8 +662,8 @@ func assertEqualCells(t *testing.T, expected, actual []Cell, msgAndArgs ...inter
 		return
 	}
 
-	expected = sortCells(copySlice(expected))
-	actual = sortCells(copySlice(actual))
+	expected = sortCells(copyCells(expected))
+	actual = sortCells(copyCells(actual))
 
 	count := 0
 
@@ -689,8 +689,8 @@ func assertEqualDiskDistances(t *testing.T, expected, actual [][]Cell) {
 		return
 	}
 
-	expected = copySlice(expected)
-	actual = copySlice(actual)
+	expected = copyRings(expected)
+	actual = copyRings(actual)
 
 	for i := range expected {
 		if len(expected[i]) != len(actual[i]) {
@@ -698,8 +698,8 @@ func assertEqualDiskDistances(t *testing.T, expected, actual [][]Cell) {
 			return
 		}
 
-		expected[i] = sortCells(copySlice(expected[i]))
-		actual[i] = sortCells(copySlice(actual[i]))
+		expected[i] = sortCells(expected[i])
+		actual[i] = sortCells(actual[i])
 
 		for j, cell := range expected[i] {
 			if cell != actual[i][j] {
@@ -718,8 +718,8 @@ func assertEqualDisks(t *testing.T, expected, actual []Cell) {
 		return
 	}
 
-	expected = sortCells(copySlice(expected))
-	actual = sortCells(copySlice(actual))
+	expected = sortCells(copyCells(expected))
+	actual = sortCells(copyCells(actual))
 
 	count := 0
 
@@ -801,7 +801,7 @@ func flattenDisks(diskDist [][]Cell) []Cell {
 	return flat
 }
 
-func tern[T any](b bool, x, y T) T {
+func tern(b bool, x, y string) string {
 	if b {
 		return x
 	}
@@ -809,8 +809,19 @@ func tern[T any](b bool, x, y T) T {
 	return y
 }
 
-func copySlice[T any](s []T) []T {
-	c := make([]T, len(s))
+func copyRings(s [][]Cell) [][]Cell {
+	c := make([][]Cell, len(s))
+	copy(c, s)
+
+	for i := range c {
+		c[i] = append([]Cell{}, s[i]...)
+	}
+
+	return c
+}
+
+func copyCells(s []Cell) []Cell {
+	c := make([]Cell, len(s))
 	copy(c, s)
 
 	return c
