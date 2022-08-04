@@ -349,9 +349,9 @@ func Polyfill(gp GeoPolygon, res int) []H3Index {
 }
 
 // SetToLinkedGeo returns a LinkedGeoPolygon describing the outlines of a set of hexagons
-func SetToLinkedGeo(in []H3Index) LinkedGeoPolygon {
+func SetToLinkedGeo(in []H3Index) *LinkedGeoPolygon {
 	if len(in) == 0 {
-		return LinkedGeoPolygon{}
+		return &LinkedGeoPolygon{}
 	}
 
 	cin := h3SliceToC(in)
@@ -604,42 +604,48 @@ func rangeSize(k int) int {
 	return int(C.maxKringSize(C.int(k)))
 }
 
-func linkedGeoPolygonFromC(cg *C.LinkedGeoPolygon) LinkedGeoPolygon {
-	g := LinkedGeoPolygon{}
-	g.First = linkedGeoLoopFromC(cg.first)
-	g.Last = linkedGeoLoopFromC(cg.last)
+func linkedGeoPolygonFromC(cg *C.LinkedGeoPolygon) *LinkedGeoPolygon {
+	g := &LinkedGeoPolygon{}
+	glf, gll := linkedGeoLoopFromC(cg.first)
+	g.First = glf
+	g.Last = gll
 
 	if cg.next != nil {
 		next := linkedGeoPolygonFromC(cg.next)
-		g.Next = &next
+		g.Next = next
 	}
 
 	return g
 }
 
-func linkedGeoLoopFromC(cg *C.LinkedGeoLoop) *LinkedGeoLoop {
-	g := LinkedGeoLoop{}
-	g.First = linkedGeoCoordFromC(cg.first)
-	g.Last = linkedGeoCoordFromC(cg.last)
+func linkedGeoLoopFromC(cg *C.LinkedGeoLoop) (*LinkedGeoLoop, *LinkedGeoLoop) {
+	g := &LinkedGeoLoop{}
+	gcf, gcl := linkedGeoCoordFromC(cg.first)
+	g.First = gcf
+	g.Last = gcl
+	l := g
 
 	if cg.next != nil {
-		next := linkedGeoLoopFromC(cg.next)
+		next, last := linkedGeoLoopFromC(cg.next)
 		g.Next = next
+		l = last
 	}
 
-	return &g
+	return g, l
 }
 
-func linkedGeoCoordFromC(cg *C.LinkedGeoCoord) *LinkedGeoCoord {
-	g := LinkedGeoCoord{}
+func linkedGeoCoordFromC(cg *C.LinkedGeoCoord) (*LinkedGeoCoord, *LinkedGeoCoord) {
+	g := &LinkedGeoCoord{}
 	g.Vertex = geoCoordFromC(cg.vertex)
+	l := g
 
 	if cg.next != nil {
-		next := linkedGeoCoordFromC(cg.next)
+		next, last := linkedGeoCoordFromC(cg.next)
 		g.Next = next
+		l = last
 	}
 
-	return &g
+	return g, l
 }
 
 // Convert slice of geocoordinates to an array of C geocoordinates (represented in C-style as a
