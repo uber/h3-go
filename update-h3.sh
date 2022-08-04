@@ -75,7 +75,7 @@ pushd "$H3_SRC_DIR" || badexit
     echo Copying source files into working directory
     pushd ./src/h3lib/lib/ || badexit
         for f in *.c; do
-            sed -E 's/#include "(.*)"/#include "h3_\1"/; s/#include <faceijk.h>/ /' "$f" > "$CWD/h3_$f" || badexit
+            sed -E 's/#include "(.*)"/#include "h3_\1"/' "$f" > "$CWD/h3_$f" || badexit
         done
     popd || badexit
 
