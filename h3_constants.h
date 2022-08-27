@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2017 Uber Technologies, Inc.
+ * Copyright 2016-2017, 2020 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,9 +74,13 @@
 #define NUM_HEX_VERTS 6
 /** The number of vertices in a pentagon */
 #define NUM_PENT_VERTS 5
+/** The number of pentagons per resolution **/
+#define NUM_PENTAGONS 12
 
 /** H3 index modes */
-#define H3_HEXAGON_MODE 1
-#define H3_UNIEDGE_MODE 2
+#define H3_CELL_MODE 1
+#define H3_DIRECTEDEDGE_MODE 2
+#define H3_EDGE_MODE 3
+#define H3_VERTEX_MODE 4
 
 #endif

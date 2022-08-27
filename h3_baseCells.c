@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Uber Technologies, Inc.
+ * Copyright 2016-2020 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,17 @@
  */
 
 #include "h3_baseCells.h"
+
 #include "h3_h3Index.h"
 
-/** @struct BaseCellOrient
+/** @struct BaseCellRotation
  *  @brief base cell at a given ijk and required rotations into its system
  */
 typedef struct {
     int baseCell;  ///< base cell number
     int ccwRot60;  ///< number of ccw 60 degree rotations relative to current
                    /// face
-} BaseCellOrient;
+} BaseCellRotation;
 
 /** @brief Neighboring base cell ID in each IJK direction.
  *
@@ -304,7 +305,7 @@ const int baseCellNeighbor60CCWRots[NUM_BASE_CELLS][7] = {
  * This table can be accessed using the functions `_faceIjkToBaseCell` and
  * `_faceIjkToBaseCellCCWrot60`
  */
-static const BaseCellOrient faceIjkBaseCells[NUM_ICOSA_FACES][3][3][3] = {
+static const BaseCellRotation faceIjkBaseCells[NUM_ICOSA_FACES][3][3][3] = {
     {// face 0
      {
          // i 0
@@ -821,6 +822,10 @@ const BaseCellData baseCellData[NUM_BASE_CELLS] = {
 
 /** @brief Return whether or not the indicated base cell is a pentagon. */
 int _isBaseCellPentagon(int baseCell) {
+    if (baseCell < 0 || baseCell >= NUM_BASE_CELLS) {
+        // Base cells less than zero can not be represented in an index
+        return false;
+    }
     return baseCellData[baseCell].isPentagon;
 }
 
@@ -838,7 +843,7 @@ bool _isBaseCellPolarPentagon(int baseCell) {
  *
  * Valid ijk+ lookup coordinates are from (0, 0, 0) to (2, 2, 2).
  */
-int _faceIjkToBaseCell(const FaceIJK* h) {
+int _faceIjkToBaseCell(const FaceIJK *h) {
     return faceIjkBaseCells[h->face][h->coord.i][h->coord.j][h->coord.k]
         .baseCell;
 }
@@ -851,15 +856,36 @@ int _faceIjkToBaseCell(const FaceIJK* h) {
  *
  * Valid ijk+ lookup coordinates are from (0, 0, 0) to (2, 2, 2).
  */
-int _faceIjkToBaseCellCCWrot60(const FaceIJK* h) {
+int _faceIjkToBaseCellCCWrot60(const FaceIJK *h) {
     return faceIjkBaseCells[h->face][h->coord.i][h->coord.j][h->coord.k]
         .ccwRot60;
 }
 
 /** @brief Find the FaceIJK given a base cell.
  */
-void _baseCellToFaceIjk(int baseCell, FaceIJK* h) {
+void _baseCellToFaceIjk(int baseCell, FaceIJK *h) {
     *h = baseCellData[baseCell].homeFijk;
+}
+
+/**
+ * @brief Given a base cell and the face it appears on, return
+ *        the number of 60' ccw rotations for that base cell's
+ *        coordinate system.
+ * @returns The number of rotations, or INVALID_ROTATIONS if the base
+ *          cell is not found on the given face
+ */
+int _baseCellToCCWrot60(int baseCell, int face) {
+    if (face < 0 || face > NUM_ICOSA_FACES) return INVALID_ROTATIONS;
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            for (int k = 0; k < 3; k++) {
+                if (faceIjkBaseCells[face][i][j][k].baseCell == baseCell) {
+                    return faceIjkBaseCells[face][i][j][k].ccwRot60;
+                }
+            }
+        }
+    }
+    return INVALID_ROTATIONS;
 }
 
 /** @brief Return whether or not the tested face is a cw offset face.
@@ -889,23 +915,25 @@ Direction _getBaseCellDirection(int originBaseCell, int neighboringBaseCell) {
 }
 
 /**
- * res0IndexCount returns the number of resolution 0 indexes
+ * res0CellCount returns the number of resolution 0 cells
  *
- * @return int count of resolution 0 indexes
+ * @return int count of resolution 0 cells
  */
-int H3_EXPORT(res0IndexCount)() { return NUM_BASE_CELLS; }
+int H3_EXPORT(res0CellCount)() { return NUM_BASE_CELLS; }
 
 /**
- * getRes0Indexes generates all base cells storing them into the provided
+ * getRes0Cells generates all base cells storing them into the provided
  * memory pointer. Buffer must be of size NUM_BASE_CELLS * sizeof(H3Index).
  *
  * @param out H3Index* the memory to store the resulting base cells in
+ * @returns E_SUCCESS.
  */
-void H3_EXPORT(getRes0Indexes)(H3Index* out) {
+H3Error H3_EXPORT(getRes0Cells)(H3Index *out) {
     for (int bc = 0; bc < NUM_BASE_CELLS; bc++) {
         H3Index baseCell = H3_INIT;
-        H3_SET_MODE(baseCell, H3_HEXAGON_MODE);
+        H3_SET_MODE(baseCell, H3_CELL_MODE);
         H3_SET_BASE_CELL(baseCell, bc);
         out[bc] = baseCell;
     }
+    return E_SUCCESS;
 }

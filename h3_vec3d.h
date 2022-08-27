@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Uber Technologies, Inc.
+ * Copyright 2018, 2020-2021 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #ifndef VEC3D_H
 #define VEC3D_H
 
-#include "h3_geoCoord.h"
+#include "h3_latLng.h"
 
 /** @struct Vec3D
  *  @brief 3D floating point structure
@@ -31,7 +31,7 @@ typedef struct {
     double z;  ///< z component
 } Vec3d;
 
-void _geoToVec3d(const GeoCoord* geo, Vec3d* point);
-double _pointSquareDist(const Vec3d* p1, const Vec3d* p2);
+void _geoToVec3d(const LatLng *geo, Vec3d *point);
+double _pointSquareDist(const Vec3d *p1, const Vec3d *p2);
 
 #endif

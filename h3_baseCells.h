@@ -45,12 +45,16 @@ extern const BaseCellData baseCellData[NUM_BASE_CELLS];
 /** Maximum input for any component to face-to-base-cell lookup functions */
 #define MAX_FACE_COORD 2
 
+/** Invalid number of rotations */
+#define INVALID_ROTATIONS -1
+
 // Internal functions
 int _isBaseCellPentagon(int baseCell);
 bool _isBaseCellPolarPentagon(int baseCell);
-int _faceIjkToBaseCell(const FaceIJK* h);
-int _faceIjkToBaseCellCCWrot60(const FaceIJK* h);
-void _baseCellToFaceIjk(int baseCell, FaceIJK* h);
+int _faceIjkToBaseCell(const FaceIJK *h);
+int _faceIjkToBaseCellCCWrot60(const FaceIJK *h);
+int _baseCellToCCWrot60(int baseCell, int face);
+void _baseCellToFaceIjk(int baseCell, FaceIJK *h);
 bool _baseCellIsCwOffset(int baseCell, int testFace);
 int _getBaseCellNeighbor(int baseCell, Direction dir);
 Direction _getBaseCellDirection(int originBaseCell, int destinationBaseCell);
