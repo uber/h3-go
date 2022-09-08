@@ -334,32 +334,32 @@ func HexagonEdgeLengthAvgM(resolution int) float64 {
 	return float64(out)
 }
 
-// ExactEdgeLengthRads returns the exact edge length of specific unidirectional
-// edge in radians.
-func ExactEdgeLengthRads(e DirectedEdge) float64 {
+// EdgeLengthRads returns the exact edge length of specific unidirectional edge
+// in radians.
+func EdgeLengthRads(e DirectedEdge) float64 {
 	var out C.double
 
-	C.exactEdgeLengthRads(C.H3Index(e), &out)
+	C.edgeLengthRads(C.H3Index(e), &out)
 
 	return float64(out)
 }
 
-// ExactEdgeLengthKm returns the exact edge length of specific unidirectional
+// EdgeLengthKm returns the exact edge length of specific unidirectional
 // edge in kilometers.
-func ExactEdgeLengthKm(e DirectedEdge) float64 {
+func EdgeLengthKm(e DirectedEdge) float64 {
 	var out C.double
 
-	C.exactEdgeLengthKm(C.H3Index(e), &out)
+	C.edgeLengthKm(C.H3Index(e), &out)
 
 	return float64(out)
 }
 
-// ExactEdgeLengthM returns the exact edge length of specific unidirectional
+// EdgeLengthM returns the exact edge length of specific unidirectional
 // edge in meters.
-func ExactEdgeLengthM(e DirectedEdge) float64 {
+func EdgeLengthM(e DirectedEdge) float64 {
 	var out C.double
 
-	C.exactEdgeLengthM(C.H3Index(e), &out)
+	C.edgeLengthM(C.H3Index(e), &out)
 
 	return float64(out)
 }
@@ -583,7 +583,10 @@ func CompactCells(in []Cell) []Cell {
 	// worst case no compaction so we need a set **at least** as large as the
 	// input
 	cout := make([]C.H3Index, csz)
-	C.compactCells(&cin[0], &cout[0], csz)
+	ret := C.compactCells(&cin[0], &cout[0], csz)
+	if ret != 0 {
+		panic("compactCells failed")
+	}
 
 	return cellsFromC(cout, false, true)
 }
