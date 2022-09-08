@@ -215,12 +215,23 @@ func TestParent(t *testing.T) {
 func TestCompactCells(t *testing.T) {
 	t.Parallel()
 
-	in := flattenDisks(validDiskDist3_1[:2])
-	t.Logf("in: %v", in)
-	out := CompactCells(in)
-	t.Logf("out: %v", in)
-	assertEqual(t, 1, len(out))
-	assertEqual(t, validDiskDist3_1[0][0].ImmediateParent(), out[0])
+	t.Run("returns 1 cell", func(t *testing.T) {
+		in := flattenDisks(validDiskDist3_1[:2])
+		t.Logf("in: %v", in)
+		out := CompactCells(in)
+		t.Logf("out: %v", in)
+		assertEqual(t, 1, len(out))
+		assertEqual(t, validDiskDist3_1[0][0].ImmediateParent(), out[0])
+	})
+
+	t.Run("compaction back to 1", func(*testing.T) {
+		in := Res0Cells()[0].Children(1)
+		t.Logf("in: %v", in)
+		out := CompactCells(in)
+		t.Logf("out: %v", out)
+		assertEqual(t, 1, len(out))
+	})
+
 }
 
 func TestUncompactCells(t *testing.T) {
