@@ -224,12 +224,38 @@ func TestCompactCells(t *testing.T) {
 		assertEqual(t, validDiskDist3_1[0][0].ImmediateParent(), out[0])
 	})
 
-	t.Run("compaction back to 1", func(*testing.T) {
-		in := Res0Cells()[0].Children(1)
+	t.Run("compaction back to 1 cell from 3 to 1", func(*testing.T) {
+		// get a 'random' res 1 cell
+		before := Res0Cells()[0].Children(1)[0]
+		t.Logf("before: %v", before)
+
+		// get the res 3 children of the res 1
+		in := before.Children(3)
 		t.Logf("in: %v", in)
+
+		// try to compact back to res 1
 		out := CompactCells(in)
 		t.Logf("out: %v", out)
 		assertEqual(t, 1, len(out))
+		assertEqual(t, before, out[0])
+	})
+
+	t.Run("compaction back to 1 cell from 2 to 0", func(*testing.T) {
+		// get a 'random' res 0 cell
+		before := Res0Cells()[0]
+		t.Logf("before: %v", before)
+
+		// get the res 2 children of the res 0
+		in := before.Children(2)
+		t.Logf("in: %v", in)
+
+		// try to compact back to res 0
+		out := CompactCells(in)
+		t.Logf("out: %v", out)
+		assertEqual(t, 1, len(out))
+		if len(out) > 0 {
+			assertEqual(t, before, out[0])
+		}
 	})
 
 }
