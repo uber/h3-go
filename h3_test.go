@@ -481,22 +481,22 @@ func TestHexagonEdgeLengthM(t *testing.T) {
 	})
 }
 
-func TestExactEdgeLengthRads(t *testing.T) {
+func TestEdgeLengthRads(t *testing.T) {
 	t.Parallel()
-	assertEqualEps(t, float64(0.001569665746947077), ExactEdgeLengthRads(validEdge))
+	assertEqualEps(t, float64(0.001569665746947077), EdgeLengthRads(validEdge))
 }
 
-func TestExactEdgeLengthKm(t *testing.T) {
+func TestEdgeLengthKm(t *testing.T) {
 	t.Parallel()
 
-	distance := ExactEdgeLengthKm(validEdge)
+	distance := EdgeLengthKm(validEdge)
 	assertEqualEps(t, float64(10.00035174544159), distance)
 }
 
-func TestExactEdgeLengthM(t *testing.T) {
+func TestEdgeLengthM(t *testing.T) {
 	t.Parallel()
 
-	distance := ExactEdgeLengthM(validEdge)
+	distance := EdgeLengthM(validEdge)
 	assertEqualEps(t, float64(10000.351745441589), distance)
 }
 
