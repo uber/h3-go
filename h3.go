@@ -583,10 +583,7 @@ func CompactCells(in []Cell) []Cell {
 	// worst case no compaction so we need a set **at least** as large as the
 	// input
 	cout := make([]C.H3Index, csz)
-	ret := C.compactCells(&cin[0], &cout[0], csz)
-	if ret != 0 {
-		panic("compactCells failed")
-	}
+	C.compactCells(&cin[0], &cout[0], csz)
 
 	return cellsFromC(cout, false, true)
 }
