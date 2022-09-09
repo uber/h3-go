@@ -1,10 +1,18 @@
 # Changelog
+
 All notable changes to this project will be documented in this file.  The
 format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
-This project tracks the **major** and **minor** versions set by
+This project tracks the **major** and **minor** versions set upstream by
 [`h3`](github.com/uber/h3), and introduces backwards-compatible updates and/or
 fixes via **patches** with patch version bumps.
+
+## 4.0.0
+
+All new functions to match H3 v4.
+
+See <https://h3geo.org/docs/library/migrating-3.x> for upstream changes, and the
+[README.md](./README.md) for upstream to h3-go binding name mapping.
 
 ## 3.7.1
 
@@ -44,9 +52,11 @@ fixes via **patches** with patch version bumps.
 ## 3.0.2
 
 ### Fixed
+
 * `go mod vendor` now works correctly (#30, #32)
 
 ### Added
+
 * Some useful H3 constants (#22):
   * `MaxResolution`
   * `NumIcosaFaces`
