@@ -2,6 +2,7 @@
 
 ![Build](https://github.com/uber/h3-go/workflows/Build/badge.svg?branch=master)
 [![Coverage Status](https://coveralls.io/repos/github/uber/h3-go/badge.svg)](https://coveralls.io/github/uber/h3-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/uber/h3-go)](https://goreportcard.com/report/github.com/uber/h3-go)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![GoDoc](http://img.shields.io/badge/go-doc-blue.svg)](https://godoc.org/github.com/uber/h3-go)
 [![H3 Version](https://img.shields.io/badge/h3-v3.7.0-blue.svg)](https://github.com/uber/h3/releases/tag/v3.7.0)
