@@ -198,6 +198,16 @@ func GridDiskDistances(origin Cell, k int) [][]Cell {
 	return ret
 }
 
+func GridRing(origin Cell, radius int) ([]Cell, error) {
+	maxRadius := MaxRadiusWithoutPentagons(origin)
+	if radius > maxRadius {
+		return nil, fmt.Errorf("radius (%d) must be smaller or equal to the max radius without pentagons (%d)", radius, maxRadius)
+	}
+	outHexes := make([]C.H3Index, maxGridDiskSize(radius))
+	C.gridRingUnsafe(C.H3Index(origin), C.int(radius), &outHexes[0])
+	return cellsFromC(outHexes, true, false), nil
+}
+
 // GridDiskDistances produces cells within grid distance k of the origin cell.
 //
 // k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
@@ -845,4 +855,16 @@ func (ij CoordIJ) toCPtr() *C.CoordIJ {
 		i: C.int(ij.I),
 		j: C.int(ij.J),
 	}
+}
+
+func MaxRadiusWithoutPentagons(cell Cell) int {
+	min := math.MaxInt
+	for _, p := range Pentagons(cell.Resolution()) {
+		if dist := GridDistance(p, cell); dist != 0 && dist < min {
+			min = dist
+		}
+	}
+	// We have to subtract -1, because `min` will include the pentagon.
+	// In order to avoid a radius with a pentagon, we have to reduce the distance by 1.
+	return min - 1
 }
