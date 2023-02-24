@@ -826,3 +826,18 @@ func copyCells(s []Cell) []Cell {
 
 	return c
 }
+
+func TestGridRing_Error(t *testing.T) {
+	c := LatLngToCell(NewLatLng(51, 13), 7)
+	res, err := GridRing(c, 900)
+	assertErr(t, err)
+	assertTrue(t, res == nil)
+}
+
+func TestGridRing_Success(t *testing.T) {
+	c := LatLngToCell(NewLatLng(51, 13), 7)
+	resRing, err := GridRing(c, 10)
+	assertNoErr(t, err)
+	resDisk := GridDiskDistances(c, 10)
+	assertEqualCells(t, resDisk[10], resRing)
+}
