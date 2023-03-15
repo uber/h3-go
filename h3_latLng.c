@@ -383,8 +383,7 @@ H3Error H3_EXPORT(cellAreaRads2)(H3Index cell, double *out) {
     }
     err = H3_EXPORT(cellToBoundary)(cell, &cb);
     if (err) {
-        // TODO: Uncoverable because cellToLatLng will have returned an error
-        // already
+        // Uncoverable because cellToLatLng will have returned an error already
         return err;
     }
 

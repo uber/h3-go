@@ -138,12 +138,11 @@ H3Error cellToLocalIjk(H3Index origin, H3Index h3, CoordIJK *out) {
     int originBaseCell = H3_GET_BASE_CELL(origin);
     int baseCell = H3_GET_BASE_CELL(h3);
 
-    if (originBaseCell < 0 ||  // LCOV_EXCL_BR_LINE
-        originBaseCell >= NUM_BASE_CELLS) {
+    if (originBaseCell < 0 || originBaseCell >= NUM_BASE_CELLS) {
         // Base cells less than zero can not be represented in an index
         return E_CELL_INVALID;
     }
-    if (baseCell < 0 || baseCell >= NUM_BASE_CELLS) {  // LCOV_EXCL_BR_LINE
+    if (baseCell < 0 || baseCell >= NUM_BASE_CELLS) {
         // Base cells less than zero can not be represented in an index
         return E_CELL_INVALID;
     }
@@ -302,8 +301,7 @@ H3Error cellToLocalIjk(H3Index origin, H3Index h3, CoordIJK *out) {
 H3Error localIjkToCell(H3Index origin, const CoordIJK *ijk, H3Index *out) {
     int res = H3_GET_RESOLUTION(origin);
     int originBaseCell = H3_GET_BASE_CELL(origin);
-    if (originBaseCell < 0 ||  // LCOV_EXCL_BR_LINE
-        originBaseCell >= NUM_BASE_CELLS) {
+    if (originBaseCell < 0 || originBaseCell >= NUM_BASE_CELLS) {
         // Base cells less than zero can not be represented in an index
         return E_CELL_INVALID;
     }
@@ -345,12 +343,18 @@ H3Error localIjkToCell(H3Index origin, const CoordIJK *ijk, H3Index *out) {
         CoordIJK lastCenter;
         if (isResolutionClassIII(r + 1)) {
             // rotate ccw
-            _upAp7(&ijkCopy);
+            H3Error upAp7Error = _upAp7Checked(&ijkCopy);
+            if (upAp7Error) {
+                return upAp7Error;
+            }
             lastCenter = ijkCopy;
             _downAp7(&lastCenter);
         } else {
             // rotate cw
-            _upAp7r(&ijkCopy);
+            H3Error upAp7rError = _upAp7rChecked(&ijkCopy);
+            if (upAp7rError) {
+                return upAp7rError;
+            }
             lastCenter = ijkCopy;
             _downAp7r(&lastCenter);
         }
@@ -432,11 +436,9 @@ H3Error localIjkToCell(H3Index origin, const CoordIJK *ijk, H3Index *out) {
             const Direction indexLeadingDigit = _h3LeadingNonZeroDigit(*out);
             // This case should be unreachable because this function is building
             // *out, and should never generate an invalid digit, above.
-            // LCOV_EXCL_START
             if (indexLeadingDigit == INVALID_DIGIT) {
                 return E_CELL_INVALID;
             }
-            // LCOV_EXCL_STOP
             if (_isBaseCellPolarPentagon(baseCell)) {
                 pentagonRotations =
                     PENTAGON_ROTATIONS_REVERSE_POLAR[revDir][indexLeadingDigit];
@@ -447,11 +449,10 @@ H3Error localIjkToCell(H3Index origin, const CoordIJK *ijk, H3Index *out) {
             }
             // For this to occur, revDir would need to be 1. Since revDir is
             // from the index base cell (which is a pentagon) towards the
-            // origin, this should never be the case. LCOV_EXCL_START
+            // origin, this should never be the case.
             if (pentagonRotations < 0) {
                 return E_CELL_INVALID;
             }
-            // LCOV_EXCL_STOP
 
             for (int i = 0; i < pentagonRotations; i++) {
                 *out = _h3RotatePent60ccw(*out);
@@ -563,7 +564,10 @@ H3Error H3_EXPORT(localIjToCell)(H3Index origin, const CoordIJ *ij,
         return E_OPTION_INVALID;
     }
     CoordIJK ijk;
-    ijToIjk(ij, &ijk);
+    H3Error ijToIjkError = ijToIjk(ij, &ijk);
+    if (ijToIjkError) {
+        return ijToIjkError;
+    }
 
     return localIjkToCell(origin, &ijk, out);
 }
@@ -683,14 +687,14 @@ H3Error H3_EXPORT(gridPathCells)(H3Index start, H3Index end, H3Index *out) {
 
     // Convert H3 addresses to IJK coords
     H3Error startError = cellToLocalIjk(start, start, &startIjk);
-    if (startError) {  // LCOV_EXCL_BR_LINE
+    if (startError) {
         // Unreachable because this was called as part of gridDistance
-        return startError;  // LCOV_EXCL_LINE
+        return startError;
     }
     H3Error endError = cellToLocalIjk(start, end, &endIjk);
-    if (endError) {  // LCOV_EXCL_BR_LINE
+    if (endError) {
         // Unreachable because this was called as part of gridDistance
-        return endError;  // LCOV_EXCL_LINE
+        return endError;
     }
 
     // Convert IJK to cube coordinates suitable for linear interpolation
@@ -712,10 +716,10 @@ H3Error H3_EXPORT(gridPathCells)(H3Index start, H3Index end, H3Index *out) {
         // Convert cube -> ijk -> h3 index
         cubeToIjk(&currentIjk);
         H3Error currentError = localIjkToCell(start, &currentIjk, &out[n]);
-        if (currentError) {  // LCOV_EXCL_BR_LINE
-            // Expected to be unreachable since cells between `start` and `end`
-            // should have valid local IJK coordinates.
-            return currentError;  // LCOV_EXCL_LINE
+        if (currentError) {
+            // The cells between `start` and `end` may fall in pentagon
+            // distortion.
+            return currentError;
         }
     }
 
