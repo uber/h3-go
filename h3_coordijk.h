@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018, 2020-2021 Uber Technologies, Inc.
+ * Copyright 2016-2018, 2020-2022 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,8 +93,11 @@ int _ijkMatches(const CoordIJK *c1, const CoordIJK *c2);
 void _ijkAdd(const CoordIJK *h1, const CoordIJK *h2, CoordIJK *sum);
 void _ijkSub(const CoordIJK *h1, const CoordIJK *h2, CoordIJK *diff);
 void _ijkScale(CoordIJK *c, int factor);
+bool _ijkNormalizeCouldOverflow(const CoordIJK *ijk);
 void _ijkNormalize(CoordIJK *c);
 Direction _unitIjkToDigit(const CoordIJK *ijk);
+H3Error _upAp7Checked(CoordIJK *ijk);
+H3Error _upAp7rChecked(CoordIJK *ijk);
 void _upAp7(CoordIJK *ijk);
 void _upAp7r(CoordIJK *ijk);
 void _downAp7(CoordIJK *ijk);
@@ -108,7 +111,7 @@ Direction _rotate60ccw(Direction digit);
 Direction _rotate60cw(Direction digit);
 int ijkDistance(const CoordIJK *a, const CoordIJK *b);
 void ijkToIj(const CoordIJK *ijk, CoordIJ *ij);
-void ijToIjk(const CoordIJ *ij, CoordIJK *ijk);
+H3Error ijToIjk(const CoordIJ *ij, CoordIJK *ijk);
 void ijkToCube(CoordIJK *ijk);
 void cubeToIjk(CoordIJK *ijk);
 
