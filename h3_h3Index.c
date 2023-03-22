@@ -27,6 +27,7 @@
 #include "h3_alloc.h"
 #include "h3_baseCells.h"
 #include "h3_faceijk.h"
+#include "h3_h3Assert.h"
 #include "h3_iterators.h"
 #include "h3_mathExtensions.h"
 
@@ -95,15 +96,15 @@ int H3_EXPORT(isValidCell)(H3Index h) {
     if (H3_GET_RESERVED_BITS(h) != 0) return 0;
 
     int baseCell = H3_GET_BASE_CELL(h);
-    if (baseCell < 0 || baseCell >= NUM_BASE_CELLS) {  // LCOV_EXCL_BR_LINE
+    if (NEVER(baseCell < 0) || baseCell >= NUM_BASE_CELLS) {
         // Base cells less than zero can not be represented in an index
         return 0;
     }
 
     int res = H3_GET_RESOLUTION(h);
-    if (res < 0 || res > MAX_H3_RES) {  // LCOV_EXCL_BR_LINE
+    if (NEVER(res < 0 || res > MAX_H3_RES)) {
         // Resolutions less than zero can not be represented in an index
-        return 0;  // LCOV_EXCL_LINE
+        return 0;
     }
 
     bool foundFirstNonZeroDigit = false;
@@ -117,7 +118,7 @@ int H3_EXPORT(isValidCell)(H3Index h) {
             }
         }
 
-        if (digit < CENTER_DIGIT || digit >= NUM_DIGITS) return 0;
+        if (NEVER(digit < CENTER_DIGIT) || digit >= NUM_DIGITS) return 0;
     }
 
     for (int r = res + 1; r <= MAX_H3_RES; r++) {
@@ -331,6 +332,7 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
             // to track how many times a parent is duplicated
             for (int i = 0; i < numRemainingHexes; i++) {
                 H3Index currIndex = remainingHexes[i];
+                // TODO: This case is coverable (reachable by fuzzer)
                 if (currIndex != 0) {
                     // If the reserved bits were set by the caller, the
                     // algorithm below may encounter undefined behavior
@@ -357,16 +359,13 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
                     int loc = (int)(parent % numRemainingHexes);
                     int loopCount = 0;
                     while (hashSetArray[loc] != 0) {
-                        if (loopCount >  // LCOV_EXCL_BR_LINE
-                            numRemainingHexes) {
-                            // LCOV_EXCL_START
+                        if (NEVER(loopCount > numRemainingHexes)) {
                             // This case should not be possible because at
                             // most one index is placed into hashSetArray
                             // per numRemainingHexes.
                             H3_MEMORY(free)(remainingHexes);
                             H3_MEMORY(free)(hashSetArray);
                             return E_FAILED;
-                            // LCOV_EXCL_STOP
                         }
                         H3Index tempIndex =
                             hashSetArray[loc] & H3_RESERVED_MASK_NEGATIVE;
@@ -442,6 +441,7 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
         int uncompactableCount = 0;
         for (int i = 0; i < numRemainingHexes; i++) {
             H3Index currIndex = remainingHexes[i];
+            // TODO: This case is coverable (reachable by fuzzer)
             if (currIndex != H3_NULL) {
                 H3Index parent;
                 H3Error parentError =
@@ -459,15 +459,13 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
                 int loopCount = 0;
                 bool isUncompactable = true;
                 do {
-                    if (loopCount > numRemainingHexes) {  // LCOV_EXCL_BR_LINE
-                        // LCOV_EXCL_START
+                    if (NEVER(loopCount > numRemainingHexes)) {
                         // This case should not be possible because at most one
                         // index is placed into hashSetArray per input hexagon.
                         H3_MEMORY(free)(compactableHexes);
                         H3_MEMORY(free)(remainingHexes);
                         H3_MEMORY(free)(hashSetArray);
                         return E_FAILED;
-                        // LCOV_EXCL_STOP
                     }
                     H3Index tempIndex =
                         hashSetArray[loc] & H3_RESERVED_MASK_NEGATIVE;
@@ -785,7 +783,7 @@ H3Error H3_EXPORT(latLngToCell)(const LatLng *g, int res, H3Index *out) {
     FaceIJK fijk;
     _geoToFaceIjk(g, res, &fijk);
     *out = _faceIjkToH3(&fijk, res);
-    if (*out) {
+    if (ALWAYS(*out)) {
         return E_SUCCESS;
     } else {
         return E_FAILED;
@@ -832,7 +830,7 @@ int _h3ToFaceIjkWithInitializedFijk(H3Index h, FaceIJK *fijk) {
  */
 H3Error _h3ToFaceIjk(H3Index h, FaceIJK *fijk) {
     int baseCell = H3_GET_BASE_CELL(h);
-    if (baseCell < 0 || baseCell >= NUM_BASE_CELLS) {  // LCOV_EXCL_BR_LINE
+    if (NEVER(baseCell < 0) || baseCell >= NUM_BASE_CELLS) {
         // Base cells less than zero can not be represented in an index
         // To prevent reading uninitialized memory, we zero the output.
         fijk->face = 0;
@@ -979,7 +977,7 @@ H3Error H3_EXPORT(getIcosahedronFaces)(H3Index h3, int *out) {
     // so fill with invalid values to indicate unused slots
     int faceCount;
     H3Error maxFaceCountError = H3_EXPORT(maxFaceCount)(h3, &faceCount);
-    if (maxFaceCountError != E_SUCCESS) {
+    if (NEVER(maxFaceCountError != E_SUCCESS)) {
         return maxFaceCountError;
     }
     for (int i = 0; i < faceCount; i++) {
@@ -1052,3 +1050,162 @@ H3Error H3_EXPORT(getPentagons)(int res, H3Index *out) {
  *         a Class II grid.
  */
 int isResolutionClassIII(int res) { return res % 2; }
+
+/**
+ * Validate a child position in the context of a given parent, returning
+ * an error if validation fails.
+ */
+static H3Error validateChildPos(int64_t childPos, H3Index parent,
+                                int childRes) {
+    int64_t maxChildCount;
+    H3Error sizeError =
+        H3_EXPORT(cellToChildrenSize)(parent, childRes, &maxChildCount);
+    if (NEVER(sizeError)) {
+        return sizeError;
+    }
+    if (childPos < 0 || childPos >= maxChildCount) {
+        return E_DOMAIN;
+    }
+    return E_SUCCESS;
+}
+
+/**
+ * Returns the position of the cell within an ordered list of all children of
+ * the cell's parent at the specified resolution
+ */
+H3Error H3_EXPORT(cellToChildPos)(H3Index child, int parentRes, int64_t *out) {
+    int childRes = H3_GET_RESOLUTION(child);
+    // Get the parent at res. This will catch any resolution errors
+    H3Index originalParent;
+    H3Error parentError =
+        H3_EXPORT(cellToParent(child, parentRes, &originalParent));
+    if (parentError) {
+        return parentError;
+    }
+
+    // Define the initial parent. Note that these variables are reassigned
+    // within the loop.
+    H3Index parent = originalParent;
+    int parentIsPentagon = H3_EXPORT(isPentagon)(parent);
+
+    // Walk up the resolution digits, incrementing the index
+    *out = 0;
+    if (parentIsPentagon) {
+        // Pentagon logic. Pentagon parents skip the 1 digit, so the offsets are
+        // different from hexagons
+        for (int res = childRes; res > parentRes; res--) {
+            H3Error parentError =
+                H3_EXPORT(cellToParent(child, res - 1, &parent));
+            if (NEVER(parentError)) {
+                return parentError;
+            }
+
+            parentIsPentagon = H3_EXPORT(isPentagon)(parent);
+            int rawDigit = H3_GET_INDEX_DIGIT(child, res);
+            // Validate the digit before proceeding
+            if (rawDigit == INVALID_DIGIT ||
+                (parentIsPentagon && rawDigit == K_AXES_DIGIT)) {
+                return E_CELL_INVALID;
+            }
+            int digit =
+                parentIsPentagon && rawDigit > 0 ? rawDigit - 1 : rawDigit;
+            if (digit != CENTER_DIGIT) {
+                int64_t hexChildCount = _ipow(7, childRes - res);
+                // The offset for the 0-digit slot depends on whether the
+                // current index is the child of a pentagon. If so, the offset
+                // is based on the count of pentagon children, otherwise,
+                // hexagon children.
+                *out += (parentIsPentagon
+                             ?  // pentagon children. See the explanation
+                                // for getNumCells in h3api.h.in
+                             1 + (5 * (hexChildCount - 1)) / 6
+                             :  // one hexagon's children
+                             hexChildCount) +
+                        // the other hexagon children
+                        (digit - 1) * hexChildCount;
+            }
+        }
+    } else {
+        // Hexagon logic. Offsets are simple powers of 7
+        for (int res = childRes; res > parentRes; res--) {
+            int digit = H3_GET_INDEX_DIGIT(child, res);
+            if (digit == INVALID_DIGIT) {
+                return E_CELL_INVALID;
+            }
+            *out += digit * _ipow(7, childRes - res);
+        }
+    }
+
+    if (NEVER(validateChildPos(*out, originalParent, childRes))) {
+        // This is the result of an internal error, so return E_FAILED
+        // instead of the validation error
+        return E_FAILED;
+    }
+
+    return E_SUCCESS;
+}
+
+/**
+ * Returns the child cell at a given position within an ordered list of all
+ * children at the specified resolution */
+H3Error H3_EXPORT(childPosToCell)(int64_t childPos, H3Index parent,
+                                  int childRes, H3Index *child) {
+    // Validate resolution
+    if (childRes < 0 || childRes > MAX_H3_RES) {
+        return E_RES_DOMAIN;
+    }
+    // Validate parent resolution
+    int parentRes = H3_GET_RESOLUTION(parent);
+    if (childRes < parentRes) {
+        return E_RES_MISMATCH;
+    }
+    // Validate child pos
+    H3Error childPosErr = validateChildPos(childPos, parent, childRes);
+    if (childPosErr) {
+        return childPosErr;
+    }
+
+    int resOffset = childRes - parentRes;
+
+    *child = parent;
+    int64_t idx = childPos;
+
+    H3_SET_RESOLUTION(*child, childRes);
+
+    if (H3_EXPORT(isPentagon)(parent)) {
+        // Pentagon tile logic. Pentagon tiles skip the 1 digit, so the offsets
+        // are different
+        bool inPent = true;
+        for (int res = 1; res <= resOffset; res++) {
+            int64_t resWidth = _ipow(7, resOffset - res);
+            if (inPent) {
+                // While we are inside a parent pentagon, we need to check if
+                // this cell is a pentagon, and if not, we need to offset its
+                // digit to account for the skipped direction
+                int64_t pentWidth = 1 + (5 * (resWidth - 1)) / 6;
+                if (idx < pentWidth) {
+                    H3_SET_INDEX_DIGIT(*child, parentRes + res, 0);
+                } else {
+                    idx -= pentWidth;
+                    inPent = false;
+                    H3_SET_INDEX_DIGIT(*child, parentRes + res,
+                                       (idx / resWidth) + 2);
+                    idx %= resWidth;
+                }
+            } else {
+                // We're no longer inside a pentagon, continue as for hex
+                H3_SET_INDEX_DIGIT(*child, parentRes + res, idx / resWidth);
+                idx %= resWidth;
+            }
+        }
+    } else {
+        // Hexagon tile logic. Offsets are simple powers of 7
+        for (int res = 1; res <= resOffset; res++) {
+            int64_t resWidth = _ipow(7, resOffset - res);
+            H3_SET_INDEX_DIGIT(*child, parentRes + res, idx / resWidth);
+            idx %= resWidth;
+        }
+    }
+
+    return E_SUCCESS;
+}
