@@ -622,7 +622,7 @@ func (c Cell) ChildPosToCell(position int, resolution int) Cell {
 }
 
 // CellToChildPos returns the position of the cell a within an ordered list of all children of the cell's parent
-// at the specified resolution res.
+// at the specified resolution.
 func CellToChildPos(a Cell, resolution int) int {
 	var out C.int64_t
 
@@ -632,7 +632,7 @@ func CellToChildPos(a Cell, resolution int) int {
 }
 
 // ChildPos returns the position of the cell within an ordered list of all children of the cell's parent
-// at the specified resolution res.
+// at the specified resolution.
 func (c Cell) ChildPos(resolution int) int {
 	var out C.int64_t
 
