@@ -27,6 +27,7 @@ package h3
 #include <h3_h3Index.h>
 */
 import "C"
+
 import (
 	"errors"
 	"fmt"
@@ -602,6 +603,42 @@ func UncompactCells(in []Cell, resolution int) []Cell {
 		C.int(resolution))
 
 	return cellsFromC(cout, false, true)
+}
+
+// ChildPosToCell returns the child of cell a at a given position within an ordered list of all
+// children at the specified resolution.
+func ChildPosToCell(position int, a Cell, resolution int) Cell {
+	var out C.H3Index
+
+	C.childPosToCell(C.int64_t(position), C.H3Index(a), C.int(resolution), &out)
+
+	return Cell(out)
+}
+
+// ChildPosToCell returns the child cell at a given position within an ordered list of all
+// children at the specified resolution.
+func (c Cell) ChildPosToCell(position int, resolution int) Cell {
+	return ChildPosToCell(position, c, resolution)
+}
+
+// CellToChildPos returns the position of the cell a within an ordered list of all children of the cell's parent
+// at the specified resolution res.
+func CellToChildPos(a Cell, resolution int) int {
+	var out C.int64_t
+
+	C.cellToChildPos(C.H3Index(a), C.int(resolution), &out)
+
+	return int(out)
+}
+
+// ChildPos returns the position of the cell within an ordered list of all children of the cell's parent
+// at the specified resolution res.
+func (c Cell) ChildPos(resolution int) int {
+	var out C.int64_t
+
+	C.cellToChildPos(C.H3Index(c), C.int(resolution), &out)
+
+	return int(out)
 }
 
 func GridDistance(a, b Cell) int {
