@@ -231,6 +231,24 @@ func TestUncompactCells(t *testing.T) {
 	assertCellIn(t, validCell, out)
 }
 
+func TestChildPosToCell(t *testing.T) {
+	t.Parallel()
+
+	children := validCell.Children(6)
+
+	assertEqual(t, children[0], validCell.ChildPosToCell(0, 6))
+	assertEqual(t, children[0], ChildPosToCell(0, validCell, 6))
+}
+
+func TestChildPos(t *testing.T) {
+	t.Parallel()
+
+	children := validCell.Children(7)
+
+	assertEqual(t, 32, children[32].ChildPos(validCell.Resolution()))
+	assertEqual(t, 32, CellToChildPos(children[32], validCell.Resolution()))
+}
+
 func TestIsResClassIII(t *testing.T) {
 	t.Parallel()
 
@@ -767,6 +785,7 @@ func assertFalse(t *testing.T, b bool) {
 	t.Helper()
 	assertEqual(t, false, b)
 }
+
 func assertTrue(t *testing.T, b bool) {
 	t.Helper()
 	assertEqual(t, true, b)
