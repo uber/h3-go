@@ -634,11 +634,7 @@ func CellToChildPos(a Cell, resolution int) int {
 // ChildPos returns the position of the cell within an ordered list of all children of the cell's parent
 // at the specified resolution.
 func (c Cell) ChildPos(resolution int) int {
-	var out C.int64_t
-
-	C.cellToChildPos(C.H3Index(c), C.int(resolution), &out)
-
-	return int(out)
+	return CellToChildPos(c, resolution)
 }
 
 func GridDistance(a, b Cell) int {
