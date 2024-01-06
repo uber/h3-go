@@ -845,3 +845,104 @@ func copyCells(s []Cell) []Cell {
 
 	return c
 }
+
+func TestCellsToMultiPolygon(t *testing.T) {
+	t.Parallel()
+
+	// Hypothetical GeoLoops for test cells
+	validCellGeoLoop := GeoLoop{
+		{Lat: 0.1, Lng: 0.1},
+		{Lat: 0.1, Lng: 0.2},
+		{Lat: 0.2, Lng: 0.2},
+		{Lat: 0.2, Lng: 0.1},
+	}
+	lineStartCellGeoLoop := GeoLoop{
+		{Lat: 0.3, Lng: 0.3},
+		{Lat: 0.3, Lng: 0.4},
+		{Lat: 0.4, Lng: 0.4},
+		{Lat: 0.4, Lng: 0.3},
+	}
+	lineEndCellGeoLoop := GeoLoop{
+		{Lat: 0.5, Lng: 0.5},
+		{Lat: 0.5, Lng: 0.6},
+		{Lat: 0.6, Lng: 0.6},
+		{Lat: 0.6, Lng: 0.5},
+	}
+
+	// Test cases
+	testCases := []struct {
+		name     string
+		cells    []Cell
+		expected *LinkedGeoPolygon
+	}{
+		{
+			name:  "Single Cell",
+			cells: []Cell{validCell},
+			expected: &LinkedGeoPolygon{
+				Data: GeoPolygon{
+					GeoLoop: validCellGeoLoop,
+				},
+				Next: nil,
+			},
+		},
+		{
+			name:  "Multiple Cells",
+			cells: []Cell{validCell, lineStartCell, lineEndCell},
+			expected: &LinkedGeoPolygon{
+				Data: GeoPolygon{
+					GeoLoop: validCellGeoLoop,
+				},
+				Next: &LinkedGeoPolygon{
+					Data: GeoPolygon{
+						GeoLoop: lineStartCellGeoLoop,
+					},
+					Next: &LinkedGeoPolygon{
+						Data: GeoPolygon{
+							GeoLoop: lineEndCellGeoLoop,
+						},
+						Next: nil,
+					},
+				},
+			},
+		},
+		// Additional test cases can be added here
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := CellsToMultiPolygon(tc.cells)
+			assertLinkedGeoPolygonEqual(t, tc.expected, result)
+		})
+	}
+}
+
+func assertLinkedGeoPolygonEqual(t *testing.T, expected, actual *LinkedGeoPolygon) {
+	t.Helper()
+	for expected != nil && actual != nil {
+		assertEqualGeoPolygon(t, expected.Data, actual.Data)
+		expected, actual = expected.Next, actual.Next
+	}
+	if expected != nil || actual != nil {
+		t.Errorf("LinkedGeoPolygons length mismatch")
+	}
+}
+
+func assertEqualGeoPolygon(t *testing.T, expected, actual GeoPolygon) {
+	t.Helper()
+	assertEqualGeoLoop(t, expected.GeoLoop, actual.GeoLoop)
+	// Add checks for holes if necessary
+}
+
+func assertEqualGeoLoop(t *testing.T, expected, actual GeoLoop) {
+	t.Helper()
+	if len(expected) != len(actual) {
+		t.Errorf("GeoLoops length mismatch: expected %d, got %d", len(expected), len(actual))
+		return
+	}
+	for i, e := range expected {
+		a := actual[i]
+		if e.Lat != a.Lat || e.Lng != a.Lng {
+			t.Errorf("GeoLoop vertex mismatch at index %d: expected %v, got %v", i, e, a)
+		}
+	}
+}

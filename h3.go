@@ -99,7 +99,10 @@ type (
 
 	// LinkedGeoPolygon is a linked-list of GeoPolygons.
 	// TODO: not implemented.
-	LinkedGeoPolygon struct{}
+	LinkedGeoPolygon struct {
+		Data GeoPolygon
+		Next *LinkedGeoPolygon
+	}
 )
 
 func NewLatLng(lat, lng float64) LatLng {
@@ -246,8 +249,33 @@ func (p GeoPolygon) Cells(resolution int) []Cell {
 	return PolygonToCells(p, resolution)
 }
 
+func CellToGeoPolygon(cell Cell) GeoPolygon {
+	boundary := CellToBoundary(cell)
+	loop := make(GeoLoop, len(boundary))
+
+	for i, coord := range boundary {
+		loop[i] = LatLng{Lat: coord.Lat, Lng: coord.Lng}
+	}
+
+	return GeoPolygon{GeoLoop: loop}
+}
+
 func CellsToMultiPolygon(cells []Cell) *LinkedGeoPolygon {
-	panic("not implemented")
+	var head, current *LinkedGeoPolygon
+
+	for _, cell := range cells {
+		geoPoly := CellToGeoPolygon(cell)
+
+		if head == nil {
+			head = &LinkedGeoPolygon{Data: geoPoly}
+			current = head
+		} else {
+			current.Next = &LinkedGeoPolygon{Data: geoPoly}
+			current = current.Next
+		}
+	}
+
+	return head
 }
 
 // PointDistRads returns the "great circle" or "haversine" distance between
