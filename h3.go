@@ -98,7 +98,6 @@ type (
 	}
 
 	// LinkedGeoPolygon is a linked-list of GeoPolygons.
-	// TODO: not implemented.
 	LinkedGeoPolygon struct {
 		Data GeoPolygon
 		Next *LinkedGeoPolygon
