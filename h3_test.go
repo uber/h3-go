@@ -849,24 +849,30 @@ func copyCells(s []Cell) []Cell {
 func TestCellsToMultiPolygon(t *testing.T) {
 	t.Parallel()
 
-	// Hypothetical GeoLoops for test cells
+	// Hypothetical GeoLoops for hexagonal test cells
 	validCellGeoLoop := GeoLoop{
 		{Lat: 0.1, Lng: 0.1},
 		{Lat: 0.1, Lng: 0.2},
+		{Lat: 0.15, Lng: 0.25},
 		{Lat: 0.2, Lng: 0.2},
 		{Lat: 0.2, Lng: 0.1},
+		{Lat: 0.15, Lng: 0.05},
 	}
 	lineStartCellGeoLoop := GeoLoop{
 		{Lat: 0.3, Lng: 0.3},
 		{Lat: 0.3, Lng: 0.4},
+		{Lat: 0.35, Lng: 0.45},
 		{Lat: 0.4, Lng: 0.4},
 		{Lat: 0.4, Lng: 0.3},
+		{Lat: 0.35, Lng: 0.25},
 	}
 	lineEndCellGeoLoop := GeoLoop{
 		{Lat: 0.5, Lng: 0.5},
 		{Lat: 0.5, Lng: 0.6},
+		{Lat: 0.55, Lng: 0.65},
 		{Lat: 0.6, Lng: 0.6},
 		{Lat: 0.6, Lng: 0.5},
+		{Lat: 0.55, Lng: 0.45},
 	}
 
 	// Test cases
@@ -905,7 +911,6 @@ func TestCellsToMultiPolygon(t *testing.T) {
 				},
 			},
 		},
-		// Additional test cases can be added here
 	}
 
 	for _, tc := range testCases {
