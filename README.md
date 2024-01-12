@@ -83,7 +83,7 @@ func ExampleLatLngToCell() {
 ## Bindings
 
 | C API                        | Go API                                             |
-| ---------------------------- | -------------------------------------------------- |
+| ---------------------------- |----------------------------------------------------|
 | `latLngToCell`               | `LatLngToCell`, `LatLng#Cell`                      |
 | `cellToLatLng`               | `CellToLatLng`, `Cell#LatLng`                      |
 | `cellToBoundary`             | `CellToBoundary`, `Cell#Boundary`                  |
@@ -91,7 +91,7 @@ func ExampleLatLngToCell() {
 | `gridDiskDistances`          | `GridDiskDistances`, `Cell#GridDiskDistances`      |
 | `gridRingUnsafe`             | N/A                                                |
 | `polygonToCells`             | `PolygonToCells`, `GeoPolygon#Cells`               |
-| `cellsToMultiPolygon`        | TODO                                               |
+| `cellsToMultiPolygon`        | `CellsToMultiPolygon`                               |
 | `degsToRads`                 | `DegsToRads`                                       |
 | `radsToDegs`                 | `RadsToDegs`                                       |
 | `greatCircleDistance`        | `GreatCircleDistance* (3/3)`                       |
