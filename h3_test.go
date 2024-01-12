@@ -848,8 +848,6 @@ func copyCells(s []Cell) []Cell {
 
 func TestCellsToMultiPolygon(t *testing.T) {
 	t.Parallel()
-
-	// Hypothetical GeoLoops for hexagonal test cells
 	validCellGeoLoop := GeoLoop{
 		{Lat: 0.1, Lng: 0.1},
 		{Lat: 0.1, Lng: 0.2},
@@ -875,7 +873,6 @@ func TestCellsToMultiPolygon(t *testing.T) {
 		{Lat: 0.55, Lng: 0.45},
 	}
 
-	// Test cases
 	testCases := []struct {
 		name     string
 		cells    []Cell
@@ -912,9 +909,10 @@ func TestCellsToMultiPolygon(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			result := CellsToMultiPolygon(tc.cells)
 			assertLinkedGeoPolygonEqual(t, tc.expected, result)
 		})
