@@ -848,29 +848,32 @@ func copyCells(s []Cell) []Cell {
 
 func TestCellsToMultiPolygon(t *testing.T) {
 	t.Parallel()
+
 	validCellGeoLoop := GeoLoop{
-		{Lat: 0.1, Lng: 0.1},
-		{Lat: 0.1, Lng: 0.2},
-		{Lat: 0.15, Lng: 0.25},
-		{Lat: 0.2, Lng: 0.2},
-		{Lat: 0.2, Lng: 0.1},
-		{Lat: 0.15, Lng: 0.05},
+		{Lat: 67.22475, Lng: -168.52301},
+		{Lat: 67.14094, Lng: -168.62691},
+		{Lat: 67.06725, Lng: -168.49491},
+		{Lat: 67.07706, Lng: -168.25970},
+		{Lat: 67.16056, Lng: -168.15480},
+		{Lat: 67.23456, Lng: -168.28610},
 	}
+
 	lineStartCellGeoLoop := GeoLoop{
-		{Lat: 0.3, Lng: 0.3},
-		{Lat: 0.3, Lng: 0.4},
-		{Lat: 0.35, Lng: 0.45},
-		{Lat: 0.4, Lng: 0.4},
-		{Lat: 0.4, Lng: 0.3},
-		{Lat: 0.35, Lng: 0.25},
+		{Lat: 37.77201, Lng: -122.41701},
+		{Lat: 37.77369, Lng: -122.41594},
+		{Lat: 37.77520, Lng: -122.41720},
+		{Lat: 37.77502, Lng: -122.41953},
+		{Lat: 37.77334, Lng: -122.42060},
+		{Lat: 37.77183, Lng: -122.41934},
 	}
+
 	lineEndCellGeoLoop := GeoLoop{
-		{Lat: 0.5, Lng: 0.5},
-		{Lat: 0.5, Lng: 0.6},
-		{Lat: 0.55, Lng: 0.65},
-		{Lat: 0.6, Lng: 0.6},
-		{Lat: 0.6, Lng: 0.5},
-		{Lat: 0.55, Lng: 0.45},
+		{Lat: 33.88098, Lng: -118.35439},
+		{Lat: 33.88267, Lng: -118.35327},
+		{Lat: 33.88429, Lng: -118.35445},
+		{Lat: 33.88421, Lng: -118.35676},
+		{Lat: 33.88251, Lng: -118.35788},
+		{Lat: 33.88090, Lng: -118.35670},
 	}
 
 	testCases := []struct {
@@ -909,6 +912,7 @@ func TestCellsToMultiPolygon(t *testing.T) {
 			},
 		},
 	}
+
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
@@ -933,19 +937,26 @@ func assertLinkedGeoPolygonEqual(t *testing.T, expected, actual *LinkedGeoPolygo
 func assertEqualGeoPolygon(t *testing.T, expected, actual GeoPolygon) {
 	t.Helper()
 	assertEqualGeoLoop(t, expected.GeoLoop, actual.GeoLoop)
-	// Add checks for holes if necessary
 }
 
 func assertEqualGeoLoop(t *testing.T, expected, actual GeoLoop) {
 	t.Helper()
+	const tolerance = 1e-5
+
 	if len(expected) != len(actual) {
 		t.Errorf("GeoLoops length mismatch: expected %d, got %d", len(expected), len(actual))
 		return
 	}
+
 	for i, e := range expected {
 		a := actual[i]
-		if e.Lat != a.Lat || e.Lng != a.Lng {
-			t.Errorf("GeoLoop vertex mismatch at index %d: expected %v, got %v", i, e, a)
+		if !floatsAreClose(e.Lat, a.Lat, tolerance) || !floatsAreClose(e.Lng, a.Lng, tolerance) {
+			t.Errorf("GeoLoop vertex mismatch at index %d: expected (%.17f, %.17f), got (%.17f, %.17f)",
+				i, e.Lat, e.Lng, a.Lat, a.Lng)
 		}
 	}
+}
+
+func floatsAreClose(a, b, tolerance float64) bool {
+	return math.Abs(a-b) <= tolerance
 }
