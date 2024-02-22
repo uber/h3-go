@@ -16,6 +16,7 @@
 package h3
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -103,59 +104,106 @@ var (
 		},
 	}
 
-	validEdge = DirectedEdge(0x1250dab73fffffff)
+	validEdge   = DirectedEdge(0x1250dab73fffffff)
+	invalidEdge = DirectedEdge(0x175283773fffffff)
 )
 
 func TestLatLngToCell(t *testing.T) {
 	t.Parallel()
-	c := LatLngToCell(validLatLng1, 5)
+	c, err := LatLngToCell(validLatLng1, 5)
+	assertNoErr(t, err)
 	assertEqual(t, validCell, c)
+}
+func TestLatLngToCellError(t *testing.T) {
+	t.Parallel()
+	_, err := LatLngToCell(validLatLng1, -1)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
+
+	_, err = LatLngToCell(NewLatLng(math.Inf(1), math.Inf(1)), 5)
+	assertTrue(t, errors.Is(err, ErrH3LatLngDomain))
+
+	_, err = LatLngToCell(NewLatLng(math.Inf(-1), math.Inf(-1)), 5)
+	assertTrue(t, errors.Is(err, ErrH3LatLngDomain))
 }
 
 func TestCellToLatLng(t *testing.T) {
 	t.Parallel()
-	g := CellToLatLng(validCell)
+	g, err := CellToLatLng(validCell)
+	assertNoErr(t, err)
 	assertEqualLatLng(t, validLatLng1, g)
+}
+func TestCellToLatLngError(t *testing.T) {
+	t.Parallel()
+	_, err := CellToLatLng(Cell(0xfffffffffffffff))
+	assertTrue(t, errors.Is(err, ErrH3InvalidIndex))
 }
 
 func TestToCellBoundary(t *testing.T) {
 	t.Parallel()
-	boundary := validCell.Boundary()
+	boundary, err := validCell.Boundary()
+	assertNoErr(t, err)
 	assertEqualLatLngs(t, validGeoLoop[:], boundary[:])
+}
+func TestToCellBoundaryError(t *testing.T) {
+	t.Parallel()
+	_, err := Cell(0xfffffffffffffff).Boundary()
+	assertTrue(t, errors.Is(err, ErrH3InvalidIndex))
 }
 
 func TestGridDisk(t *testing.T) {
 	t.Parallel()
 	t.Run("no pentagon", func(t *testing.T) {
 		t.Parallel()
+		disks, err := validCell.GridDisk(len(validDiskDist3_1) - 1)
+		assertNoErr(t, err)
 		assertEqualDisks(t,
 			flattenDisks(validDiskDist3_1),
-			validCell.GridDisk(len(validDiskDist3_1)-1))
+			disks,
+		)
 	})
 	t.Run("pentagon ok", func(t *testing.T) {
 		t.Parallel()
 		assertNoPanic(t, func() {
-			disk := GridDisk(pentagonCell, 1)
+			disk, err := GridDisk(pentagonCell, 1)
+			assertNoErr(t, err)
 			assertEqual(t, 6, len(disk), "expected pentagon disk to have 6 cells")
 		})
 	})
+}
+func TestGridDiskError(t *testing.T) {
+	t.Parallel()
+	_, err := GridDisk(Cell(0xfffffffffffffff), 1)
+	assertTrue(t, errors.Is(err, ErrH3InvalidIndex))
+
+	_, err = GridDisk(validCell, -1)
+	assertTrue(t, errors.Is(err, ErrH3Domain))
 }
 
 func TestGridDiskDistances(t *testing.T) {
 	t.Parallel()
 	t.Run("no pentagon", func(t *testing.T) {
 		t.Parallel()
-		rings := validCell.GridDiskDistances(len(validDiskDist3_1) - 1)
+		rings, err := validCell.GridDiskDistances(len(validDiskDist3_1) - 1)
+		assertNoErr(t, err)
 		assertEqualDiskDistances(t, validDiskDist3_1, rings)
 	})
 	t.Run("pentagon centered", func(t *testing.T) {
 		t.Parallel()
 		assertNoPanic(t, func() {
-			rings := GridDiskDistances(pentagonCell, 1)
+			rings, err := GridDiskDistances(pentagonCell, 1)
+			assertNoErr(t, err)
 			assertEqual(t, 2, len(rings), "expected 2 rings")
 			assertEqual(t, 5, len(rings[1]), "expected 5 cells in second ring")
 		})
 	})
+}
+func TestGridDiskDistancesError(t *testing.T) {
+	t.Parallel()
+	_, err := GridDiskDistances(Cell(0xfffffffffffffff), 1)
+	assertTrue(t, errors.Is(err, ErrH3InvalidIndex))
+
+	_, err = GridDiskDistances(validCell, -1)
+	assertTrue(t, errors.Is(err, ErrH3Domain))
 }
 
 func TestIsValid(t *testing.T) {
@@ -169,15 +217,17 @@ func TestRoundtrip(t *testing.T) {
 	t.Run("latlng", func(t *testing.T) {
 		t.Parallel()
 		expectedGeo := LatLng{Lat: 1, Lng: 2}
-		c := LatLngToCell(expectedGeo, MaxResolution)
-		actualGeo := CellToLatLng(c)
+		c, _ := LatLngToCell(expectedGeo, MaxResolution)
+		actualGeo, _ := CellToLatLng(c)
 		assertEqualLatLng(t, expectedGeo, actualGeo)
-		assertEqualLatLng(t, expectedGeo, expectedGeo.Cell(MaxResolution).LatLng())
+		c, _ = expectedGeo.Cell(MaxResolution)
+		latlng, _ := c.LatLng()
+		assertEqualLatLng(t, expectedGeo, latlng)
 	})
 	t.Run("cell", func(t *testing.T) {
 		t.Parallel()
-		geo := CellToLatLng(validCell)
-		actualCell := LatLngToCell(geo, validCell.Resolution())
+		geo, _ := CellToLatLng(validCell)
+		actualCell, _ := LatLngToCell(geo, validCell.Resolution())
 		assertEqual(t, validCell, actualCell)
 	})
 }
@@ -186,11 +236,15 @@ func TestResolution(t *testing.T) {
 	t.Parallel()
 
 	for i := 1; i <= MaxResolution; i++ {
-		c := LatLngToCell(validLatLng1, i)
+		c, err := LatLngToCell(validLatLng1, i)
+		assertNoErr(t, err)
 		assertEqual(t, i, c.Resolution())
 	}
 
-	for _, e := range validCell.DirectedEdges() {
+	edges, err := validCell.DirectedEdges()
+	assertNoErr(t, err)
+
+	for _, e := range edges {
 		assertEqual(t, validCell.Resolution(), e.Resolution())
 	}
 }
@@ -204,12 +258,22 @@ func TestBaseCellNumber(t *testing.T) {
 func TestParent(t *testing.T) {
 	t.Parallel()
 	// get the index's parent by requesting that index's resolution+1
-	parent := validCell.ImmediateParent()
+	parent, errParent := validCell.ImmediateParent()
 
 	// get the children at the resolution of the original index
-	children := parent.ImmediateChildren()
+	children, errChildren := parent.ImmediateChildren()
 
+	assertNoErr(t, errParent)
+	assertNoErr(t, errChildren)
 	assertCellIn(t, validCell, children)
+}
+func TestParentError(t *testing.T) {
+	t.Parallel()
+	_, err := validCell.Parent(6)
+	assertTrue(t, errors.Is(err, ErrH3ResMismatch))
+
+	_, err = validCell.Parent(-1)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
 }
 
 func TestCompactCells(t *testing.T) {
@@ -217,43 +281,91 @@ func TestCompactCells(t *testing.T) {
 
 	in := flattenDisks(validDiskDist3_1[:2])
 	t.Logf("in: %v", in)
-	out := CompactCells(in)
-	t.Logf("out: %v", in)
+
+	out, err := CompactCells(in)
+	t.Logf("out: %v", out)
+	assertNoErr(t, err)
 	assertEqual(t, 1, len(out))
-	assertEqual(t, validDiskDist3_1[0][0].ImmediateParent(), out[0])
+
+	parentCell, err := validDiskDist3_1[0][0].ImmediateParent()
+	assertNoErr(t, err)
+	assertEqual(t, parentCell, out[0])
+}
+func TestCompactCellsError(t *testing.T) {
+	t.Parallel()
+
+	cell := Cell(0x863e35407ffffff)
+	in := []Cell{}
+
+	for i := 0; i < 8; i++ {
+		in = append(in, cell)
+	}
+
+	_, err := CompactCells(in)
+	assertTrue(t, errors.Is(err, ErrH3DupInput))
 }
 
 func TestUncompactCells(t *testing.T) {
 	t.Parallel()
 	// get the index's parent by requesting that index's resolution+1
-	parent := validCell.ImmediateParent()
-	out := UncompactCells([]Cell{parent}, parent.Resolution()+1)
+	parent, err := validCell.ImmediateParent()
+	assertNoErr(t, err)
+	out, err := UncompactCells([]Cell{parent}, parent.Resolution()+1)
+	assertNoErr(t, err)
 	assertCellIn(t, validCell, out)
+}
+func TestUncompactCellsError(t *testing.T) {
+	t.Parallel()
+
+	in := validDiskDist3_1[1]
+
+	_, err := UncompactCells(in, 3)
+	assertTrue(t, errors.Is(err, ErrH3ResMismatch))
+
+	_, err = UncompactCells(in, -1)
+	assertTrue(t, errors.Is(err, ErrH3ResMismatch))
+
+	_, err = UncompactCells(in, 16)
+	assertTrue(t, errors.Is(err, ErrH3ResMismatch))
 }
 
 func TestChildPosToCell(t *testing.T) {
 	t.Parallel()
 
-	children := validCell.Children(6)
+	children, err := validCell.Children(6)
+	assertNoErr(t, err)
 
-	assertEqual(t, children[0], validCell.ChildPosToCell(0, 6))
-	assertEqual(t, children[0], ChildPosToCell(0, validCell, 6))
+	child, err := validCell.ChildPosToCell(0, 6)
+	assertNoErr(t, err)
+	assertEqual(t, children[0], child)
+
+	child, err = ChildPosToCell(0, validCell, 6)
+	assertNoErr(t, err)
+	assertEqual(t, children[0], child)
 }
 
 func TestChildPos(t *testing.T) {
 	t.Parallel()
 
-	children := validCell.Children(7)
+	children, err := validCell.Children(7)
+	assertNoErr(t, err)
 
-	assertEqual(t, 32, children[32].ChildPos(validCell.Resolution()))
-	assertEqual(t, 32, CellToChildPos(children[32], validCell.Resolution()))
+	child, err := children[32].ChildPos(validCell.Resolution())
+	assertNoErr(t, err)
+	assertEqual(t, 32, child)
+
+	child, err = CellToChildPos(children[32], validCell.Resolution())
+	assertNoErr(t, err)
+	assertEqual(t, 32, child)
 }
 
 func TestIsResClassIII(t *testing.T) {
 	t.Parallel()
 
+	parentCell, err := validCell.ImmediateParent()
+	assertNoErr(t, err)
 	assertTrue(t, validCell.IsResClassIII())
-	assertFalse(t, validCell.ImmediateParent().IsResClassIII())
+	assertFalse(t, parentCell.IsResClassIII())
 }
 
 func TestIsPentagon(t *testing.T) {
@@ -264,16 +376,31 @@ func TestIsPentagon(t *testing.T) {
 
 func TestIsNeighbor(t *testing.T) {
 	t.Parallel()
-	assertFalse(t, validCell.IsNeighbor(pentagonCell))
-	assertTrue(t, validCell.DirectedEdges()[0].Destination().IsNeighbor(validCell))
+
+	res, err := validCell.IsNeighbor(validDiskDist3_1[2][0])
+	assertNoErr(t, err)
+	assertFalse(t, res)
+
+	edges, _ := validCell.DirectedEdges()
+	dest, _ := edges[0].Destination()
+
+	res, err = dest.IsNeighbor(validCell)
+	assertNoErr(t, err)
+	assertTrue(t, res)
 }
 
 func TestDirectedEdge(t *testing.T) {
 	t.Parallel()
 
 	origin := validDiskDist3_1[1][0]
-	destination := origin.DirectedEdges()[0].Destination()
-	edge := origin.DirectedEdge(destination)
+	edges, err := origin.DirectedEdges()
+	assertNoErr(t, err)
+
+	destination, err := edges[0].Destination()
+	assertNoErr(t, err)
+
+	edge, err := origin.DirectedEdge(destination)
+	assertNoErr(t, err)
 
 	t.Run("is valid", func(t *testing.T) {
 		t.Parallel()
@@ -283,33 +410,70 @@ func TestDirectedEdge(t *testing.T) {
 
 	t.Run("get origin/destination from edge", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, origin, edge.Origin())
-		assertEqual(t, destination, edge.Destination())
+		originExpected, err := edge.Origin()
+		assertNoErr(t, err)
+		assertEqual(t, origin, originExpected)
+
+		destinationExpected, err := edge.Destination()
+		assertNoErr(t, err)
+		assertEqual(t, destination, destinationExpected)
 
 		// shadow origin/destination
-		cells := edge.Cells()
+		cells, err := edge.Cells()
+		assertNoErr(t, err)
+
 		origin, destination := cells[0], cells[1]
-		assertEqual(t, origin, edge.Origin())
-		assertEqual(t, destination, edge.Destination())
+		originExpected, err = edge.Origin()
+		assertNoErr(t, err)
+		assertEqual(t, origin, originExpected)
+
+		destinationExpected, err = edge.Destination()
+		assertNoErr(t, err)
+		assertEqual(t, destination, destinationExpected)
 	})
 
 	t.Run("get edges from hexagon", func(t *testing.T) {
 		t.Parallel()
-		edges := validCell.DirectedEdges()
+		edges, err := validCell.DirectedEdges()
+		assertNoErr(t, err)
 		assertEqual(t, 6, len(edges), "hexagon has 6 edges")
 	})
 
 	t.Run("get edges from pentagon", func(t *testing.T) {
 		t.Parallel()
-		edges := pentagonCell.DirectedEdges()
+		edges, err := pentagonCell.DirectedEdges()
+		assertNoErr(t, err)
 		assertEqual(t, 5, len(edges), "pentagon has 5 edges")
 	})
 
 	t.Run("get boundary from edge", func(t *testing.T) {
 		t.Parallel()
-		gb := edge.Boundary()
+		gb, err := edge.Boundary()
+		assertNoErr(t, err)
 		assertEqual(t, 2, len(gb), "edge has 2 boundary cells")
 	})
+}
+func TestDirectedEdgeError(t *testing.T) {
+	t.Parallel()
+
+	_, err := validCell.DirectedEdge(validDiskDist3_1[2][0])
+	assertTrue(t, errors.Is(err, ErrH3Neighbors))
+
+	_, err = DirectedEdge(0).Origin()
+	assertTrue(t, errors.Is(err, ErrH3InvalidDirEdge))
+
+	_, err = DirectedEdge(0).Destination()
+	assertTrue(t, errors.Is(err, ErrH3InvalidDirEdge))
+	_, err = invalidEdge.Destination()
+	assertTrue(t, errors.Is(err, ErrH3Failed))
+
+	_, err = DirectedEdge(0).Cells()
+	assertTrue(t, errors.Is(err, ErrH3InvalidDirEdge))
+	_, err = invalidEdge.Cells()
+	assertTrue(t, errors.Is(err, ErrH3Failed))
+
+	_, err = invalidEdge.Boundary()
+	assertTrue(t, errors.Is(err, ErrH3InvalidDirEdge))
 }
 
 func TestStrings(t *testing.T) {
@@ -353,13 +517,14 @@ func TestPolygonToCells(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		t.Parallel()
-		cells := PolygonToCells(GeoPolygon{}, 6)
+		cells, err := PolygonToCells(GeoPolygon{}, 6)
+		assertNoErr(t, err)
 		assertEqual(t, 0, len(cells))
 	})
 
 	t.Run("without holes", func(t *testing.T) {
 		t.Parallel()
-		cells := validGeoPolygonNoHoles.Cells(6)
+		cells, err := validGeoPolygonNoHoles.Cells(6)
 		expectedIndexes := []Cell{
 			0x860dab607ffffff,
 			0x860dab60fffffff,
@@ -369,12 +534,13 @@ func TestPolygonToCells(t *testing.T) {
 			0x860dab62fffffff,
 			0x860dab637ffffff,
 		}
+		assertNoErr(t, err)
 		assertEqualCells(t, expectedIndexes, cells)
 	})
 
 	t.Run("with hole", func(t *testing.T) {
 		t.Parallel()
-		cells := validGeoPolygonHoles.Cells(6)
+		cells, err := validGeoPolygonHoles.Cells(6)
 		expectedIndexes := []Cell{
 			0x860dab60fffffff,
 			0x860dab617ffffff,
@@ -383,19 +549,36 @@ func TestPolygonToCells(t *testing.T) {
 			0x860dab62fffffff,
 			0x860dab637ffffff,
 		}
+		assertNoErr(t, err)
 		assertEqualCells(t, expectedIndexes, cells)
 	})
+}
+func TestPolygonToCellsError(t *testing.T) {
+	t.Parallel()
+	_, err := PolygonToCells(validGeoPolygonHoles, -1)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
+
+	invalidGeoPolygon := GeoPolygon{
+		GeoLoop: GeoLoop{
+			{Lat: math.Inf(1), Lng: math.Inf(1)},
+			{Lat: math.Inf(-1), Lng: math.Inf(-1)},
+		},
+		Holes: []GeoLoop{},
+	}
+	_, err = PolygonToCells(invalidGeoPolygon, 5)
+	assertTrue(t, errors.Is(err, ErrH3Failed))
 }
 
 func TestGridPath(t *testing.T) {
 	t.Parallel()
-	path := lineStartCell.GridPath(lineEndCell)
-
+	path, err := lineStartCell.GridPath(lineEndCell)
+	assertNoErr(t, err)
 	assertEqual(t, lineStartCell, path[0])
 	assertEqual(t, lineEndCell, path[len(path)-1])
 
 	for i := 0; i < len(path)-1; i++ {
-		assertTrue(t, path[i].IsNeighbor(path[i+1]))
+		res, _ := path[i].IsNeighbor(path[i+1])
+		assertTrue(t, res)
 	}
 }
 
@@ -403,32 +586,60 @@ func TestHexAreaKm2(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(4357449.4161), HexagonAreaAvgKm2(0))
+		area, err := HexagonAreaAvgKm2(0)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(4357449.4161), area)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(0.0000009), HexagonAreaAvgKm2(15))
+		area, err := HexagonAreaAvgKm2(15)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(0.0000009), area)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(0.7373276), HexagonAreaAvgKm2(8))
+		area, err := HexagonAreaAvgKm2(8)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(0.7373276), area)
 	})
+}
+func TestHexAreaKm2Error(t *testing.T) {
+	t.Parallel()
+	_, err := HexagonAreaAvgKm2(-1)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
+
+	_, err = HexagonAreaAvgKm2(16)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
 }
 
 func TestHexAreaM2(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(4357449416078.3901), HexagonAreaAvgM2(0))
+		area, err := HexagonAreaAvgM2(0)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(4357449416078.3901), area)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(0.8953), HexagonAreaAvgM2(15))
+		area, err := HexagonAreaAvgM2(15)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(0.8953), area)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(737327.5976), HexagonAreaAvgM2(8))
+		area, err := HexagonAreaAvgM2(8)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(737327.5976), area)
 	})
+}
+func TestHexAreaM2Error(t *testing.T) {
+	t.Parallel()
+	_, err := HexagonAreaAvgM2(-1)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
+
+	_, err = HexagonAreaAvgM2(16)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
 }
 
 func TestPointDistRads(t *testing.T) {
@@ -451,71 +662,137 @@ func TestPointDistM(t *testing.T) {
 
 func TestCellAreaRads2(t *testing.T) {
 	t.Parallel()
-	assertEqualEps(t, float64(0.000006643967854567278), CellAreaRads2(validCell))
+	area, err := CellAreaRads2(validCell)
+	assertNoErr(t, err)
+	assertEqualEps(t, float64(0.000006643967854567278), area)
+}
+func TestCellAreaRads2Error(t *testing.T) {
+	t.Parallel()
+	_, err := CellAreaRads2(Cell(0xfffffffffffffff))
+	assertTrue(t, errors.Is(err, ErrH3InvalidIndex))
 }
 
 func TestCellAreaKm2(t *testing.T) {
 	t.Parallel()
-	assertEqualEps(t, float64(269.6768779509321), CellAreaKm2(validCell))
+	area, err := CellAreaKm2(validCell)
+	assertNoErr(t, err)
+	assertEqualEps(t, float64(269.6768779509321), area)
+}
+func TestCellAreaKm2Error(t *testing.T) {
+	t.Parallel()
+	_, err := CellAreaKm2(Cell(0xfffffffffffffff))
+	assertTrue(t, errors.Is(err, ErrH3InvalidIndex))
 }
 
 func TestCellAreaM2(t *testing.T) {
 	t.Parallel()
-	assertEqualEps(t, float64(269676877.95093215), CellAreaM2(validCell))
+	area, err := CellAreaM2(validCell)
+	assertNoErr(t, err)
+	assertEqualEps(t, float64(269676877.95093215), area)
+}
+func TestCellAreaM2Error(t *testing.T) {
+	t.Parallel()
+	_, err := CellAreaM2(Cell(0xfffffffffffffff))
+	assertTrue(t, errors.Is(err, ErrH3InvalidIndex))
 }
 
 func TestHexagonEdgeLengthKm(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(1107.712591), HexagonEdgeLengthAvgKm(0))
+		area, err := HexagonEdgeLengthAvgKm(0)
+		assertNoErr(t, err)
+		assertEqual(t, float64(1107.712591), area)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(0.000509713), HexagonEdgeLengthAvgKm(15))
+		area, err := HexagonEdgeLengthAvgKm(15)
+		assertNoErr(t, err)
+		assertEqual(t, float64(0.000509713), area)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(0.461354684), HexagonEdgeLengthAvgKm(8))
+		area, err := HexagonEdgeLengthAvgKm(8)
+		assertNoErr(t, err)
+		assertEqual(t, float64(0.461354684), area)
 	})
+}
+func TestHexagonEdgeLengthKmError(t *testing.T) {
+	t.Parallel()
+	_, err := HexagonEdgeLengthAvgKm(-1)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
+
+	_, err = HexagonEdgeLengthAvgKm(16)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
 }
 
 func TestHexagonEdgeLengthM(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
-		area := HexagonEdgeLengthAvgM(0)
+		area, err := HexagonEdgeLengthAvgM(0)
+		assertNoErr(t, err)
 		assertEqual(t, float64(1107712.591), area)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
-		area := HexagonEdgeLengthAvgM(15)
+		area, err := HexagonEdgeLengthAvgM(15)
+		assertNoErr(t, err)
 		assertEqual(t, float64(0.509713273), area)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
-		area := HexagonEdgeLengthAvgM(8)
+		area, err := HexagonEdgeLengthAvgM(8)
+		assertNoErr(t, err)
 		assertEqual(t, float64(461.3546837), area)
 	})
+}
+func TestHexagonEdgeLengthMError(t *testing.T) {
+	t.Parallel()
+	_, err := HexagonEdgeLengthAvgM(-1)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
+
+	_, err = HexagonEdgeLengthAvgM(16)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
 }
 
 func TestEdgeLengthRads(t *testing.T) {
 	t.Parallel()
-	assertEqualEps(t, float64(0.001569665746947077), EdgeLengthRads(validEdge))
+
+	distance, err := EdgeLengthRads(validEdge)
+	assertNoErr(t, err)
+	assertEqualEps(t, float64(0.001569665746947077), distance)
+}
+func TestEdgeLengthRadsError(t *testing.T) {
+	t.Parallel()
+	_, err := EdgeLengthRads(DirectedEdge(0))
+	assertTrue(t, errors.Is(err, ErrH3InvalidDirEdge))
 }
 
 func TestEdgeLengthKm(t *testing.T) {
 	t.Parallel()
 
-	distance := EdgeLengthKm(validEdge)
+	distance, err := EdgeLengthKm(validEdge)
+	assertNoErr(t, err)
 	assertEqualEps(t, float64(10.00035174544159), distance)
+}
+func TestEdgeLengthKmError(t *testing.T) {
+	t.Parallel()
+	_, err := EdgeLengthRads(DirectedEdge(0))
+	assertTrue(t, errors.Is(err, ErrH3InvalidDirEdge))
 }
 
 func TestEdgeLengthM(t *testing.T) {
 	t.Parallel()
 
-	distance := EdgeLengthM(validEdge)
+	distance, err := EdgeLengthM(validEdge)
+	assertNoErr(t, err)
 	assertEqualEps(t, float64(10000.351745441589), distance)
+}
+func TestEdgeLengthMError(t *testing.T) {
+	t.Parallel()
+	_, err := EdgeLengthRads(DirectedEdge(0))
+	assertTrue(t, errors.Is(err, ErrH3InvalidDirEdge))
 }
 
 func TestNumCells(t *testing.T) {
@@ -536,8 +813,9 @@ func TestNumCells(t *testing.T) {
 
 func TestRes0Cells(t *testing.T) {
 	t.Parallel()
-	cells := Res0Cells()
+	cells, err := Res0Cells()
 
+	assertNoErr(t, err)
 	assertEqual(t, 122, len(cells))
 	assertEqual(t, Cell(0x8001fffffffffff), cells[0])
 	assertEqual(t, Cell(0x80f3fffffffffff), cells[121])
@@ -545,23 +823,48 @@ func TestRes0Cells(t *testing.T) {
 
 func TestGridDistance(t *testing.T) {
 	t.Parallel()
-	assertEqual(t, 1823, lineStartCell.GridDistance(lineEndCell))
+	dist, err := lineStartCell.GridDistance(lineEndCell)
+	assertNoErr(t, err)
+	assertEqual(t, 1823, dist)
+}
+func TestGridDistanceError(t *testing.T) {
+	t.Parallel()
+	_, err := GridDistance(Cell(0x821c37fffffffff), Cell(0x822837fffffffff))
+	assertTrue(t, errors.Is(err, ErrH3Failed))
+
+	_, err = GridDistance(Cell(0x81283ffffffffff), Cell(0x8029fffffffffff))
+	assertTrue(t, errors.Is(err, ErrH3ResMismatch))
+
+	_, err = GridDistance(Cell(0xfffffffffffffff), Cell(0xfffffffffffffff))
+	assertTrue(t, errors.Is(err, ErrH3InvalidIndex))
 }
 
 func TestCenterChild(t *testing.T) {
 	t.Parallel()
 
-	child := validCell.CenterChild(15)
+	child, err := validCell.CenterChild(15)
+	assertNoErr(t, err)
 	assertEqual(t, Cell(0x8f0dab600000000), child)
+}
+func TestCenterChildError(t *testing.T) {
+	t.Parallel()
+	_, err := validCell.CenterChild(4)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
 }
 
 func TestIcosahedronFaces(t *testing.T) {
 	t.Parallel()
 
-	faces := validDiskDist3_1[1][1].IcosahedronFaces()
+	faces, err := validDiskDist3_1[1][1].IcosahedronFaces()
 
+	assertNoErr(t, err)
 	assertEqual(t, 1, len(faces))
 	assertEqual(t, 1, faces[0])
+}
+func TestIcosahedronFacesError(t *testing.T) {
+	t.Parallel()
+	_, err := Cell(0xfffffffffffffff).IcosahedronFaces()
+	assertTrue(t, errors.Is(err, ErrH3InvalidIndex))
 }
 
 func TestPentagons(t *testing.T) {
@@ -570,7 +873,8 @@ func TestPentagons(t *testing.T) {
 	for _, res := range []int{0, 8, 15} {
 		t.Run(fmt.Sprintf("res=%d", res), func(t *testing.T) {
 			t.Parallel()
-			pentagons := Pentagons(res)
+			pentagons, err := Pentagons(res)
+			assertNoErr(t, err)
 			assertEqual(t, 12, len(pentagons))
 			for _, pentagon := range pentagons {
 				assertTrue(t, pentagon.IsPentagon())
@@ -578,6 +882,11 @@ func TestPentagons(t *testing.T) {
 			}
 		})
 	}
+}
+func TestPentagonsError(t *testing.T) {
+	t.Parallel()
+	_, err := Pentagons(-1)
+	assertTrue(t, errors.Is(err, ErrH3ResDomain))
 }
 
 func equalEps(expected, actual float64) bool {
