@@ -67,6 +67,61 @@ const (
 	RadsToDegs = 180.0 / math.Pi
 )
 
+var (
+	ErrH3Failed           = errors.New("unknown error")
+	ErrH3Domain           = errors.New("argument out of range error")
+	ErrH3LatLngDomain     = errors.New("latitude or longitude out of range error")
+	ErrH3ResDomain        = errors.New("resolution out of range error")
+	ErrH3InvalidIndex     = errors.New("h3index invalid error")
+	ErrH3InvalidDirEdge   = errors.New("directed edge invalid error")
+	ErrH3InvalidUnDirEdge = errors.New("undirected edge invalid error")
+	ErrH3InvalidVertex    = errors.New("vertex invalid error")
+	ErrH3Pentagon         = errors.New("pentagon distortion encountered error")
+	ErrH3DupInput         = errors.New("duplicate input error")
+	ErrH3Neighbors        = errors.New("cells are not neighbors error")
+	ErrH3ResMismatch      = errors.New("resolution mismatch error")
+	ErrH3MemAlloc         = errors.New("memory allocation error")
+	ErrH3MemBound         = errors.New("memory bounds error")
+	ErrH3InvalidOption    = errors.New("invalid mode or flag error")
+)
+
+func errFromCode(errc int) error {
+	switch errc {
+	case C.E_FAILED:
+		return ErrH3Failed
+	case C.E_DOMAIN:
+		return ErrH3Domain
+	case C.E_LATLNG_DOMAIN:
+		return ErrH3LatLngDomain
+	case C.E_RES_DOMAIN:
+		return ErrH3ResDomain
+	case C.E_CELL_INVALID:
+		return ErrH3InvalidIndex
+	case C.E_DIR_EDGE_INVALID:
+		return ErrH3InvalidDirEdge
+	case C.E_UNDIR_EDGE_INVALID:
+		return ErrH3InvalidUnDirEdge
+	case C.E_VERTEX_INVALID:
+		return ErrH3InvalidVertex
+	case C.E_PENTAGON:
+		return ErrH3Pentagon
+	case C.E_DUPLICATE_INPUT:
+		return ErrH3DupInput
+	case C.E_NOT_NEIGHBORS:
+		return ErrH3Neighbors
+	case C.E_RES_MISMATCH:
+		return ErrH3ResMismatch
+	case C.E_MEMORY_ALLOC:
+		return ErrH3MemAlloc
+	case C.E_MEMORY_BOUNDS:
+		return ErrH3MemBound
+	case C.E_OPTION_INVALID:
+		return ErrH3InvalidOption
+	default:
+		return ErrH3Failed
+	}
+}
+
 type (
 
 	// Cell is an Index that identifies a single hexagon cell at a resolution.
@@ -107,44 +162,50 @@ func NewLatLng(lat, lng float64) LatLng {
 }
 
 // LatLngToCell returns the Cell at resolution for a geographic coordinate.
-func LatLngToCell(latLng LatLng, resolution int) Cell {
+func LatLngToCell(latLng LatLng, resolution int) (Cell, error) {
 	var i C.H3Index
 
-	C.latLngToCell(latLng.toCPtr(), C.int(resolution), &i)
+	if rc := C.latLngToCell(latLng.toCPtr(), C.int(resolution), &i); rc != C.E_SUCCESS {
+		return Cell(i), errFromCode(int(rc))
+	}
 
-	return Cell(i)
+	return Cell(i), nil
 }
 
 // Cell returns the Cell at resolution for a geographic coordinate.
-func (g LatLng) Cell(resolution int) Cell {
+func (g LatLng) Cell(resolution int) (Cell, error) {
 	return LatLngToCell(g, resolution)
 }
 
 // CellToLatLng returns the geographic centerpoint of a Cell.
-func CellToLatLng(c Cell) LatLng {
+func CellToLatLng(c Cell) (LatLng, error) {
 	var g C.LatLng
 
-	C.cellToLatLng(C.H3Index(c), &g)
+	if rc := C.cellToLatLng(C.H3Index(c), &g); rc != C.E_SUCCESS {
+		return LatLng{}, errFromCode(int(rc))
+	}
 
-	return latLngFromC(g)
+	return latLngFromC(g), nil
 }
 
 // LatLng returns the Cell at resolution for a geographic coordinate.
-func (c Cell) LatLng() LatLng {
+func (c Cell) LatLng() (LatLng, error) {
 	return CellToLatLng(c)
 }
 
 // CellToBoundary returns a CellBoundary of the Cell.
-func CellToBoundary(c Cell) CellBoundary {
+func CellToBoundary(c Cell) (CellBoundary, error) {
 	var cb C.CellBoundary
 
-	C.cellToBoundary(C.H3Index(c), &cb)
+	if rc := C.cellToBoundary(C.H3Index(c), &cb); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
-	return cellBndryFromC(&cb)
+	return cellBndryFromC(&cb), nil
 }
 
 // Boundary returns a CellBoundary of the Cell.
-func (c Cell) Boundary() CellBoundary {
+func (c Cell) Boundary() (CellBoundary, error) {
 	return CellToBoundary(c)
 }
 
@@ -155,11 +216,14 @@ func (c Cell) Boundary() CellBoundary {
 //
 // Output is placed in an array in no particular order. Elements of the output
 // array may be left zero, as can happen when crossing a pentagon.
-func GridDisk(origin Cell, k int) []Cell {
+func GridDisk(origin Cell, k int) ([]Cell, error) {
 	out := make([]C.H3Index, maxGridDiskSize(k))
-	C.gridDisk(C.H3Index(origin), C.int(k), &out[0])
+
+	if rc := C.gridDisk(C.H3Index(origin), C.int(k), &out[0]); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 	// QUESTION: should we prune zeroes from the output?
-	return cellsFromC(out, true, false)
+	return cellsFromC(out, true, false), nil
 }
 
 // GridDisk produces cells within grid distance k of the origin cell.
@@ -169,7 +233,7 @@ func GridDisk(origin Cell, k int) []Cell {
 //
 // Output is placed in an array in no particular order. Elements of the output
 // array may be left zero, as can happen when crossing a pentagon.
-func (c Cell) GridDisk(k int) []Cell {
+func (c Cell) GridDisk(k int) ([]Cell, error) {
 	return GridDisk(c, k)
 }
 
@@ -181,11 +245,14 @@ func (c Cell) GridDisk(k int) []Cell {
 // Outer slice is ordered from origin outwards. Inner slices are in no
 // particular order. Elements of the output array may be left zero, as can
 // happen when crossing a pentagon.
-func GridDiskDistances(origin Cell, k int) [][]Cell {
+func GridDiskDistances(origin Cell, k int) ([][]Cell, error) {
 	rsz := maxGridDiskSize(k)
 	outHexes := make([]C.H3Index, rsz)
 	outDists := make([]C.int, rsz)
-	C.gridDiskDistances(C.H3Index(origin), C.int(k), &outHexes[0], &outDists[0])
+
+	if rc := C.gridDiskDistances(C.H3Index(origin), C.int(k), &outHexes[0], &outDists[0]); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
 	ret := make([][]Cell, k+1)
 	for i := 0; i <= k; i++ {
@@ -196,7 +263,7 @@ func GridDiskDistances(origin Cell, k int) [][]Cell {
 		ret[d] = append(ret[d], Cell(outHexes[i]))
 	}
 
-	return ret
+	return ret, nil
 }
 
 // GridDiskDistances produces cells within grid distance k of the origin cell.
@@ -207,7 +274,7 @@ func GridDiskDistances(origin Cell, k int) [][]Cell {
 // Outer slice is ordered from origin outwards. Inner slices are in no
 // particular order. Elements of the output array may be left zero, as can
 // happen when crossing a pentagon.
-func (c Cell) GridDiskDistances(k int) [][]Cell {
+func (c Cell) GridDiskDistances(k int) ([][]Cell, error) {
 	return GridDiskDistances(c, k)
 }
 
@@ -218,21 +285,27 @@ func (c Cell) GridDiskDistances(k int) [][]Cell {
 // hexagons, tests them and their neighbors to be contained by the geoloop(s),
 // and then any newly found hexagons are used to test again until no new
 // hexagons are found.
-func PolygonToCells(polygon GeoPolygon, resolution int) []Cell {
+func PolygonToCells(polygon GeoPolygon, resolution int) ([]Cell, error) {
 	if len(polygon.GeoLoop) == 0 {
-		return nil
+		return nil, nil
 	}
 	cpoly := allocCGeoPolygon(polygon)
 
 	defer freeCGeoPolygon(&cpoly)
 
 	maxLen := new(C.int64_t)
-	C.maxPolygonToCellsSize(&cpoly, C.int(resolution), 0, maxLen)
+
+	if rc := C.maxPolygonToCellsSize(&cpoly, C.int(resolution), 0, maxLen); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
 	out := make([]C.H3Index, *maxLen)
-	C.polygonToCells(&cpoly, C.int(resolution), 0, &out[0])
 
-	return cellsFromC(out, true, false)
+	if rc := C.polygonToCells(&cpoly, C.int(resolution), 0, &out[0]); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
+
+	return cellsFromC(out, true, false), nil
 }
 
 // PolygonToCells takes a given GeoJSON-like data structure fills it with the
@@ -242,7 +315,7 @@ func PolygonToCells(polygon GeoPolygon, resolution int) []Cell {
 // hexagons, tests them and their neighbors to be contained by the geoloop(s),
 // and then any newly found hexagons are used to test again until no new
 // hexagons are found.
-func (p GeoPolygon) Cells(resolution int) []Cell {
+func (p GeoPolygon) Cells(resolution int) ([]Cell, error) {
 	return PolygonToCells(p, resolution)
 }
 
@@ -270,99 +343,119 @@ func GreatCircleDistanceM(a, b LatLng) float64 {
 
 // HexAreaKm2 returns the average hexagon area in square kilometers at the given
 // resolution.
-func HexagonAreaAvgKm2(resolution int) float64 {
+func HexagonAreaAvgKm2(resolution int) (float64, error) {
 	var out C.double
 
-	C.getHexagonAreaAvgKm2(C.int(resolution), &out)
+	if rc := C.getHexagonAreaAvgKm2(C.int(resolution), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return float64(out)
+	return float64(out), nil
 }
 
 // HexAreaM2 returns the average hexagon area in square meters at the given
 // resolution.
-func HexagonAreaAvgM2(resolution int) float64 {
+func HexagonAreaAvgM2(resolution int) (float64, error) {
 	var out C.double
 
-	C.getHexagonAreaAvgM2(C.int(resolution), &out)
+	if rc := C.getHexagonAreaAvgM2(C.int(resolution), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return float64(out)
+	return float64(out), nil
 }
 
 // CellAreaRads2 returns the exact area of specific cell in square radians.
-func CellAreaRads2(c Cell) float64 {
+func CellAreaRads2(c Cell) (float64, error) {
 	var out C.double
 
-	C.cellAreaRads2(C.H3Index(c), &out)
+	if rc := C.cellAreaRads2(C.H3Index(c), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return float64(out)
+	return float64(out), nil
 }
 
 // CellAreaKm2 returns the exact area of specific cell in square kilometers.
-func CellAreaKm2(c Cell) float64 {
+func CellAreaKm2(c Cell) (float64, error) {
 	var out C.double
 
-	C.cellAreaKm2(C.H3Index(c), &out)
+	if rc := C.cellAreaKm2(C.H3Index(c), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return float64(out)
+	return float64(out), nil
 }
 
 // CellAreaM2 returns the exact area of specific cell in square meters.
-func CellAreaM2(c Cell) float64 {
+func CellAreaM2(c Cell) (float64, error) {
 	var out C.double
 
-	C.cellAreaM2(C.H3Index(c), &out)
+	if rc := C.cellAreaM2(C.H3Index(c), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return float64(out)
+	return float64(out), nil
 }
 
 // HexagonEdgeLengthAvgKm returns the average hexagon edge length in kilometers
 // at the given resolution.
-func HexagonEdgeLengthAvgKm(resolution int) float64 {
+func HexagonEdgeLengthAvgKm(resolution int) (float64, error) {
 	var out C.double
 
-	C.getHexagonEdgeLengthAvgKm(C.int(resolution), &out)
+	if rc := C.getHexagonEdgeLengthAvgKm(C.int(resolution), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return float64(out)
+	return float64(out), nil
 }
 
 // HexagonEdgeLengthAvgM returns the average hexagon edge length in meters at
 // the given resolution.
-func HexagonEdgeLengthAvgM(resolution int) float64 {
+func HexagonEdgeLengthAvgM(resolution int) (float64, error) {
 	var out C.double
 
-	C.getHexagonEdgeLengthAvgM(C.int(resolution), &out)
+	if rc := C.getHexagonEdgeLengthAvgM(C.int(resolution), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return float64(out)
+	return float64(out), nil
 }
 
 // EdgeLengthRads returns the exact edge length of specific unidirectional edge
 // in radians.
-func EdgeLengthRads(e DirectedEdge) float64 {
+func EdgeLengthRads(e DirectedEdge) (float64, error) {
 	var out C.double
 
-	C.edgeLengthRads(C.H3Index(e), &out)
+	if rc := C.edgeLengthRads(C.H3Index(e), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return float64(out)
+	return float64(out), nil
 }
 
 // EdgeLengthKm returns the exact edge length of specific unidirectional
 // edge in kilometers.
-func EdgeLengthKm(e DirectedEdge) float64 {
+func EdgeLengthKm(e DirectedEdge) (float64, error) {
 	var out C.double
 
-	C.edgeLengthKm(C.H3Index(e), &out)
+	if rc := C.edgeLengthKm(C.H3Index(e), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return float64(out)
+	return float64(out), nil
 }
 
 // EdgeLengthM returns the exact edge length of specific unidirectional
 // edge in meters.
-func EdgeLengthM(e DirectedEdge) float64 {
+func EdgeLengthM(e DirectedEdge) (float64, error) {
 	var out C.double
 
-	C.edgeLengthM(C.H3Index(e), &out)
+	if rc := C.edgeLengthM(C.H3Index(e), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return float64(out)
+	return float64(out), nil
 }
 
 // NumCells returns the number of cells at the given resolution.
@@ -373,19 +466,23 @@ func NumCells(resolution int) int {
 }
 
 // Res0Cells returns all the cells at resolution 0.
-func Res0Cells() []Cell {
+func Res0Cells() ([]Cell, error) {
 	out := make([]C.H3Index, C.res0CellCount())
-	C.getRes0Cells(&out[0])
+	if rc := C.getRes0Cells(&out[0]); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
-	return cellsFromC(out, false, false)
+	return cellsFromC(out, false, false), nil
 }
 
 // Pentagons returns all the pentagons at resolution.
-func Pentagons(resolution int) []Cell {
+func Pentagons(resolution int) ([]Cell, error) {
 	out := make([]C.H3Index, NumPentagons)
-	C.getPentagons(C.int(resolution), &out[0])
+	if rc := C.getPentagons(C.int(resolution), &out[0]); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
-	return cellsFromC(out, false, false)
+	return cellsFromC(out, false, false), nil
 }
 
 func (c Cell) Resolution() int {
@@ -451,43 +548,51 @@ func (c Cell) IsValid() bool {
 }
 
 // Parent returns the parent or grandparent Cell of this Cell.
-func (c Cell) Parent(resolution int) Cell {
+func (c Cell) Parent(resolution int) (Cell, error) {
 	var out C.H3Index
 
-	C.cellToParent(C.H3Index(c), C.int(resolution), &out)
+	if rc := C.cellToParent(C.H3Index(c), C.int(resolution), &out); rc != C.E_SUCCESS {
+		return Cell(-1), errFromCode(int(rc))
+	}
 
-	return Cell(out)
+	return Cell(out), nil
 }
 
 // Parent returns the parent or grandparent Cell of this Cell.
-func (c Cell) ImmediateParent() Cell {
+func (c Cell) ImmediateParent() (Cell, error) {
 	return c.Parent(c.Resolution() - 1)
 }
 
 // Children returns the children or grandchildren cells of this Cell.
-func (c Cell) Children(resolution int) []Cell {
+func (c Cell) Children(resolution int) ([]Cell, error) {
 	var outsz C.int64_t
 
-	C.cellToChildrenSize(C.H3Index(c), C.int(resolution), &outsz)
+	if rc := C.cellToChildrenSize(C.H3Index(c), C.int(resolution), &outsz); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 	out := make([]C.H3Index, outsz)
 
-	C.cellToChildren(C.H3Index(c), C.int(resolution), &out[0])
+	if rc := C.cellToChildren(C.H3Index(c), C.int(resolution), &out[0]); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
-	return cellsFromC(out, false, false)
+	return cellsFromC(out, false, false), nil
 }
 
 // ImmediateChildren returns the children or grandchildren cells of this Cell.
-func (c Cell) ImmediateChildren() []Cell {
+func (c Cell) ImmediateChildren() ([]Cell, error) {
 	return c.Children(c.Resolution() + 1)
 }
 
 // CenterChild returns the center child Cell of this Cell.
-func (c Cell) CenterChild(resolution int) Cell {
+func (c Cell) CenterChild(resolution int) (Cell, error) {
 	var out C.H3Index
 
-	C.cellToCenterChild(C.H3Index(c), C.int(resolution), &out)
+	if rc := C.cellToCenterChild(C.H3Index(c), C.int(resolution), &out); rc != C.E_SUCCESS {
+		return Cell(-1), errFromCode(int(rc))
+	}
 
-	return Cell(out)
+	return Cell(out), nil
 }
 
 // IsResClassIII returns true if this is a class III index. If false, this is a
@@ -502,39 +607,49 @@ func (c Cell) IsPentagon() bool {
 }
 
 // IcosahedronFaces finds all icosahedron faces (0-19) intersected by this Cell.
-func (c Cell) IcosahedronFaces() []int {
+func (c Cell) IcosahedronFaces() ([]int, error) {
 	var outsz C.int
 
-	C.maxFaceCount(C.H3Index(c), &outsz)
+	if rc := C.maxFaceCount(C.H3Index(c), &outsz); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 	out := make([]C.int, outsz)
 
-	C.getIcosahedronFaces(C.H3Index(c), &out[0])
+	if rc := C.getIcosahedronFaces(C.H3Index(c), &out[0]); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
-	return intsFromC(out)
+	return intsFromC(out), nil
 }
 
 // IsNeighbor returns true if this Cell is a neighbor of the other Cell.
-func (c Cell) IsNeighbor(other Cell) bool {
+func (c Cell) IsNeighbor(other Cell) (bool, error) {
 	var out C.int
-	C.areNeighborCells(C.H3Index(c), C.H3Index(other), &out)
+	if rc := C.areNeighborCells(C.H3Index(c), C.H3Index(other), &out); rc != C.E_SUCCESS {
+		return false, errFromCode(int(rc))
+	}
 
-	return out == 1
+	return out == 1, nil
 }
 
 // DirectedEdge returns a DirectedEdge from this Cell to other.
-func (c Cell) DirectedEdge(other Cell) DirectedEdge {
+func (c Cell) DirectedEdge(other Cell) (DirectedEdge, error) {
 	var out C.H3Index
-	C.cellsToDirectedEdge(C.H3Index(c), C.H3Index(other), &out)
+	if rc := C.cellsToDirectedEdge(C.H3Index(c), C.H3Index(other), &out); rc != C.E_SUCCESS {
+		return DirectedEdge(-1), errFromCode(int(rc))
+	}
 
-	return DirectedEdge(out)
+	return DirectedEdge(out), nil
 }
 
 // DirectedEdges returns 6 directed edges with h as the origin.
-func (c Cell) DirectedEdges() []DirectedEdge {
+func (c Cell) DirectedEdges() ([]DirectedEdge, error) {
 	out := make([]C.H3Index, numCellEdges) // always 6 directed edges
-	C.originToDirectedEdges(C.H3Index(c), &out[0])
+	if rc := C.originToDirectedEdges(C.H3Index(c), &out[0]); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
-	return edgesFromC(out)
+	return edgesFromC(out), nil
 }
 
 func (e DirectedEdge) IsValid() bool {
@@ -542,138 +657,167 @@ func (e DirectedEdge) IsValid() bool {
 }
 
 // Origin returns the origin cell of this directed edge.
-func (e DirectedEdge) Origin() Cell {
+func (e DirectedEdge) Origin() (Cell, error) {
 	var out C.H3Index
-	C.getDirectedEdgeOrigin(C.H3Index(e), &out)
+	if rc := C.getDirectedEdgeOrigin(C.H3Index(e), &out); rc != C.E_SUCCESS {
+		return Cell(-1), errFromCode(int(rc))
+	}
 
-	return Cell(out)
+	return Cell(out), nil
 }
 
 // Destination returns the destination cell of this directed edge.
-func (e DirectedEdge) Destination() Cell {
+func (e DirectedEdge) Destination() (Cell, error) {
 	var out C.H3Index
-	C.getDirectedEdgeDestination(C.H3Index(e), &out)
+	if rc := C.getDirectedEdgeDestination(C.H3Index(e), &out); rc != C.E_SUCCESS {
+		return Cell(-1), errFromCode(int(rc))
+	}
 
-	return Cell(out)
+	return Cell(out), nil
 }
 
 // Cells returns the origin and destination cells in that order.
-func (e DirectedEdge) Cells() []Cell {
+func (e DirectedEdge) Cells() ([]Cell, error) {
 	out := make([]C.H3Index, numEdgeCells)
-	C.directedEdgeToCells(C.H3Index(e), &out[0])
+	if rc := C.directedEdgeToCells(C.H3Index(e), &out[0]); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
-	return cellsFromC(out, false, false)
+	return cellsFromC(out, false, false), nil
 }
 
 // Boundary provides the coordinates of the boundary of the directed edge. Note,
 // the type returned is CellBoundary, but the coordinates will be from the
 // center of the origin to the center of the destination. There may be more than
 // 2 coordinates to account for crossing faces.
-func (e DirectedEdge) Boundary() CellBoundary {
+func (e DirectedEdge) Boundary() (CellBoundary, error) {
 	var out C.CellBoundary
-	C.directedEdgeToBoundary(C.H3Index(e), &out)
+	if rc := C.directedEdgeToBoundary(C.H3Index(e), &out); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
-	return cellBndryFromC(&out)
+	return cellBndryFromC(&out), nil
 }
 
 // CompactCells merges full sets of children into their parent H3Index
 // recursively, until no more merges are possible.
-func CompactCells(in []Cell) []Cell {
+func CompactCells(in []Cell) ([]Cell, error) {
 	cin := cellsToC(in)
 	csz := C.int64_t(len(in))
 	// worst case no compaction so we need a set **at least** as large as the
 	// input
 	cout := make([]C.H3Index, csz)
-	C.compactCells(&cin[0], &cout[0], csz)
+	if rc := C.compactCells(&cin[0], &cout[0], csz); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
-	return cellsFromC(cout, false, true)
+	return cellsFromC(cout, false, true), nil
 }
 
 // UncompactCells splits every H3Index in in if its resolution is greater
 // than resolution recursively. Returns all the H3Indexes at resolution resolution.
-func UncompactCells(in []Cell, resolution int) []Cell {
+func UncompactCells(in []Cell, resolution int) ([]Cell, error) {
 	cin := cellsToC(in)
 	var csz C.int64_t
-	C.uncompactCellsSize(&cin[0], C.int64_t(len(cin)), C.int(resolution), &csz)
+
+	if rc := C.uncompactCellsSize(&cin[0], C.int64_t(len(cin)), C.int(resolution), &csz); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
 	cout := make([]C.H3Index, csz)
-	C.uncompactCells(
+	if rc := C.uncompactCells(
 		&cin[0], C.int64_t(len(in)),
 		&cout[0], csz,
-		C.int(resolution))
+		C.int(resolution)); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
-	return cellsFromC(cout, false, true)
+	return cellsFromC(cout, false, true), nil
 }
 
 // ChildPosToCell returns the child of cell a at a given position within an ordered list of all
 // children at the specified resolution.
-func ChildPosToCell(position int, a Cell, resolution int) Cell {
+func ChildPosToCell(position int, a Cell, resolution int) (Cell, error) {
 	var out C.H3Index
 
-	C.childPosToCell(C.int64_t(position), C.H3Index(a), C.int(resolution), &out)
+	if rc := C.childPosToCell(C.int64_t(position), C.H3Index(a), C.int(resolution), &out); rc != C.E_SUCCESS {
+		return Cell(-1), errFromCode(int(rc))
+	}
 
-	return Cell(out)
+	return Cell(out), nil
 }
 
 // ChildPosToCell returns the child cell at a given position within an ordered list of all
 // children at the specified resolution.
-func (c Cell) ChildPosToCell(position int, resolution int) Cell {
+func (c Cell) ChildPosToCell(position int, resolution int) (Cell, error) {
 	return ChildPosToCell(position, c, resolution)
 }
 
 // CellToChildPos returns the position of the cell a within an ordered list of all children of the cell's parent
 // at the specified resolution.
-func CellToChildPos(a Cell, resolution int) int {
+func CellToChildPos(a Cell, resolution int) (int, error) {
 	var out C.int64_t
 
-	C.cellToChildPos(C.H3Index(a), C.int(resolution), &out)
+	if rc := C.cellToChildPos(C.H3Index(a), C.int(resolution), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return int(out)
+	return int(out), nil
 }
 
 // ChildPos returns the position of the cell within an ordered list of all children of the cell's parent
 // at the specified resolution.
-func (c Cell) ChildPos(resolution int) int {
+func (c Cell) ChildPos(resolution int) (int, error) {
 	return CellToChildPos(c, resolution)
 }
 
-func GridDistance(a, b Cell) int {
+func GridDistance(a, b Cell) (int, error) {
 	var out C.int64_t
-	C.gridDistance(C.H3Index(a), C.H3Index(b), &out)
+	if rc := C.gridDistance(C.H3Index(a), C.H3Index(b), &out); rc != C.E_SUCCESS {
+		return -1, errFromCode(int(rc))
+	}
 
-	return int(out)
+	return int(out), nil
 }
 
-func (c Cell) GridDistance(other Cell) int {
+func (c Cell) GridDistance(other Cell) (int, error) {
 	return GridDistance(c, other)
 }
 
-func GridPath(a, b Cell) []Cell {
+func GridPath(a, b Cell) ([]Cell, error) {
 	var outsz C.int64_t
-	C.gridPathCellsSize(C.H3Index(a), C.H3Index(b), &outsz)
+	if rc := C.gridPathCellsSize(C.H3Index(a), C.H3Index(b), &outsz); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
 	out := make([]C.H3Index, outsz)
-	C.gridPathCells(C.H3Index(a), C.H3Index(b), &out[0])
+	if rc := C.gridPathCells(C.H3Index(a), C.H3Index(b), &out[0]); rc != C.E_SUCCESS {
+		return nil, errFromCode(int(rc))
+	}
 
-	return cellsFromC(out, false, false)
+	return cellsFromC(out, false, false), nil
 }
 
-func (c Cell) GridPath(other Cell) []Cell {
+func (c Cell) GridPath(other Cell) ([]Cell, error) {
 	return GridPath(c, other)
 }
 
-func CellToLocalIJ(origin, cell Cell) CoordIJ {
+func CellToLocalIJ(origin, cell Cell) (CoordIJ, error) {
 	var out C.CoordIJ
-	C.cellToLocalIj(C.H3Index(origin), C.H3Index(cell), 0, &out)
+	if rc := C.cellToLocalIj(C.H3Index(origin), C.H3Index(cell), 0, &out); rc != C.E_SUCCESS {
+		return CoordIJ{}, errFromCode(int(rc))
+	}
 
-	return CoordIJ{int(out.i), int(out.j)}
+	return CoordIJ{int(out.i), int(out.j)}, nil
 }
 
-func LocalIJToCell(origin Cell, ij CoordIJ) Cell {
+func LocalIJToCell(origin Cell, ij CoordIJ) (Cell, error) {
 	var out C.H3Index
-	C.localIjToCell(C.H3Index(origin), ij.toCPtr(), 0, &out)
+	if rc := C.localIjToCell(C.H3Index(origin), ij.toCPtr(), 0, &out); rc != C.E_SUCCESS {
+		return Cell(-1), errFromCode(int(rc))
+	}
 
-	return Cell(out)
+	return Cell(out), nil
 }
 
 func maxGridDiskSize(k int) int {

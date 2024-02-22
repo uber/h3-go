@@ -61,9 +61,13 @@ func ExampleLatLngToCell() {
  latLng := h3.NewLatLng(37.775938728915946, -122.41795063018799)
  resolution := 9 // between 0 (biggest cell) and 15 (smallest cell)
 
- cell := h3.LatLngToCell(latLng, resolution)
+ cell, err := h3.LatLngToCell(latLng, resolution)
+ if err != nil {
+  fmt.Printf("%s", err.Error())
+ } else {
+  fmt.Printf("%s", cell)
+ }
 
- fmt.Printf("%s", cell)
  // Output:
  // 8928308280fffff
 }
