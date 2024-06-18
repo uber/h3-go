@@ -246,8 +246,8 @@ func PolygonToCells(polygon GeoPolygon, resolution int, containmentOpt ...int) [
 // hexagons, tests them and their neighbors to be contained by the geoloop(s),
 // and then any newly found hexagons are used to test again until no new
 // hexagons are found.
-func (p GeoPolygon) Cells(resolution int) []Cell {
-	return PolygonToCells(p, resolution)
+func (p GeoPolygon) Cells(resolution int, containmentOpt ...int) []Cell {
+	return PolygonToCells(p, resolution, containmentOpt...)
 }
 
 func CellsToMultiPolygon(cells []Cell) *LinkedGeoPolygon {
