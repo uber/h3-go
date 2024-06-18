@@ -80,6 +80,15 @@ var (
 		{Lat: 67.234563187, Lng: -168.286102782},
 	}
 
+	// bbox of boundary of validCell_1.
+	validGeoLoopBbox = GeoLoop{
+		{Lat: 67.067252558, Lng: -168.626914333},
+		{Lat: 67.234563187, Lng: -168.626914333},
+		{Lat: 67.234563187, Lng: -168.154801171},
+		{Lat: 67.067252558, Lng: -168.154801171},
+		{Lat: 67.067252558, Lng: -168.626914333},
+	}
+
 	validHole1 = GeoLoop{
 		{Lat: 67.2, Lng: -168.4},
 		{Lat: 67.1, Lng: -168.4},
@@ -387,6 +396,61 @@ func TestPolygonToCells(t *testing.T) {
 	})
 }
 
+func TestPolygonToCellsContainment(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+		for _, flag := range []ContainmentMode{
+			CONTAINMENT_CENTER,
+			CONTAINMENT_FULL,
+			CONTAINMENT_OVERLAPPING,
+			CONTAINMENT_OVERLAPPING_BBOX,
+		} {
+			cells := PolygonToCells(GeoPolygon{}, 6, flag)
+			assertEqual(t, 0, len(cells))
+		}
+	})
+
+	t.Run("without holes", func(t *testing.T) {
+		t.Parallel()
+		for _, flag := range []ContainmentMode{
+			CONTAINMENT_CENTER,
+			CONTAINMENT_FULL,
+			CONTAINMENT_OVERLAPPING,
+			CONTAINMENT_OVERLAPPING_BBOX,
+		} {
+			cells := validGeoPolygonNoHoles.Cells(6, flag)
+			expectedCellCounts := map[ContainmentMode]int{
+				CONTAINMENT_CENTER:           7,
+				CONTAINMENT_FULL:             1,
+				CONTAINMENT_OVERLAPPING:      14,
+				CONTAINMENT_OVERLAPPING_BBOX: 21,
+			}
+			assertEqual(t, expectedCellCounts[flag], len(cells))
+		}
+	})
+
+	t.Run("with holes", func(t *testing.T) {
+		t.Parallel()
+		for _, flag := range []ContainmentMode{
+			CONTAINMENT_CENTER,
+			CONTAINMENT_FULL,
+			CONTAINMENT_OVERLAPPING,
+			CONTAINMENT_OVERLAPPING_BBOX,
+		} {
+			cells := validGeoPolygonHoles.Cells(6, flag)
+			expectedCellCounts := map[ContainmentMode]int{
+				CONTAINMENT_CENTER:           6,
+				CONTAINMENT_FULL:             0,
+				CONTAINMENT_OVERLAPPING:      14,
+				CONTAINMENT_OVERLAPPING_BBOX: 21,
+			}
+			assertEqual(t, expectedCellCounts[flag], len(cells))
+		}
+	})
+}
+
 func TestGridPath(t *testing.T) {
 	t.Parallel()
 	path := lineStartCell.GridPath(lineEndCell)
@@ -468,15 +532,15 @@ func TestHexagonEdgeLengthKm(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(1107.712591), HexagonEdgeLengthAvgKm(0))
+		assertEqual(t, float64(1281.256011), HexagonEdgeLengthAvgKm(0))
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(0.000509713), HexagonEdgeLengthAvgKm(15))
+		assertEqual(t, float64(0.000584169), HexagonEdgeLengthAvgKm(15))
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(0.461354684), HexagonEdgeLengthAvgKm(8))
+		assertEqual(t, float64(0.531414010), HexagonEdgeLengthAvgKm(8))
 	})
 }
 
@@ -485,17 +549,17 @@ func TestHexagonEdgeLengthM(t *testing.T) {
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
 		area := HexagonEdgeLengthAvgM(0)
-		assertEqual(t, float64(1107712.591), area)
+		assertEqual(t, float64(1281256.011), area)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
 		area := HexagonEdgeLengthAvgM(15)
-		assertEqual(t, float64(0.509713273), area)
+		assertEqual(t, float64(0.584168630), area)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
 		area := HexagonEdgeLengthAvgM(8)
-		assertEqual(t, float64(461.3546837), area)
+		assertEqual(t, float64(531.4140101), area)
 	})
 }
 

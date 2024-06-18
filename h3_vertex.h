@@ -20,8 +20,8 @@
 #ifndef H3VERTEX_H
 #define H3VERTEX_H
 
-#include "h3_h3Index.h"
 #include "h3_faceijk.h"
+#include "h3_h3Index.h"
 
 /** @struct PentagonDirectionFaces
  *  @brief  The faces in each axial direction of a given pentagon base cell

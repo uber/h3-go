@@ -25,6 +25,8 @@ package h3
 #include <stdlib.h>
 #include <h3_h3api.h>
 #include <h3_h3Index.h>
+#include <h3_polygon.h>
+#include <h3_polyfill.h>
 */
 import "C"
 
@@ -65,6 +67,13 @@ const (
 
 	DegsToRads = math.Pi / 180.0
 	RadsToDegs = 180.0 / math.Pi
+
+	// PolygonToCells containment modes
+	CONTAINMENT_CENTER           ContainmentMode = C.CONTAINMENT_CENTER           // Cell center is contained in the shape
+	CONTAINMENT_FULL             ContainmentMode = C.CONTAINMENT_FULL             // Cell is fully contained in the shape
+	CONTAINMENT_OVERLAPPING      ContainmentMode = C.CONTAINMENT_OVERLAPPING      // Cell overlaps the shape at any point
+	CONTAINMENT_OVERLAPPING_BBOX ContainmentMode = C.CONTAINMENT_OVERLAPPING_BBOX // Cell bounding box overlaps shape
+	CONTAINMENT_INVALID          ContainmentMode = C.CONTAINMENT_INVALID          // This mode is invalid and should not be used
 )
 
 type (
@@ -100,6 +109,9 @@ type (
 	// LinkedGeoPolygon is a linked-list of GeoPolygons.
 	// TODO: not implemented.
 	LinkedGeoPolygon struct{}
+
+	// ContainmentMode is an int for specifying PolygonToCell containment behavior.
+	ContainmentMode C.uint32_t
 )
 
 func NewLatLng(lat, lng float64) LatLng {
@@ -218,10 +230,10 @@ func (c Cell) GridDiskDistances(k int) [][]Cell {
 // hexagons, tests them and their neighbors to be contained by the geoloop(s),
 // and then any newly found hexagons are used to test again until no new
 // hexagons are found.
-func PolygonToCells(polygon GeoPolygon, resolution int, containmentOpt ...int) []Cell {
-	containmentFlag := 0
-	if len(containmentOpt) > 0 && containmentOpt[0] > 0 && containmentOpt[0] <= 4 {
-		containmentFlag = containmentOpt[0]
+func PolygonToCells(polygon GeoPolygon, resolution int, mode ...ContainmentMode) []Cell {
+	var containmentFlag ContainmentMode = CONTAINMENT_CENTER
+	if len(mode) > 0 {
+		containmentFlag = mode[0]
 	}
 	if len(polygon.GeoLoop) == 0 {
 		return nil
@@ -234,7 +246,7 @@ func PolygonToCells(polygon GeoPolygon, resolution int, containmentOpt ...int) [
 	C.maxPolygonToCellsSize(&cpoly, C.int(resolution), C.uint32_t(containmentFlag), maxLen)
 
 	out := make([]C.H3Index, *maxLen)
-	C.polygonToCells(&cpoly, C.int(resolution), C.uint32_t(containmentFlag), &out[0])
+	C.polygonToCellsExperimental(&cpoly, C.int(resolution), C.uint32_t(containmentFlag), &out[0])
 
 	return cellsFromC(out, true, false)
 }
@@ -246,8 +258,8 @@ func PolygonToCells(polygon GeoPolygon, resolution int, containmentOpt ...int) [
 // hexagons, tests them and their neighbors to be contained by the geoloop(s),
 // and then any newly found hexagons are used to test again until no new
 // hexagons are found.
-func (p GeoPolygon) Cells(resolution int, containmentOpt ...int) []Cell {
-	return PolygonToCells(p, resolution, containmentOpt...)
+func (p GeoPolygon) Cells(resolution int, mode ...ContainmentMode) []Cell {
+	return PolygonToCells(p, resolution, mode...)
 }
 
 func CellsToMultiPolygon(cells []Cell) *LinkedGeoPolygon {
