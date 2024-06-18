@@ -218,7 +218,11 @@ func (c Cell) GridDiskDistances(k int) [][]Cell {
 // hexagons, tests them and their neighbors to be contained by the geoloop(s),
 // and then any newly found hexagons are used to test again until no new
 // hexagons are found.
-func PolygonToCells(polygon GeoPolygon, resolution int) []Cell {
+func PolygonToCells(polygon GeoPolygon, resolution int, containmentOpt ...int) []Cell {
+	containmentFlag := 0
+	if len(containmentOpt) > 0 && containmentOpt[0] > 0 && containmentOpt[0] <= 4 {
+		containmentFlag = containmentOpt[0]
+	}
 	if len(polygon.GeoLoop) == 0 {
 		return nil
 	}
@@ -227,10 +231,10 @@ func PolygonToCells(polygon GeoPolygon, resolution int) []Cell {
 	defer freeCGeoPolygon(&cpoly)
 
 	maxLen := new(C.int64_t)
-	C.maxPolygonToCellsSize(&cpoly, C.int(resolution), 0, maxLen)
+	C.maxPolygonToCellsSize(&cpoly, C.int(resolution), C.uint32_t(containmentFlag), maxLen)
 
 	out := make([]C.H3Index, *maxLen)
-	C.polygonToCells(&cpoly, C.int(resolution), 0, &out[0])
+	C.polygonToCells(&cpoly, C.int(resolution), C.uint32_t(containmentFlag), &out[0])
 
 	return cellsFromC(out, true, false)
 }
