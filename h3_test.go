@@ -423,6 +423,9 @@ func TestCellsToMultiPolygon(t *testing.T) {
 	assertEqual(t, len(res[1].GeoLoop), 18)
 	assertEqual(t, len(res[1].Holes), 0)
 
+	// empty
+	res = CellsToMultiPolygon([]Cell{})
+	assertEqual(t, len(res), 0)
 }
 
 func TestGridPath(t *testing.T) {
