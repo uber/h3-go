@@ -242,6 +242,8 @@ func (p GeoPolygon) Cells(resolution int) []Cell {
 	return PolygonToCells(p, resolution)
 }
 
+// CellsToMultiPolygon takes a set of cells and creates GeoPolygon(s)
+// describing the outline(s) of a set of hexagons. Polygon outlines will follow
 // GeoJSON MultiPolygon order: Each polygon will have one outer loop, which is first in
 // the list, followed by any holes.
 func CellsToMultiPolygon(cells []Cell) []GeoPolygon {
