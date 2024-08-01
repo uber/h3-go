@@ -262,8 +262,39 @@ func (p GeoPolygon) Cells(resolution int, mode ...ContainmentMode) []Cell {
 	return PolygonToCells(p, resolution, mode...)
 }
 
-func CellsToMultiPolygon(cells []Cell) *LinkedGeoPolygon {
-	panic("not implemented")
+// CellsToMultiPolygon takes a set of cells and creates GeoPolygon(s)
+// describing the outline(s) of a set of hexagons. Polygon outlines will follow
+// GeoJSON MultiPolygon order: Each polygon will have one outer loop, which is first in
+// the list, followed by any holes.
+func CellsToMultiPolygon(cells []Cell) []GeoPolygon {
+	if len(cells) == 0 {
+		return nil
+	}
+	h3Indexes := cellsToC(cells)
+	cLinkedGeoPolygon := new(C.LinkedGeoPolygon)
+	C.cellsToLinkedMultiPolygon(&h3Indexes[0], C.int(len(h3Indexes)), cLinkedGeoPolygon)
+
+	// traverse polygons and build GeoPolygon set
+	ret := []GeoPolygon{}
+	currPoly := cLinkedGeoPolygon
+	for currPoly != nil {
+		loops := []GeoLoop{}
+		// traverse the loops for polygon
+		currLoop := currPoly.first
+		for currLoop != nil {
+			loop := []LatLng{}
+			currPt := currLoop.first
+			for currPt != nil {
+				loop = append(loop, latLngFromC(currPt.vertex))
+				currPt = currPt.next
+			}
+			loops = append(loops, loop)
+			currLoop = currLoop.next
+		}
+		ret = append(ret, GeoPolygon{GeoLoop: loops[0], Holes: loops[1:]})
+		currPoly = currPoly.next
+	}
+	return ret
 }
 
 // PointDistRads returns the "great circle" or "haversine" distance between

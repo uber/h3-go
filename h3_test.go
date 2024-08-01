@@ -644,6 +644,44 @@ func TestPentagons(t *testing.T) {
 	}
 }
 
+func TestCellsToMultiPolygon(t *testing.T) {
+	t.Parallel()
+
+	// 7 cells in disk -> 1 polygon, 18-point loop, and no holes
+	cells := GridDisk(LatLngToCell(NewLatLng(0, 0), 10), 1)
+	res := CellsToMultiPolygon(cells)
+	assertEqual(t, len(res), 1)
+	assertEqual(t, len(res[0].GeoLoop), 18)
+	assertEqual(t, len(res[0].Holes), 0)
+
+	// 6 cells in ring -> 1 polygon, 18-point loop, and 1 6-point hole
+	cells = GridDisk(LatLngToCell(NewLatLng(0, 0), 10), 1)[1:]
+	res = CellsToMultiPolygon(cells)
+	assertEqual(t, len(res), 1)
+	assertEqual(t, len(res[0].GeoLoop), 18)
+	assertEqual(t, len(res[0].Holes), 1)
+	assertEqual(t, len(res[0].Holes[0]), 6)
+
+	// 2 hexagons connected -> 1 polygon, 10-point loop (2 shared points) and no holes
+	cells = GridDisk(LatLngToCell(NewLatLng(0, 0), 10), 1)[:2]
+	res = CellsToMultiPolygon(cells)
+	assertEqual(t, len(res), 1)
+	assertEqual(t, len(res[0].GeoLoop), 10)
+	assertEqual(t, len(res[0].Holes), 0)
+
+	// 2 distinct disks -> 2 polygons, 2 18-point loops, and no holes
+	cells1 := GridDisk(LatLngToCell(NewLatLng(0, 0), 10), 1)
+	cells2 := GridDisk(LatLngToCell(NewLatLng(10, 10), 10), 1)
+	cells = append(cells1, cells2...)
+	res = CellsToMultiPolygon(cells)
+	assertEqual(t, len(res), 2)
+	assertEqual(t, len(res[0].GeoLoop), 18)
+	assertEqual(t, len(res[0].Holes), 0)
+	assertEqual(t, len(res[1].GeoLoop), 18)
+	assertEqual(t, len(res[1].Holes), 0)
+
+}
+
 func equalEps(expected, actual float64) bool {
 	return math.Abs(expected-actual) < eps
 }
