@@ -246,6 +246,10 @@ func (p GeoPolygon) Cells(resolution int) []Cell {
 // describing the outline(s) of a set of hexagons. Polygon outlines will follow
 // GeoJSON MultiPolygon order: Each polygon will have one outer loop, which is first in
 // the list, followed by any holes.
+//
+// It is expected that all hexagons in the set have the same resolution and that the set
+// contains no duplicates. Behavior is undefined if duplicates or multiple resolutions are
+// present, and the algorithm may produce unexpected or invalid output.
 func CellsToMultiPolygon(cells []Cell) []GeoPolygon {
 	if len(cells) == 0 {
 		return nil
