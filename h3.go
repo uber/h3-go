@@ -257,27 +257,33 @@ func CellsToMultiPolygon(cells []Cell) []GeoPolygon {
 	h3Indexes := cellsToC(cells)
 	cLinkedGeoPolygon := new(C.LinkedGeoPolygon)
 	C.cellsToLinkedMultiPolygon(&h3Indexes[0], C.int(len(h3Indexes)), cLinkedGeoPolygon)
-
-	// traverse polygons and build GeoPolygon set
 	ret := []GeoPolygon{}
+
+	// traverse polygons for linked list of polygons
 	currPoly := cLinkedGeoPolygon
 	for currPoly != nil {
 		loops := []GeoLoop{}
-		// traverse the loops for polygon
+
+		// traverse loops for a polygon
 		currLoop := currPoly.first
 		for currLoop != nil {
 			loop := []LatLng{}
+
+			// traverse points for a loop
 			currPt := currLoop.first
 			for currPt != nil {
 				loop = append(loop, latLngFromC(currPt.vertex))
 				currPt = currPt.next
 			}
+
 			loops = append(loops, loop)
 			currLoop = currLoop.next
 		}
+
 		ret = append(ret, GeoPolygon{GeoLoop: loops[0], Holes: loops[1:]})
 		currPoly = currPoly.next
 	}
+
 	return ret
 }
 
