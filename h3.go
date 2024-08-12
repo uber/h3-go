@@ -713,6 +713,10 @@ func LocalIJToCell(origin Cell, ij CoordIJ) Cell {
 	return Cell(out)
 }
 
+func IsValidVertex(c Cell) bool {
+	return C.isValidVertex(C.H3Index(c)) == 1
+}
+
 func maxGridDiskSize(k int) int {
 	return 3*k*(k+1) + 1
 }

@@ -621,6 +621,13 @@ func TestPentagons(t *testing.T) {
 	}
 }
 
+func TestIsValidVertex(t *testing.T) {
+	t.Parallel()
+
+	assertFalse(t, IsValidVertex(0))
+	assertTrue(t, IsValidVertex(2473183460575936511))
+}
+
 func equalEps(expected, actual float64) bool {
 	return math.Abs(expected-actual) < eps
 }
