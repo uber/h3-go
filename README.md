@@ -126,7 +126,7 @@ func ExampleLatLngToCell() {
 | `cellToVertex`               | TODO                                               |
 | `cellToVertexes`             | TODO                                               |
 | `vertexToLatLng`             | TODO                                               |
-| `isValidVertex`              | TODO                                               |
+| `isValidVertex`              | `IsValidVertex`                                    |
 | `gridDistance`               | `GridDistance`, `Cell#GridDistance`                |
 | `gridPathCells`              | `GridPath`, `Cell#GridPath`                        |
 | `cellToLocalIj`              | `CellToLocalIJ`                                    |
