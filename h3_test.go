@@ -609,6 +609,7 @@ func TestPentagons(t *testing.T) {
 	t.Parallel()
 
 	for _, res := range []int{0, 8, 15} {
+		res := res
 		t.Run(fmt.Sprintf("res=%d", res), func(t *testing.T) {
 			t.Parallel()
 			pentagons := Pentagons(res)
