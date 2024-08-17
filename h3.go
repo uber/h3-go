@@ -713,6 +713,13 @@ func LocalIJToCell(origin Cell, ij CoordIJ) Cell {
 	return Cell(out)
 }
 
+func CellToVertex(c Cell, vertexNum int) Cell {
+	var out C.H3Index
+	C.cellToVertex(C.H3Index(c), C.int(vertexNum), &out)
+
+	return Cell(out)
+}
+
 func IsValidVertex(c Cell) bool {
 	return C.isValidVertex(C.H3Index(c)) == 1
 }

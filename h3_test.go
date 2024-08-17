@@ -622,6 +622,16 @@ func TestPentagons(t *testing.T) {
 	}
 }
 
+func TestCellToVertex(t *testing.T) {
+	t.Parallel()
+
+	validVertex := CellToVertex(validCell, 0)
+	invalidVertex := CellToVertex(validCell, 6)
+
+	assertEqual(t, 0x2050dab63fffffff, validVertex)
+	assertEqual(t, 0, invalidVertex)
+}
+
 func TestIsValidVertex(t *testing.T) {
 	t.Parallel()
 

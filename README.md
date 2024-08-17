@@ -123,7 +123,7 @@ func ExampleLatLngToCell() {
 | `directedEdgeToCells`        | `DirectedEdge#Cells`                               |
 | `originToDirectedEdges`      | `Cell#DirectedEdges`                               |
 | `directedEdgeToBoundary`     | `DirectedEdge#Boundary`                            |
-| `cellToVertex`               | TODO                                               |
+| `cellToVertex`               | `CellToVertex`                                     |
 | `cellToVertexes`             | TODO                                               |
 | `vertexToLatLng`             | TODO                                               |
 | `isValidVertex`              | `IsValidVertex`                                    |
