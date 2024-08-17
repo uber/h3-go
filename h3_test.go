@@ -636,13 +636,13 @@ func TestCellToVertex(t *testing.T) {
 
 	for i, tc := range testCases {
 		tc := tc
+
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			t.Parallel()
 			vertex := CellToVertex(tc.cell, tc.vertexNum)
 			assertEqual(t, tc.expectedVertex, vertex)
 		})
 	}
-
 }
 
 func TestCellToVertexes(t *testing.T) {
@@ -659,6 +659,7 @@ func TestCellToVertexes(t *testing.T) {
 
 	for _, tc := range testCases {
 		tc := tc
+
 		t.Run(fmt.Sprint(tc.numVertexes), func(t *testing.T) {
 			t.Parallel()
 			vertexes := CellToVertexes(tc.cell)
@@ -680,6 +681,7 @@ func TestVertexToLatLng(t *testing.T) {
 
 	for i, tc := range testCases {
 		tc := tc
+
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			t.Parallel()
 			latLng := VertexToLatLng(tc.vertex)
