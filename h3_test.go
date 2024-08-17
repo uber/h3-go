@@ -625,11 +625,22 @@ func TestPentagons(t *testing.T) {
 func TestCellToVertex(t *testing.T) {
 	t.Parallel()
 
-	validVertex := CellToVertex(validCell, 0)
-	invalidVertex := CellToVertex(validCell, 6)
+	testCases := []struct {
+		cell           Cell
+		expectedVertex Cell
+		vertexNum      int
+	}{
+		{cell: validCell, expectedVertex: 0x2050dab63fffffff, vertexNum: 0},
+		{cell: validCell, expectedVertex: 0, vertexNum: 6}, // vertex num should be between 0 and 5 for hexagonal cells.
+	}
 
-	assertEqual(t, 0x2050dab63fffffff, validVertex)
-	assertEqual(t, 0, invalidVertex)
+	for i, tc := range testCases {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			vertex := CellToVertex(tc.cell, tc.vertexNum)
+			assertEqual(t, tc.expectedVertex, vertex)
+		})
+	}
+
 }
 
 func TestCellToVertexes(t *testing.T) {
