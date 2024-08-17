@@ -124,7 +124,7 @@ func ExampleLatLngToCell() {
 | `originToDirectedEdges`      | `Cell#DirectedEdges`                               |
 | `directedEdgeToBoundary`     | `DirectedEdge#Boundary`                            |
 | `cellToVertex`               | `CellToVertex`                                     |
-| `cellToVertexes`             | TODO                                               |
+| `cellToVertexes`             | `cellToVertexes`                                   |
 | `vertexToLatLng`             | TODO                                               |
 | `isValidVertex`              | `IsValidVertex`                                    |
 | `gridDistance`               | `GridDistance`, `Cell#GridDistance`                |

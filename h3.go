@@ -60,8 +60,9 @@ const (
 	base16  = 16
 	bitSize = 64
 
-	numCellEdges = 6
-	numEdgeCells = 2
+	numCellEdges    = 6
+	numEdgeCells    = 2
+	numCellVertexes = 6
 
 	DegsToRads = math.Pi / 180.0
 	RadsToDegs = 180.0 / math.Pi
@@ -718,6 +719,13 @@ func CellToVertex(c Cell, vertexNum int) Cell {
 	C.cellToVertex(C.H3Index(c), C.int(vertexNum), &out)
 
 	return Cell(out)
+}
+
+func CellToVertexes(c Cell) []Cell {
+	out := make([]C.H3Index, numCellVertexes)
+	C.cellToVertexes(C.H3Index(c), &out[0])
+
+	return cellsFromC(out, true, false)
 }
 
 func IsValidVertex(c Cell) bool {

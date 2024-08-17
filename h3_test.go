@@ -632,6 +632,26 @@ func TestCellToVertex(t *testing.T) {
 	assertEqual(t, 0, invalidVertex)
 }
 
+func TestCellToVertexes(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		cell        Cell
+		numVertexes int
+	}{
+		{cell: validCell, numVertexes: 6},
+		{cell: pentagonCell, numVertexes: 5},
+		{cell: -1, numVertexes: 0}, // Invalid cel.
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprint(tc.numVertexes), func(t *testing.T) {
+			vertexes := CellToVertexes(tc.cell)
+			assertEqual(t, tc.numVertexes, len(vertexes))
+		})
+	}
+}
+
 func TestIsValidVertex(t *testing.T) {
 	t.Parallel()
 
