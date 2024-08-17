@@ -125,7 +125,7 @@ func ExampleLatLngToCell() {
 | `directedEdgeToBoundary`     | `DirectedEdge#Boundary`                            |
 | `cellToVertex`               | `CellToVertex`                                     |
 | `cellToVertexes`             | `cellToVertexes`                                   |
-| `vertexToLatLng`             | TODO                                               |
+| `vertexToLatLng`             | `VertexToLatLng`                                   |
 | `isValidVertex`              | `IsValidVertex`                                    |
 | `gridDistance`               | `GridDistance`, `Cell#GridDistance`                |
 | `gridPathCells`              | `GridPath`, `Cell#GridPath`                        |

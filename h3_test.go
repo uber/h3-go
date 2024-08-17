@@ -663,6 +663,25 @@ func TestCellToVertexes(t *testing.T) {
 	}
 }
 
+func TestVertexToLatLng(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		vertex         Cell
+		expectedLatLng LatLng
+	}{
+		{vertex: CellToVertex(validCell, 0), expectedLatLng: LatLng{Lat: 67.22475, Lng: -168.52301}},
+		{vertex: -1, expectedLatLng: LatLng{}}, // Invalid vertex.
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			latLng := VertexToLatLng(tc.vertex)
+			assertEqualLatLng(t, tc.expectedLatLng, latLng)
+		})
+	}
+}
+
 func TestIsValidVertex(t *testing.T) {
 	t.Parallel()
 

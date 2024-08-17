@@ -728,6 +728,13 @@ func CellToVertexes(c Cell) []Cell {
 	return cellsFromC(out, true, false)
 }
 
+func VertexToLatLng(vertex Cell) LatLng {
+	var out C.LatLng
+	C.vertexToLatLng(C.H3Index(vertex), &out)
+
+	return latLngFromC(out)
+}
+
 func IsValidVertex(c Cell) bool {
 	return C.isValidVertex(C.H3Index(c)) == 1
 }
