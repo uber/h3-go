@@ -636,6 +636,7 @@ func TestCellToVertex(t *testing.T) {
 
 	for i, tc := range testCases {
 		tc := tc
+
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			t.Parallel()
 
@@ -681,6 +682,7 @@ func TestVertexToLatLng(t *testing.T) {
 
 	for i, tc := range testCases {
 		tc := tc
+
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			t.Parallel()
 
