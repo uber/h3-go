@@ -60,8 +60,9 @@ const (
 	base16  = 16
 	bitSize = 64
 
-	numCellEdges = 6
-	numEdgeCells = 2
+	numCellEdges    = 6
+	numEdgeCells    = 2
+	numCellVertexes = 6
 
 	DegsToRads = math.Pi / 180.0
 	RadsToDegs = 180.0 / math.Pi
@@ -711,6 +712,31 @@ func LocalIJToCell(origin Cell, ij CoordIJ) Cell {
 	C.localIjToCell(C.H3Index(origin), ij.toCPtr(), 0, &out)
 
 	return Cell(out)
+}
+
+func CellToVertex(c Cell, vertexNum int) Cell {
+	var out C.H3Index
+	C.cellToVertex(C.H3Index(c), C.int(vertexNum), &out)
+
+	return Cell(out)
+}
+
+func CellToVertexes(c Cell) []Cell {
+	out := make([]C.H3Index, numCellVertexes)
+	C.cellToVertexes(C.H3Index(c), &out[0])
+
+	return cellsFromC(out, true, false)
+}
+
+func VertexToLatLng(vertex Cell) LatLng {
+	var out C.LatLng
+	C.vertexToLatLng(C.H3Index(vertex), &out)
+
+	return latLngFromC(out)
+}
+
+func IsValidVertex(c Cell) bool {
+	return C.isValidVertex(C.H3Index(c)) == 1
 }
 
 func maxGridDiskSize(k int) int {

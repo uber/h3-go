@@ -609,6 +609,7 @@ func TestPentagons(t *testing.T) {
 	t.Parallel()
 
 	for _, res := range []int{0, 8, 15} {
+		res := res
 		t.Run(fmt.Sprintf("res=%d", res), func(t *testing.T) {
 			t.Parallel()
 			pentagons := Pentagons(res)
@@ -619,6 +620,83 @@ func TestPentagons(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCellToVertex(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		cell           Cell
+		expectedVertex Cell
+		vertexNum      int
+	}{
+		{cell: validCell, expectedVertex: 0x2050dab63fffffff, vertexNum: 0},
+		{cell: validCell, expectedVertex: 0, vertexNum: 6}, // vertex num should be between 0 and 5 for hexagonal cells.
+	}
+
+	for i, tc := range testCases {
+		tc := tc
+
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			t.Parallel()
+
+			vertex := CellToVertex(tc.cell, tc.vertexNum)
+			assertEqual(t, tc.expectedVertex, vertex)
+		})
+	}
+}
+
+func TestCellToVertexes(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		cell        Cell
+		numVertexes int
+	}{
+		{cell: validCell, numVertexes: 6},
+		{cell: pentagonCell, numVertexes: 5},
+		{cell: -1, numVertexes: 0}, // Invalid cel.
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(fmt.Sprint(tc.numVertexes), func(t *testing.T) {
+			t.Parallel()
+
+			vertexes := CellToVertexes(tc.cell)
+			assertEqual(t, tc.numVertexes, len(vertexes))
+		})
+	}
+}
+
+func TestVertexToLatLng(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		vertex         Cell
+		expectedLatLng LatLng
+	}{
+		{vertex: CellToVertex(validCell, 0), expectedLatLng: LatLng{Lat: 67.22475, Lng: -168.52301}},
+		{vertex: -1, expectedLatLng: LatLng{}}, // Invalid vertex.
+	}
+
+	for i, tc := range testCases {
+		tc := tc
+
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			t.Parallel()
+
+			latLng := VertexToLatLng(tc.vertex)
+			assertEqualLatLng(t, tc.expectedLatLng, latLng)
+		})
+	}
+}
+
+func TestIsValidVertex(t *testing.T) {
+	t.Parallel()
+
+	assertFalse(t, IsValidVertex(0))
+	assertTrue(t, IsValidVertex(2473183460575936511))
 }
 
 func equalEps(expected, actual float64) bool {
