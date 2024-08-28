@@ -23,6 +23,7 @@ linters-settings:
   depguard:
     rules:
       main:
+        list-mode: lax
         allow:
           - "github.com/uber/h3-go/v4"
 
