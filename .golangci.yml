@@ -20,9 +20,11 @@ linters-settings:
     allow-assign-and-anything: true
     allow-cuddle-declarations: true
     allow-assign-and-call: true
-  main:
-    allow:
-      - "github.com/uber/h3-go/v4"
+  depguard:
+    rules:
+      main:
+        allow:
+          - "github.com/uber/h3-go/v4"
 
 linters:
   disable-all: true
