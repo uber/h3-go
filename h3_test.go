@@ -325,7 +325,7 @@ func TestStrings(t *testing.T) {
 		t.Parallel()
 		i := IndexFromString(validCell.String())
 
-		//nolint:gosec // IndexFromString returns uint64 and fixing that to detect integers overflows will break package API. Let's skip it for now.
+		//nolint:gosec // IndexFromString returns uint64 and fixing that to detect integer overflows will break package API. Let's skip it for now.
 		assertEqual(t, validCell, Cell(i))
 	})
 
