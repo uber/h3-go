@@ -324,6 +324,8 @@ func TestStrings(t *testing.T) {
 	t.Run("good string round trip", func(t *testing.T) {
 		t.Parallel()
 		i := IndexFromString(validCell.String())
+
+		//nolint:gosec
 		assertEqual(t, validCell, Cell(i))
 	})
 

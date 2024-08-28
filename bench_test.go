@@ -24,6 +24,7 @@ func BenchmarkToString(b *testing.B) {
 
 func BenchmarkFromString(b *testing.B) {
 	for n := 0; n < b.N; n++ {
+		//nolint:gosec
 		cell = Cell(IndexFromString("850dab63fffffff"))
 	}
 }
