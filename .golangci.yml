@@ -12,7 +12,7 @@ linters-settings:
       - performance
       - style
   govet:
-    check-shadowing: true
+    enable-all: true
   nolintlint:
     require-explanation: true
     require-specific: true
@@ -20,23 +20,27 @@ linters-settings:
     allow-assign-and-anything: true
     allow-cuddle-declarations: true
     allow-assign-and-call: true
+  depguard:
+    rules:
+      main:
+        list-mode: lax
+        allow:
+          - "github.com/uber/h3-go/v4"
 
 linters:
   disable-all: true
   enable:
     - bodyclose
-    - deadcode
     - depguard
     - dogsled
     - dupl
     - errcheck
-    - exportloopref
+    # - copyloopvar Enable this after upgrading go version to 1.22
     - exhaustive
     - goconst
-    # - gocritic
     - gofmt
     - goimports
-    - gomnd
+    - mnd
     - gocyclo
     - gosec
     - gosimple
@@ -49,14 +53,12 @@ linters:
     - predeclared
     - revive
     - staticcheck
-    - structcheck
     - stylecheck
     - thelper
     - tparallel
     - typecheck
     - unconvert
     - unparam
-    - varcheck
     - whitespace
     - wsl
 

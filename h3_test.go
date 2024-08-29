@@ -324,6 +324,8 @@ func TestStrings(t *testing.T) {
 	t.Run("good string round trip", func(t *testing.T) {
 		t.Parallel()
 		i := IndexFromString(validCell.String())
+
+		//nolint:gosec // IndexFromString returns uint64 and fixing that to detect integer overflows will break package API. Let's skip it for now.
 		assertEqual(t, validCell, Cell(i))
 	})
 
@@ -612,8 +614,10 @@ func TestPentagons(t *testing.T) {
 		res := res
 		t.Run(fmt.Sprintf("res=%d", res), func(t *testing.T) {
 			t.Parallel()
+
 			pentagons := Pentagons(res)
 			assertEqual(t, 12, len(pentagons))
+
 			for _, pentagon := range pentagons {
 				assertTrue(t, pentagon.IsPentagon())
 				assertEqual(t, res, pentagon.Resolution())
@@ -737,6 +741,7 @@ func assertEqual[T comparable](t *testing.T, expected, actual T, msgAndArgs ...i
 			expStr = fmt.Sprintf("%v", e)
 			actStr = fmt.Sprintf("%v", a)
 		}
+
 		t.Errorf("%v != %v", expStr, actStr)
 		logMsgAndArgs(t, msgAndArgs...)
 	}
@@ -779,6 +784,7 @@ func assertEqualLatLngs(t *testing.T, expected, actual []LatLng, msgAndArgs ...i
 
 			t.Errorf("LatLngs[%d]: (%s, %s)", i, latStr, lngStr)
 			logMsgAndArgs(t, msgAndArgs...)
+
 			count++
 
 			if count > 10 {
@@ -808,6 +814,7 @@ func assertEqualCells(t *testing.T, expected, actual []Cell, msgAndArgs ...inter
 		if c != actual[i] {
 			t.Errorf("Cells[%d]: %v != %v", i, c, actual[i])
 			logMsgAndArgs(t, msgAndArgs...)
+
 			count++
 
 			if count > 10 {
@@ -863,6 +870,7 @@ func assertEqualDisks(t *testing.T, expected, actual []Cell) {
 	for i, cell := range expected {
 		if cell != actual[i] {
 			t.Errorf("cell[%d]: %v != %v", i, cell, actual[i])
+
 			count++
 
 			if count > 5 {

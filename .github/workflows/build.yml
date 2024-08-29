@@ -11,30 +11,33 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ["1.18"]
+        go-version: ["1.20"]
 
     steps:
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.47.3
+          version: v1.60.3
 
   test:
     name: test
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ["1.18", "1.19"]
+        go-version: 
+          - "1.20"
+          - "1.21"
+          - "1.22"
 
     steps:
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: unit-tests
         run: |
           go test -count=2 -race -covermode atomic -coverprofile=covprofile ./...

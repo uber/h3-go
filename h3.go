@@ -407,7 +407,7 @@ func EdgeLengthM(e DirectedEdge) float64 {
 func NumCells(resolution int) int {
 	// NOTE: this is a mathematical operation, no need to call into H3 library.
 	// See h3api.h for formula derivation.
-	return 2 + 120*intPow(7, (resolution)) //nolint:gomnd // math formula
+	return 2 + 120*intPow(7, (resolution)) //nolint:mnd // math formula
 }
 
 // Res0Cells returns all the cells at resolution 0.
@@ -765,7 +765,7 @@ func ringSize(k int) int {
 		return 1
 	}
 
-	return 6 * k //nolint:gomnd // math formula
+	return 6 * k //nolint:mnd // math formula
 }
 
 // Convert slice of LatLngs to an array of C LatLngs (represented in C-style as
