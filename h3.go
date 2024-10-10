@@ -716,14 +716,14 @@ func (c Cell) ChildPos(resolution int) int {
 	return CellToChildPos(c, resolution)
 }
 
-func GridDistance(a, b Cell) int {
+func GridDistance(a, b Cell) (int, error) {
 	var out C.int64_t
-	C.gridDistance(C.H3Index(a), C.H3Index(b), &out)
+	errC := C.gridDistance(C.H3Index(a), C.H3Index(b), &out)
 
-	return int(out)
+	return int(out), errMap[errC]
 }
 
-func (c Cell) GridDistance(other Cell) int {
+func (c Cell) GridDistance(other Cell) (int, error) {
 	return GridDistance(c, other)
 }
 

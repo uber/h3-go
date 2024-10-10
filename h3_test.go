@@ -661,7 +661,14 @@ func TestRes0Cells(t *testing.T) {
 
 func TestGridDistance(t *testing.T) {
 	t.Parallel()
-	assertEqual(t, 1823, lineStartCell.GridDistance(lineEndCell))
+
+	dist, err := lineStartCell.GridDistance(lineEndCell)
+	assertEqual(t, 1823, dist)
+	assertNoErr(t, err)
+
+	_, err = GridDistance(-1, -2)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrCellInvalid)
 }
 
 func TestCenterChild(t *testing.T) {
