@@ -397,52 +397,52 @@ func CellAreaM2(c Cell) (float64, error) {
 
 // HexagonEdgeLengthAvgKm returns the average hexagon edge length in kilometers
 // at the given resolution.
-func HexagonEdgeLengthAvgKm(resolution int) float64 {
+func HexagonEdgeLengthAvgKm(resolution int) (float64, error) {
 	var out C.double
 
-	C.getHexagonEdgeLengthAvgKm(C.int(resolution), &out)
+	errC := C.getHexagonEdgeLengthAvgKm(C.int(resolution), &out)
 
-	return float64(out)
+	return float64(out), errMap[errC]
 }
 
 // HexagonEdgeLengthAvgM returns the average hexagon edge length in meters at
 // the given resolution.
-func HexagonEdgeLengthAvgM(resolution int) float64 {
+func HexagonEdgeLengthAvgM(resolution int) (float64, error) {
 	var out C.double
 
-	C.getHexagonEdgeLengthAvgM(C.int(resolution), &out)
+	errC := C.getHexagonEdgeLengthAvgM(C.int(resolution), &out)
 
-	return float64(out)
+	return float64(out), errMap[errC]
 }
 
 // EdgeLengthRads returns the exact edge length of specific unidirectional edge
 // in radians.
-func EdgeLengthRads(e DirectedEdge) float64 {
+func EdgeLengthRads(e DirectedEdge) (float64, error) {
 	var out C.double
 
-	C.edgeLengthRads(C.H3Index(e), &out)
+	errC := C.edgeLengthRads(C.H3Index(e), &out)
 
-	return float64(out)
+	return float64(out), errMap[errC]
 }
 
 // EdgeLengthKm returns the exact edge length of specific unidirectional
 // edge in kilometers.
-func EdgeLengthKm(e DirectedEdge) float64 {
+func EdgeLengthKm(e DirectedEdge) (float64, error) {
 	var out C.double
 
-	C.edgeLengthKm(C.H3Index(e), &out)
+	errC := C.edgeLengthKm(C.H3Index(e), &out)
 
-	return float64(out)
+	return float64(out), errMap[errC]
 }
 
 // EdgeLengthM returns the exact edge length of specific unidirectional
 // edge in meters.
-func EdgeLengthM(e DirectedEdge) float64 {
+func EdgeLengthM(e DirectedEdge) (float64, error) {
 	var out C.double
 
-	C.edgeLengthM(C.H3Index(e), &out)
+	errC := C.edgeLengthM(C.H3Index(e), &out)
 
-	return float64(out)
+	return float64(out), errMap[errC]
 }
 
 // NumCells returns the number of cells at the given resolution.

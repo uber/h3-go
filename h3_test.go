@@ -758,15 +758,27 @@ func TestHexagonEdgeLengthKm(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(1107.712591), HexagonEdgeLengthAvgKm(0))
+		length, err := HexagonEdgeLengthAvgKm(0)
+		assertNoErr(t, err)
+		assertEqual(t, float64(1107.712591), length)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(0.000509713), HexagonEdgeLengthAvgKm(15))
+		length, err := HexagonEdgeLengthAvgKm(15)
+		assertNoErr(t, err)
+		assertEqual(t, float64(0.000509713), length)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(0.461354684), HexagonEdgeLengthAvgKm(8))
+		length, err := HexagonEdgeLengthAvgKm(8)
+		assertNoErr(t, err)
+		assertEqual(t, float64(0.461354684), length)
+	})
+	t.Run("invalid resolution", func(t *testing.T) {
+		t.Parallel()
+		_, err := HexagonEdgeLengthAvgKm(-1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrResolutionDomain)
 	})
 }
 
@@ -774,38 +786,63 @@ func TestHexagonEdgeLengthM(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
-		area := HexagonEdgeLengthAvgM(0)
+		area, err := HexagonEdgeLengthAvgM(0)
+		assertNoErr(t, err)
 		assertEqual(t, float64(1107712.591), area)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
-		area := HexagonEdgeLengthAvgM(15)
+		area, err := HexagonEdgeLengthAvgM(15)
+		assertNoErr(t, err)
 		assertEqual(t, float64(0.509713273), area)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
-		area := HexagonEdgeLengthAvgM(8)
+		area, err := HexagonEdgeLengthAvgM(8)
+		assertNoErr(t, err)
 		assertEqual(t, float64(461.3546837), area)
+	})
+	t.Run("invalid resolution", func(t *testing.T) {
+		t.Parallel()
+		_, err := HexagonEdgeLengthAvgM(-1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrResolutionDomain)
 	})
 }
 
 func TestEdgeLengthRads(t *testing.T) {
 	t.Parallel()
-	assertEqualEps(t, float64(0.001569665746947077), EdgeLengthRads(validEdge))
+	length, err := EdgeLengthRads(validEdge)
+	assertNoErr(t, err)
+	assertEqualEps(t, float64(0.001569665746947077), length)
+
+	_, err = EdgeLengthRads(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrDirectedEdgeInvalid)
 }
 
 func TestEdgeLengthKm(t *testing.T) {
 	t.Parallel()
 
-	distance := EdgeLengthKm(validEdge)
+	distance, err := EdgeLengthKm(validEdge)
+	assertNoErr(t, err)
 	assertEqualEps(t, float64(10.00035174544159), distance)
+
+	_, err = EdgeLengthKm(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrDirectedEdgeInvalid)
 }
 
 func TestEdgeLengthM(t *testing.T) {
 	t.Parallel()
 
-	distance := EdgeLengthM(validEdge)
+	distance, err := EdgeLengthM(validEdge)
+	assertNoErr(t, err)
 	assertEqualEps(t, float64(10000.351745441589), distance)
+
+	_, err = EdgeLengthM(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrDirectedEdgeInvalid)
 }
 
 func TestNumCells(t *testing.T) {
