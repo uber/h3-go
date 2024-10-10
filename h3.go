@@ -543,19 +543,22 @@ func (c Cell) ImmediateParent() (Cell, error) {
 }
 
 // Children returns the children or grandchildren cells of this Cell.
-func (c Cell) Children(resolution int) []Cell {
+func (c Cell) Children(resolution int) ([]Cell, error) {
 	var outsz C.int64_t
 
-	C.cellToChildrenSize(C.H3Index(c), C.int(resolution), &outsz)
+	if err := errMap[C.cellToChildrenSize(C.H3Index(c), C.int(resolution), &outsz)]; err != nil {
+		return nil, err
+	}
 	out := make([]C.H3Index, outsz)
 
-	C.cellToChildren(C.H3Index(c), C.int(resolution), &out[0])
+	// Seems like this function always returns E_SUCCESS.
+	errC := C.cellToChildren(C.H3Index(c), C.int(resolution), &out[0])
 
-	return cellsFromC(out, false, false)
+	return cellsFromC(out, false, false), errMap[errC]
 }
 
 // ImmediateChildren returns the children or grandchildren cells of this Cell.
-func (c Cell) ImmediateChildren() []Cell {
+func (c Cell) ImmediateChildren() ([]Cell, error) {
 	return c.Children(c.Resolution() + 1)
 }
 

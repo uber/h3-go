@@ -286,13 +286,22 @@ func TestParent(t *testing.T) {
 	assertNoErr(t, err)
 
 	// get the children at the resolution of the original index
-	children := parent.ImmediateChildren()
+	children, _ := parent.ImmediateChildren()
 
 	assertCellIn(t, validCell, children)
 
 	_, err = validCell.Parent(-1)
 	assertErr(t, err)
 	assertErrIs(t, err, ErrResolutionDomain)
+}
+
+func TestChildren_Error(t *testing.T) {
+	t.Parallel()
+
+	children, err := validCell.Children(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrResolutionDomain)
+	assertNil(t, children)
 }
 
 func TestCompactCells(t *testing.T) {
@@ -319,7 +328,7 @@ func TestUncompactCells(t *testing.T) {
 func TestChildPosToCell(t *testing.T) {
 	t.Parallel()
 
-	children := validCell.Children(6)
+	children, _ := validCell.Children(6)
 
 	assertEqual(t, children[0], validCell.ChildPosToCell(0, 6))
 	assertEqual(t, children[0], ChildPosToCell(0, validCell, 6))
@@ -328,7 +337,7 @@ func TestChildPosToCell(t *testing.T) {
 func TestChildPos(t *testing.T) {
 	t.Parallel()
 
-	children := validCell.Children(7)
+	children, _ := validCell.Children(7)
 
 	assertEqual(t, 32, children[32].ChildPos(validCell.Resolution()))
 	assertEqual(t, 32, CellToChildPos(children[32], validCell.Resolution()))
