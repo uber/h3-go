@@ -614,11 +614,13 @@ func (c Cell) DirectedEdge(other Cell) (DirectedEdge, error) {
 }
 
 // DirectedEdges returns 6 directed edges with h as the origin.
-func (c Cell) DirectedEdges() []DirectedEdge {
+func (c Cell) DirectedEdges() ([]DirectedEdge, error) {
 	out := make([]C.H3Index, numCellEdges) // always 6 directed edges
-	C.originToDirectedEdges(C.H3Index(c), &out[0])
 
-	return edgesFromC(out)
+	// Seems like this function always returns E_SUCCESS.
+	errC := C.originToDirectedEdges(C.H3Index(c), &out[0])
+
+	return edgesFromC(out), errMap[errC]
 }
 
 func (e DirectedEdge) IsValid() bool {

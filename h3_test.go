@@ -268,7 +268,8 @@ func TestResolution(t *testing.T) {
 		assertEqual(t, i, c.Resolution())
 	}
 
-	for _, e := range validCell.DirectedEdges() {
+	edges, _ := validCell.DirectedEdges()
+	for _, e := range edges {
 		assertEqual(t, validCell.Resolution(), e.Resolution())
 	}
 }
@@ -395,7 +396,8 @@ func TestIsNeighbor(t *testing.T) {
 	assertErrIs(t, err, ErrRsolutionMismatch)
 	assertFalse(t, isNeighbor)
 
-	isNeighbor, err = validCell.DirectedEdges()[0].Destination().IsNeighbor(validCell)
+	edges, _ := validCell.DirectedEdges()
+	isNeighbor, err = edges[0].Destination().IsNeighbor(validCell)
 	assertNoErr(t, err)
 	assertTrue(t, isNeighbor)
 }
@@ -404,7 +406,11 @@ func TestDirectedEdge(t *testing.T) {
 	t.Parallel()
 
 	origin := validDiskDist3_1[1][0]
-	destination := origin.DirectedEdges()[0].Destination()
+	edges, err := origin.DirectedEdges()
+	assertNoErr(t, err)
+
+	destination := edges[0].Destination()
+
 	edge, err := origin.DirectedEdge(destination)
 	assertNoErr(t, err)
 
@@ -428,13 +434,15 @@ func TestDirectedEdge(t *testing.T) {
 
 	t.Run("get edges from hexagon", func(t *testing.T) {
 		t.Parallel()
-		edges := validCell.DirectedEdges()
+		edges, err := validCell.DirectedEdges()
+		assertNoErr(t, err)
 		assertEqual(t, 6, len(edges), "hexagon has 6 edges")
 	})
 
 	t.Run("get edges from pentagon", func(t *testing.T) {
 		t.Parallel()
-		edges := pentagonCell.DirectedEdges()
+		edges, err := pentagonCell.DirectedEdges()
+		assertNoErr(t, err)
 		assertEqual(t, 5, len(edges), "pentagon has 5 edges")
 	})
 
