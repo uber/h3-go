@@ -448,8 +448,16 @@ func TestDirectedEdge(t *testing.T) {
 
 	t.Run("get boundary from edge", func(t *testing.T) {
 		t.Parallel()
-		gb := edge.Boundary()
+		gb, err := edge.Boundary()
+		assertNoErr(t, err)
 		assertEqual(t, 2, len(gb), "edge has 2 boundary cells")
+	})
+
+	t.Run("boundary error", func(t *testing.T) {
+		gb, err := DirectedEdge(-1).Boundary()
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDirectedEdgeInvalid)
+		assertNil(t, gb)
 	})
 
 	t.Run("error", func(t *testing.T) {

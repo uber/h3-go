@@ -655,11 +655,13 @@ func (e DirectedEdge) Cells() []Cell {
 // the type returned is CellBoundary, but the coordinates will be from the
 // center of the origin to the center of the destination. There may be more than
 // 2 coordinates to account for crossing faces.
-func (e DirectedEdge) Boundary() CellBoundary {
+func (e DirectedEdge) Boundary() (CellBoundary, error) {
 	var out C.CellBoundary
-	C.directedEdgeToBoundary(C.H3Index(e), &out)
+	if err := errMap[C.directedEdgeToBoundary(C.H3Index(e), &out)]; err != nil {
+		return nil, err
+	}
 
-	return cellBndryFromC(&out)
+	return cellBndryFromC(&out), nil
 }
 
 // CompactCells merges full sets of children into their parent H3Index
