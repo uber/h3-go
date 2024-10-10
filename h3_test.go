@@ -580,7 +580,8 @@ func TestCellsToMultiPolygon(t *testing.T) {
 	// 7 cells in disk -> 1 polygon, 18-point loop, and no holes
 	c, _ := LatLngToCell(NewLatLng(0, 0), 10)
 	cells, _ := GridDisk(c, 1)
-	res := CellsToMultiPolygon(cells)
+	res, err := CellsToMultiPolygon(cells)
+	assertNoErr(t, err)
 	assertEqual(t, len(res), 1)
 	assertEqual(t, len(res[0].GeoLoop), 18)
 	assertEqual(t, len(res[0].Holes), 0)
@@ -588,7 +589,8 @@ func TestCellsToMultiPolygon(t *testing.T) {
 	// 6 cells in ring -> 1 polygon, 18-point loop, and 1 6-point hole
 	c, _ = LatLngToCell(NewLatLng(0, 0), 10)
 	cells, _ = GridDisk(c, 1)
-	res = CellsToMultiPolygon(cells[1:])
+	res, err = CellsToMultiPolygon(cells[1:])
+	assertNoErr(t, err)
 	assertEqual(t, len(res), 1)
 	assertEqual(t, len(res[0].GeoLoop), 18)
 	assertEqual(t, len(res[0].Holes), 1)
@@ -597,7 +599,8 @@ func TestCellsToMultiPolygon(t *testing.T) {
 	// 2 hexagons connected -> 1 polygon, 10-point loop (2 shared points) and no holes
 	c, _ = LatLngToCell(NewLatLng(0, 0), 10)
 	cells, _ = GridDisk(c, 1)
-	res = CellsToMultiPolygon(cells[:2])
+	res, err = CellsToMultiPolygon(cells[:2])
+	assertNoErr(t, err)
 	assertEqual(t, len(res), 1)
 	assertEqual(t, len(res[0].GeoLoop), 10)
 	assertEqual(t, len(res[0].Holes), 0)
@@ -609,7 +612,8 @@ func TestCellsToMultiPolygon(t *testing.T) {
 	c, _ = LatLngToCell(NewLatLng(10, 10), 10)
 	cells2, _ := GridDisk(c, 1)
 	cells = append(cells1, cells2...)
-	res = CellsToMultiPolygon(cells)
+	res, err = CellsToMultiPolygon(cells)
+	assertNoErr(t, err)
 	assertEqual(t, len(res), 2)
 	assertEqual(t, len(res[0].GeoLoop), 18)
 	assertEqual(t, len(res[0].Holes), 0)
@@ -617,8 +621,15 @@ func TestCellsToMultiPolygon(t *testing.T) {
 	assertEqual(t, len(res[1].Holes), 0)
 
 	// empty
-	res = CellsToMultiPolygon([]Cell{})
+	res, err = CellsToMultiPolygon([]Cell{})
+	assertNoErr(t, err)
 	assertEqual(t, len(res), 0)
+
+	// Error.
+	res, err = CellsToMultiPolygon([]Cell{-1})
+	assertErr(t, err)
+	assertErrIs(t, err, ErrCellInvalid)
+	assertNil(t, res)
 }
 
 func TestGridPath(t *testing.T) {

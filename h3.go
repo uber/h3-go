@@ -293,13 +293,16 @@ func (p GeoPolygon) Cells(resolution int) ([]Cell, error) {
 // It is expected that all hexagons in the set have the same resolution and that the set
 // contains no duplicates. Behavior is undefined if duplicates or multiple resolutions are
 // present, and the algorithm may produce unexpected or invalid output.
-func CellsToMultiPolygon(cells []Cell) []GeoPolygon {
+func CellsToMultiPolygon(cells []Cell) ([]GeoPolygon, error) {
 	if len(cells) == 0 {
-		return nil
+		return nil, nil
 	}
 	h3Indexes := cellsToC(cells)
 	cLinkedGeoPolygon := new(C.LinkedGeoPolygon)
-	C.cellsToLinkedMultiPolygon(&h3Indexes[0], C.int(len(h3Indexes)), cLinkedGeoPolygon)
+	if err := errMap[C.cellsToLinkedMultiPolygon(&h3Indexes[0], C.int(len(h3Indexes)), cLinkedGeoPolygon)]; err != nil {
+		return nil, err
+	}
+
 	ret := []GeoPolygon{}
 
 	// traverse polygons for linked list of polygons
@@ -327,7 +330,7 @@ func CellsToMultiPolygon(cells []Cell) []GeoPolygon {
 		currPoly = currPoly.next
 	}
 
-	return ret
+	return ret, nil
 }
 
 // PointDistRads returns the "great circle" or "haversine" distance between
