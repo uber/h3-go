@@ -1074,14 +1074,14 @@ func assertNoErr(t *testing.T, err error) {
 	}
 }
 
-func assertEqual[T comparable](t *testing.T, expected, actual T, msgAndArgs ...interface{}) {
+func assertEqual[T comparable](t *testing.T, expected, actual T, msgAndArgs ...any) {
 	t.Helper()
 
 	if expected != actual {
 		var (
 			expStr, actStr string
 
-			e, a interface{} = expected, actual
+			e, a any = expected, actual
 		)
 
 		switch e.(type) {
@@ -1098,7 +1098,7 @@ func assertEqual[T comparable](t *testing.T, expected, actual T, msgAndArgs ...i
 	}
 }
 
-func assertEqualEps(t *testing.T, expected, actual float64, msgAndArgs ...interface{}) {
+func assertEqualEps(t *testing.T, expected, actual float64, msgAndArgs ...any) {
 	t.Helper()
 
 	if !equalEps(expected, actual) {
@@ -1113,7 +1113,7 @@ func assertEqualLatLng(t *testing.T, expected, actual LatLng) {
 	assertEqualEps(t, expected.Lng, actual.Lng, "longitude mismatch")
 }
 
-func assertEqualLatLngs(t *testing.T, expected, actual []LatLng, msgAndArgs ...interface{}) {
+func assertEqualLatLngs(t *testing.T, expected, actual []LatLng, msgAndArgs ...any) {
 	t.Helper()
 
 	if len(expected) != len(actual) {
@@ -1146,7 +1146,7 @@ func assertEqualLatLngs(t *testing.T, expected, actual []LatLng, msgAndArgs ...i
 	}
 }
 
-func assertEqualCells(t *testing.T, expected, actual []Cell, msgAndArgs ...interface{}) {
+func assertEqualCells(t *testing.T, expected, actual []Cell, msgAndArgs ...any) {
 	t.Helper()
 
 	if len(expected) != len(actual) {
@@ -1301,7 +1301,7 @@ func sortCells(s []Cell) []Cell {
 	return s
 }
 
-func logMsgAndArgs(t *testing.T, msgAndArgs ...interface{}) {
+func logMsgAndArgs(t *testing.T, msgAndArgs ...any) {
 	t.Helper()
 
 	if len(msgAndArgs) > 0 {
