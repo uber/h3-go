@@ -863,8 +863,9 @@ func TestNumCells(t *testing.T) {
 
 func TestRes0Cells(t *testing.T) {
 	t.Parallel()
-	cells := Res0Cells()
+	cells, err := Res0Cells()
 
+	assertNoErr(t, err)
 	assertEqual(t, 122, len(cells))
 	assertEqual(t, Cell(0x8001fffffffffff), cells[0])
 	assertEqual(t, Cell(0x80f3fffffffffff), cells[121])
@@ -918,7 +919,8 @@ func TestPentagons(t *testing.T) {
 		t.Run(fmt.Sprintf("res=%d", res), func(t *testing.T) {
 			t.Parallel()
 
-			pentagons := Pentagons(res)
+			pentagons, err := Pentagons(res)
+			assertNoErr(t, err)
 			assertEqual(t, 12, len(pentagons))
 
 			for _, pentagon := range pentagons {
@@ -927,6 +929,10 @@ func TestPentagons(t *testing.T) {
 			}
 		})
 	}
+
+	_, err := Pentagons(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrResolutionDomain)
 }
 
 func TestCellToVertex(t *testing.T) {

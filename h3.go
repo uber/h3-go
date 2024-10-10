@@ -453,19 +453,19 @@ func NumCells(resolution int) int {
 }
 
 // Res0Cells returns all the cells at resolution 0.
-func Res0Cells() []Cell {
+func Res0Cells() ([]Cell, error) {
 	out := make([]C.H3Index, C.res0CellCount())
-	C.getRes0Cells(&out[0])
+	errC := C.getRes0Cells(&out[0])
 
-	return cellsFromC(out, false, false)
+	return cellsFromC(out, false, false), errMap[errC]
 }
 
 // Pentagons returns all the pentagons at resolution.
-func Pentagons(resolution int) []Cell {
+func Pentagons(resolution int) ([]Cell, error) {
 	out := make([]C.H3Index, NumPentagons)
-	C.getPentagons(C.int(resolution), &out[0])
+	errC := C.getPentagons(C.int(resolution), &out[0])
 
-	return cellsFromC(out, false, false)
+	return cellsFromC(out, false, false), errMap[errC]
 }
 
 func (c Cell) Resolution() int {
