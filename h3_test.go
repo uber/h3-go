@@ -282,12 +282,17 @@ func TestBaseCellNumber(t *testing.T) {
 func TestParent(t *testing.T) {
 	t.Parallel()
 	// get the index's parent by requesting that index's resolution+1
-	parent := validCell.ImmediateParent()
+	parent, err := validCell.ImmediateParent()
+	assertNoErr(t, err)
 
 	// get the children at the resolution of the original index
 	children := parent.ImmediateChildren()
 
 	assertCellIn(t, validCell, children)
+
+	_, err = validCell.Parent(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrResolutionDomain)
 }
 
 func TestCompactCells(t *testing.T) {
@@ -298,13 +303,15 @@ func TestCompactCells(t *testing.T) {
 	out := CompactCells(in)
 	t.Logf("out: %v", in)
 	assertEqual(t, 1, len(out))
-	assertEqual(t, validDiskDist3_1[0][0].ImmediateParent(), out[0])
+
+	p, _ := validDiskDist3_1[0][0].ImmediateParent()
+	assertEqual(t, p, out[0])
 }
 
 func TestUncompactCells(t *testing.T) {
 	t.Parallel()
 	// get the index's parent by requesting that index's resolution+1
-	parent := validCell.ImmediateParent()
+	parent, _ := validCell.ImmediateParent()
 	out := UncompactCells([]Cell{parent}, parent.Resolution()+1)
 	assertCellIn(t, validCell, out)
 }
@@ -330,8 +337,9 @@ func TestChildPos(t *testing.T) {
 func TestIsResClassIII(t *testing.T) {
 	t.Parallel()
 
+	p, _ := validCell.ImmediateParent()
 	assertTrue(t, validCell.IsResClassIII())
-	assertFalse(t, validCell.ImmediateParent().IsResClassIII())
+	assertFalse(t, p.IsResClassIII())
 }
 
 func TestIsPentagon(t *testing.T) {

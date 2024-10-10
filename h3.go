@@ -529,16 +529,16 @@ func (c Cell) IsValid() bool {
 }
 
 // Parent returns the parent or grandparent Cell of this Cell.
-func (c Cell) Parent(resolution int) Cell {
+func (c Cell) Parent(resolution int) (Cell, error) {
 	var out C.H3Index
 
-	C.cellToParent(C.H3Index(c), C.int(resolution), &out)
+	errC := C.cellToParent(C.H3Index(c), C.int(resolution), &out)
 
-	return Cell(out)
+	return Cell(out), errMap[errC]
 }
 
 // Parent returns the parent or grandparent Cell of this Cell.
-func (c Cell) ImmediateParent() Cell {
+func (c Cell) ImmediateParent() (Cell, error) {
 	return c.Parent(c.Resolution() - 1)
 }
 
