@@ -350,49 +350,49 @@ func GreatCircleDistanceM(a, b LatLng) float64 {
 
 // HexAreaKm2 returns the average hexagon area in square kilometers at the given
 // resolution.
-func HexagonAreaAvgKm2(resolution int) float64 {
+func HexagonAreaAvgKm2(resolution int) (float64, error) {
 	var out C.double
 
-	C.getHexagonAreaAvgKm2(C.int(resolution), &out)
+	errC := C.getHexagonAreaAvgKm2(C.int(resolution), &out)
 
-	return float64(out)
+	return float64(out), errMap[errC]
 }
 
 // HexAreaM2 returns the average hexagon area in square meters at the given
 // resolution.
-func HexagonAreaAvgM2(resolution int) float64 {
+func HexagonAreaAvgM2(resolution int) (float64, error) {
 	var out C.double
 
-	C.getHexagonAreaAvgM2(C.int(resolution), &out)
+	errC := C.getHexagonAreaAvgM2(C.int(resolution), &out)
 
-	return float64(out)
+	return float64(out), errMap[errC]
 }
 
 // CellAreaRads2 returns the exact area of specific cell in square radians.
-func CellAreaRads2(c Cell) float64 {
+func CellAreaRads2(c Cell) (float64, error) {
 	var out C.double
 
-	C.cellAreaRads2(C.H3Index(c), &out)
+	errC := C.cellAreaRads2(C.H3Index(c), &out)
 
-	return float64(out)
+	return float64(out), errMap[errC]
 }
 
 // CellAreaKm2 returns the exact area of specific cell in square kilometers.
-func CellAreaKm2(c Cell) float64 {
+func CellAreaKm2(c Cell) (float64, error) {
 	var out C.double
 
-	C.cellAreaKm2(C.H3Index(c), &out)
+	errC := C.cellAreaKm2(C.H3Index(c), &out)
 
-	return float64(out)
+	return float64(out), errMap[errC]
 }
 
 // CellAreaM2 returns the exact area of specific cell in square meters.
-func CellAreaM2(c Cell) float64 {
+func CellAreaM2(c Cell) (float64, error) {
 	var out C.double
 
-	C.cellAreaM2(C.H3Index(c), &out)
+	errC := C.cellAreaM2(C.H3Index(c), &out)
 
-	return float64(out)
+	return float64(out), errMap[errC]
 }
 
 // HexagonEdgeLengthAvgKm returns the average hexagon edge length in kilometers

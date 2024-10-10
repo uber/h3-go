@@ -651,15 +651,27 @@ func TestHexAreaKm2(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(4357449.4161), HexagonAreaAvgKm2(0))
+		area, err := HexagonAreaAvgKm2(0)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(4357449.4161), area)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(0.0000009), HexagonAreaAvgKm2(15))
+		area, err := HexagonAreaAvgKm2(15)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(0.0000009), area)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(0.7373276), HexagonAreaAvgKm2(8))
+		area, err := HexagonAreaAvgKm2(8)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(0.7373276), area)
+	})
+	t.Run("error", func(t *testing.T) {
+		t.Parallel()
+		_, err := HexagonAreaAvgKm2(-1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrResolutionDomain)
 	})
 }
 
@@ -667,15 +679,27 @@ func TestHexAreaM2(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(4357449416078.3901), HexagonAreaAvgM2(0))
+		area, err := HexagonAreaAvgM2(0)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(4357449416078.3901), area)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(0.8953), HexagonAreaAvgM2(15))
+		area, err := HexagonAreaAvgM2(15)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(0.8953), area)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqualEps(t, float64(737327.5976), HexagonAreaAvgM2(8))
+		area, err := HexagonAreaAvgM2(8)
+		assertNoErr(t, err)
+		assertEqualEps(t, float64(737327.5976), area)
+	})
+	t.Run("error", func(t *testing.T) {
+		t.Parallel()
+		_, err := HexagonAreaAvgM2(-1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrResolutionDomain)
 	})
 }
 
@@ -699,17 +723,35 @@ func TestPointDistM(t *testing.T) {
 
 func TestCellAreaRads2(t *testing.T) {
 	t.Parallel()
-	assertEqualEps(t, float64(0.000006643967854567278), CellAreaRads2(validCell))
+	area, err := CellAreaRads2(validCell)
+	assertNoErr(t, err)
+	assertEqualEps(t, float64(0.000006643967854567278), area)
+
+	_, err = CellAreaRads2(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrCellInvalid)
 }
 
 func TestCellAreaKm2(t *testing.T) {
 	t.Parallel()
-	assertEqualEps(t, float64(269.6768779509321), CellAreaKm2(validCell))
+	area, err := CellAreaKm2(validCell)
+	assertNoErr(t, err)
+	assertEqualEps(t, float64(269.6768779509321), area)
+
+	_, err = CellAreaKm2(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrCellInvalid)
 }
 
 func TestCellAreaM2(t *testing.T) {
 	t.Parallel()
-	assertEqualEps(t, float64(269676877.95093215), CellAreaM2(validCell))
+	area, err := CellAreaM2(validCell)
+	assertNoErr(t, err)
+	assertEqualEps(t, float64(269676877.95093215), area)
+
+	_, err = CellAreaM2(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrCellInvalid)
 }
 
 func TestHexagonEdgeLengthKm(t *testing.T) {
