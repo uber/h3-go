@@ -563,12 +563,12 @@ func (c Cell) ImmediateChildren() ([]Cell, error) {
 }
 
 // CenterChild returns the center child Cell of this Cell.
-func (c Cell) CenterChild(resolution int) Cell {
+func (c Cell) CenterChild(resolution int) (Cell, error) {
 	var out C.H3Index
 
-	C.cellToCenterChild(C.H3Index(c), C.int(resolution), &out)
+	errC := C.cellToCenterChild(C.H3Index(c), C.int(resolution), &out)
 
-	return Cell(out)
+	return Cell(out), errMap[errC]
 }
 
 // IsResClassIII returns true if this is a class III index. If false, this is a

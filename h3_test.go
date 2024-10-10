@@ -715,8 +715,13 @@ func TestGridDistance(t *testing.T) {
 func TestCenterChild(t *testing.T) {
 	t.Parallel()
 
-	child := validCell.CenterChild(15)
+	child, err := validCell.CenterChild(15)
+	assertNoErr(t, err)
 	assertEqual(t, Cell(0x8f0dab600000000), child)
+
+	_, err = validCell.CenterChild(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrResolutionDomain)
 }
 
 func TestIcosahedronFaces(t *testing.T) {
