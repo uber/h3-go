@@ -216,11 +216,13 @@ func (c Cell) GridDisk(k int) ([]Cell, error) {
 // Outer slice is ordered from origin outwards. Inner slices are in no
 // particular order. Elements of the output array may be left zero, as can
 // happen when crossing a pentagon.
-func GridDiskDistances(origin Cell, k int) [][]Cell {
+func GridDiskDistances(origin Cell, k int) ([][]Cell, error) {
 	rsz := maxGridDiskSize(k)
 	outHexes := make([]C.H3Index, rsz)
 	outDists := make([]C.int, rsz)
-	C.gridDiskDistances(C.H3Index(origin), C.int(k), &outHexes[0], &outDists[0])
+	if err := errMap[C.gridDiskDistances(C.H3Index(origin), C.int(k), &outHexes[0], &outDists[0])]; err != nil {
+		return nil, err
+	}
 
 	ret := make([][]Cell, k+1)
 	for i := 0; i <= k; i++ {
@@ -231,7 +233,7 @@ func GridDiskDistances(origin Cell, k int) [][]Cell {
 		ret[d] = append(ret[d], Cell(outHexes[i]))
 	}
 
-	return ret
+	return ret, nil
 }
 
 // GridDiskDistances produces cells within grid distance k of the origin cell.
@@ -242,7 +244,7 @@ func GridDiskDistances(origin Cell, k int) [][]Cell {
 // Outer slice is ordered from origin outwards. Inner slices are in no
 // particular order. Elements of the output array may be left zero, as can
 // happen when crossing a pentagon.
-func (c Cell) GridDiskDistances(k int) [][]Cell {
+func (c Cell) GridDiskDistances(k int) ([][]Cell, error) {
 	return GridDiskDistances(c, k)
 }
 

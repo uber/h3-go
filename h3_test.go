@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"testing"
 )
@@ -180,18 +181,29 @@ func TestGridDisk(t *testing.T) {
 
 func TestGridDiskDistances(t *testing.T) {
 	t.Parallel()
+
 	t.Run("no pentagon", func(t *testing.T) {
 		t.Parallel()
-		rings := validCell.GridDiskDistances(len(validDiskDist3_1) - 1)
+		rings, err := validCell.GridDiskDistances(len(validDiskDist3_1) - 1)
+		assertNoErr(t, err)
 		assertEqualDiskDistances(t, validDiskDist3_1, rings)
 	})
+
 	t.Run("pentagon centered", func(t *testing.T) {
 		t.Parallel()
 		assertNoPanic(t, func() {
-			rings := GridDiskDistances(pentagonCell, 1)
+			rings, err := GridDiskDistances(pentagonCell, 1)
+			assertNoErr(t, err)
 			assertEqual(t, 2, len(rings), "expected 2 rings")
 			assertEqual(t, 5, len(rings[1]), "expected 5 cells in second ring")
 		})
+	})
+
+	t.Run("invalid k-ring", func(t *testing.T) {
+		rings, err := GridDiskDistances(pentagonCell, -1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDomain)
+		assertNil(t, rings)
 	})
 }
 
@@ -981,6 +993,27 @@ func assertFalse(t *testing.T, b bool) {
 func assertTrue(t *testing.T, b bool) {
 	t.Helper()
 	assertEqual(t, true, b)
+}
+
+func assertNil(t *testing.T, val any) {
+	t.Helper()
+
+	if val == nil {
+		return
+	}
+
+	value := reflect.ValueOf(val)
+	switch value.Kind() {
+	case
+		reflect.Chan, reflect.Func,
+		reflect.Interface, reflect.Map,
+		reflect.Ptr, reflect.Slice, reflect.UnsafePointer:
+		if value.IsNil() {
+			return
+		}
+	}
+
+	t.Errorf("expected value to be nil, got: %v", val)
 }
 
 func sortCells(s []Cell) []Cell {
