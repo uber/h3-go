@@ -309,12 +309,17 @@ func TestCompactCells(t *testing.T) {
 
 	in := flattenDisks(validDiskDist3_1[:2])
 	t.Logf("in: %v", in)
-	out := CompactCells(in)
+	out, err := CompactCells(in)
 	t.Logf("out: %v", in)
+	assertNoErr(t, err)
 	assertEqual(t, 1, len(out))
 
 	p, _ := validDiskDist3_1[0][0].ImmediateParent()
 	assertEqual(t, p, out[0])
+
+	_, err = CompactCells([]Cell{-1})
+	assertErr(t, err)
+	assertErrIs(t, err, ErrCellInvalid)
 }
 
 func TestUncompactCells(t *testing.T) {

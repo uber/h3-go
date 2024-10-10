@@ -660,15 +660,15 @@ func (e DirectedEdge) Boundary() CellBoundary {
 
 // CompactCells merges full sets of children into their parent H3Index
 // recursively, until no more merges are possible.
-func CompactCells(in []Cell) []Cell {
+func CompactCells(in []Cell) ([]Cell, error) {
 	cin := cellsToC(in)
 	csz := C.int64_t(len(in))
 	// worst case no compaction so we need a set **at least** as large as the
 	// input
 	cout := make([]C.H3Index, csz)
-	C.compactCells(&cin[0], &cout[0], csz)
+	errC := C.compactCells(&cin[0], &cout[0], csz)
 
-	return cellsFromC(cout, false, true)
+	return cellsFromC(cout, false, true), errMap[errC]
 }
 
 // UncompactCells splits every H3Index in in if its resolution is greater
