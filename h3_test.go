@@ -324,10 +324,17 @@ func TestCompactCells(t *testing.T) {
 
 func TestUncompactCells(t *testing.T) {
 	t.Parallel()
+
 	// get the index's parent by requesting that index's resolution+1
 	parent, _ := validCell.ImmediateParent()
-	out := UncompactCells([]Cell{parent}, parent.Resolution()+1)
+	out, err := UncompactCells([]Cell{parent}, parent.Resolution()+1)
+	assertNoErr(t, err)
 	assertCellIn(t, validCell, out)
+
+	out, err = UncompactCells([]Cell{parent}, -1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrRsolutionMismatch)
+	assertNil(t, out)
 }
 
 func TestChildPosToCell(t *testing.T) {

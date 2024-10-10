@@ -673,18 +673,20 @@ func CompactCells(in []Cell) ([]Cell, error) {
 
 // UncompactCells splits every H3Index in in if its resolution is greater
 // than resolution recursively. Returns all the H3Indexes at resolution resolution.
-func UncompactCells(in []Cell, resolution int) []Cell {
+func UncompactCells(in []Cell, resolution int) ([]Cell, error) {
 	cin := cellsToC(in)
 	var csz C.int64_t
-	C.uncompactCellsSize(&cin[0], C.int64_t(len(cin)), C.int(resolution), &csz)
+	if err := errMap[C.uncompactCellsSize(&cin[0], C.int64_t(len(cin)), C.int(resolution), &csz)]; err != nil {
+		return nil, err
+	}
 
 	cout := make([]C.H3Index, csz)
-	C.uncompactCells(
+	errC := C.uncompactCells(
 		&cin[0], C.int64_t(len(in)),
 		&cout[0], csz,
 		C.int(resolution))
 
-	return cellsFromC(cout, false, true)
+	return cellsFromC(cout, false, true), errMap[errC]
 }
 
 // ChildPosToCell returns the child of cell a at a given position within an ordered list of all
