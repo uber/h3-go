@@ -752,11 +752,11 @@ func CellToLocalIJ(origin, cell Cell) (CoordIJ, error) {
 	return CoordIJ{int(out.i), int(out.j)}, errMap[errC]
 }
 
-func LocalIJToCell(origin Cell, ij CoordIJ) Cell {
+func LocalIJToCell(origin Cell, ij CoordIJ) (Cell, error) {
 	var out C.H3Index
-	C.localIjToCell(C.H3Index(origin), ij.toCPtr(), 0, &out)
+	errC := C.localIjToCell(C.H3Index(origin), ij.toCPtr(), 0, &out)
 
-	return Cell(out)
+	return Cell(out), errMap[errC]
 }
 
 func CellToVertex(c Cell, vertexNum int) Cell {

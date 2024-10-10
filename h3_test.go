@@ -156,6 +156,19 @@ func TestCellToLocalIJ(t *testing.T) {
 	assertErrIs(t, err, ErrCellInvalid)
 }
 
+func TestLocalIJToCell(t *testing.T) {
+	t.Parallel()
+
+	ij, _ := CellToLocalIJ(validCell, validCell)
+	c, err := LocalIJToCell(validCell, ij)
+	assertNoErr(t, err)
+	assertEqual(t, c, validCell)
+
+	_, err = LocalIJToCell(-1, ij)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrCellInvalid)
+}
+
 func TestGridDisk(t *testing.T) {
 	t.Parallel()
 
