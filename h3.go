@@ -255,21 +255,23 @@ func (c Cell) GridDiskDistances(k int) ([][]Cell, error) {
 // hexagons, tests them and their neighbors to be contained by the geoloop(s),
 // and then any newly found hexagons are used to test again until no new
 // hexagons are found.
-func PolygonToCells(polygon GeoPolygon, resolution int) []Cell {
+func PolygonToCells(polygon GeoPolygon, resolution int) ([]Cell, error) {
 	if len(polygon.GeoLoop) == 0 {
-		return nil
+		return nil, nil
 	}
 	cpoly := allocCGeoPolygon(polygon)
 
 	defer freeCGeoPolygon(&cpoly)
 
 	maxLen := new(C.int64_t)
-	C.maxPolygonToCellsSize(&cpoly, C.int(resolution), 0, maxLen)
+	if err := errMap[C.maxPolygonToCellsSize(&cpoly, C.int(resolution), 0, maxLen)]; err != nil {
+		return nil, err
+	}
 
 	out := make([]C.H3Index, *maxLen)
-	C.polygonToCells(&cpoly, C.int(resolution), 0, &out[0])
+	errC := C.polygonToCells(&cpoly, C.int(resolution), 0, &out[0])
 
-	return cellsFromC(out, true, false)
+	return cellsFromC(out, true, false), errMap[errC]
 }
 
 // PolygonToCells takes a given GeoJSON-like data structure fills it with the
@@ -279,7 +281,7 @@ func PolygonToCells(polygon GeoPolygon, resolution int) []Cell {
 // hexagons, tests them and their neighbors to be contained by the geoloop(s),
 // and then any newly found hexagons are used to test again until no new
 // hexagons are found.
-func (p GeoPolygon) Cells(resolution int) []Cell {
+func (p GeoPolygon) Cells(resolution int) ([]Cell, error) {
 	return PolygonToCells(p, resolution)
 }
 
