@@ -68,6 +68,44 @@ const (
 	RadsToDegs = 180.0 / math.Pi
 )
 
+// Error codes.
+var (
+	ErrFailed                = errors.New("the operation failed")
+	ErrDomain                = errors.New("argument was outside of acceptable range")
+	ErrLatLngDomain          = errors.New("latitude or longitude arguments were outside of acceptable range")
+	ErrResolutionDomain      = errors.New("resolution argument was outside of acceptable range")
+	ErrCellInvalid           = errors.New("H3Index cell argument was not valid")
+	ErrDirectedEdgeInvalid   = errors.New("H3Index directed edge argument was not valid")
+	ErrUndirectedEdgeInvalid = errors.New("H3Index undirected edge argument was not valid")
+	ErrVertexInvalid         = errors.New("H3Index vertex argument was not valid")
+	ErrPentagon              = errors.New("pentagon distortion was encountered")
+	ErrDuplicateInput        = errors.New("duplicate input was encountered in the arguments")
+	ErrNotNeighbors          = errors.New("H3Index cell arguments were not neighbors")
+	ErrRsolutionMismatch     = errors.New("H3Index cell arguments had incompatible resolutions")
+	ErrMemoryAlloc           = errors.New("necessary memory allocation failed")
+	ErrMemoryBounds          = errors.New("bounds of provided memory were not large enough")
+	ErrOptionInvalid         = errors.New("mode or flags argument was not valid")
+
+	errMap = map[C.uint]error{
+		0:  nil, // Success error code.
+		1:  ErrFailed,
+		2:  ErrDomain,
+		3:  ErrLatLngDomain,
+		4:  ErrResolutionDomain,
+		5:  ErrCellInvalid,
+		6:  ErrDirectedEdgeInvalid,
+		7:  ErrUndirectedEdgeInvalid,
+		8:  ErrVertexInvalid,
+		9:  ErrPentagon,
+		10: ErrDuplicateInput,
+		11: ErrNotNeighbors,
+		12: ErrRsolutionMismatch,
+		13: ErrMemoryAlloc,
+		14: ErrMemoryBounds,
+		15: ErrOptionInvalid,
+	}
+)
+
 type (
 
 	// Cell is an Index that identifies a single hexagon cell at a resolution.
