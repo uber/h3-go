@@ -606,11 +606,11 @@ func (c Cell) IsNeighbor(other Cell) (bool, error) {
 }
 
 // DirectedEdge returns a DirectedEdge from this Cell to other.
-func (c Cell) DirectedEdge(other Cell) DirectedEdge {
+func (c Cell) DirectedEdge(other Cell) (DirectedEdge, error) {
 	var out C.H3Index
-	C.cellsToDirectedEdge(C.H3Index(c), C.H3Index(other), &out)
+	errC := C.cellsToDirectedEdge(C.H3Index(c), C.H3Index(other), &out)
 
-	return DirectedEdge(out)
+	return DirectedEdge(out), errMap[errC]
 }
 
 // DirectedEdges returns 6 directed edges with h as the origin.

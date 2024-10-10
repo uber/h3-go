@@ -405,7 +405,8 @@ func TestDirectedEdge(t *testing.T) {
 
 	origin := validDiskDist3_1[1][0]
 	destination := origin.DirectedEdges()[0].Destination()
-	edge := origin.DirectedEdge(destination)
+	edge, err := origin.DirectedEdge(destination)
+	assertNoErr(t, err)
 
 	t.Run("is valid", func(t *testing.T) {
 		t.Parallel()
@@ -441,6 +442,13 @@ func TestDirectedEdge(t *testing.T) {
 		t.Parallel()
 		gb := edge.Boundary()
 		assertEqual(t, 2, len(gb), "edge has 2 boundary cells")
+	})
+
+	t.Run("error", func(t *testing.T) {
+		t.Parallel()
+		_, err := validCell.DirectedEdge(-1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrNotNeighbors)
 	})
 }
 
