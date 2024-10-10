@@ -492,14 +492,27 @@ func TestCellsToMultiPolygon(t *testing.T) {
 
 func TestGridPath(t *testing.T) {
 	t.Parallel()
-	path := lineStartCell.GridPath(lineEndCell)
+	path, err := lineStartCell.GridPath(lineEndCell)
 
+	assertNoErr(t, err)
 	assertEqual(t, lineStartCell, path[0])
 	assertEqual(t, lineEndCell, path[len(path)-1])
 
 	for i := 0; i < len(path)-1; i++ {
 		assertTrue(t, path[i].IsNeighbor(path[i+1]))
 	}
+
+	path, err = GridPath(1, -1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrRsolutionMismatch)
+	assertNil(t, path)
+
+	c1, _ := NewLatLng(1, 1).Cell(5)
+	c2, _ := NewLatLng(50.10320148224132, -143.47849001502516).Cell(5)
+	path, err = GridPath(c1, c2)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrFailed)
+	assertNil(t, path)
 }
 
 func TestHexAreaKm2(t *testing.T) {

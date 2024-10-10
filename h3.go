@@ -727,17 +727,21 @@ func (c Cell) GridDistance(other Cell) int {
 	return GridDistance(c, other)
 }
 
-func GridPath(a, b Cell) []Cell {
+func GridPath(a, b Cell) ([]Cell, error) {
 	var outsz C.int64_t
-	C.gridPathCellsSize(C.H3Index(a), C.H3Index(b), &outsz)
+	if err := errMap[C.gridPathCellsSize(C.H3Index(a), C.H3Index(b), &outsz)]; err != nil {
+		return nil, err
+	}
 
 	out := make([]C.H3Index, outsz)
-	C.gridPathCells(C.H3Index(a), C.H3Index(b), &out[0])
+	if err := errMap[C.gridPathCells(C.H3Index(a), C.H3Index(b), &out[0])]; err != nil {
+		return nil, err
+	}
 
-	return cellsFromC(out, false, false)
+	return cellsFromC(out, false, false), nil
 }
 
-func (c Cell) GridPath(other Cell) []Cell {
+func (c Cell) GridPath(other Cell) ([]Cell, error) {
 	return GridPath(c, other)
 }
 
