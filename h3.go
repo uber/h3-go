@@ -598,11 +598,11 @@ func (c Cell) IcosahedronFaces() ([]int, error) {
 }
 
 // IsNeighbor returns true if this Cell is a neighbor of the other Cell.
-func (c Cell) IsNeighbor(other Cell) bool {
+func (c Cell) IsNeighbor(other Cell) (bool, error) {
 	var out C.int
-	C.areNeighborCells(C.H3Index(c), C.H3Index(other), &out)
+	errC := C.areNeighborCells(C.H3Index(c), C.H3Index(other), &out)
 
-	return out == 1
+	return out == 1, errMap[errC]
 }
 
 // DirectedEdge returns a DirectedEdge from this Cell to other.

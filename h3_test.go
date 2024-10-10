@@ -389,8 +389,15 @@ func TestIsPentagon(t *testing.T) {
 
 func TestIsNeighbor(t *testing.T) {
 	t.Parallel()
-	assertFalse(t, validCell.IsNeighbor(pentagonCell))
-	assertTrue(t, validCell.DirectedEdges()[0].Destination().IsNeighbor(validCell))
+
+	isNeighbor, err := validCell.IsNeighbor(pentagonCell)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrRsolutionMismatch)
+	assertFalse(t, isNeighbor)
+
+	isNeighbor, err = validCell.DirectedEdges()[0].Destination().IsNeighbor(validCell)
+	assertNoErr(t, err)
+	assertTrue(t, isNeighbor)
 }
 
 func TestDirectedEdge(t *testing.T) {
@@ -582,7 +589,8 @@ func TestGridPath(t *testing.T) {
 	assertEqual(t, lineEndCell, path[len(path)-1])
 
 	for i := 0; i < len(path)-1; i++ {
-		assertTrue(t, path[i].IsNeighbor(path[i+1]))
+		isNeighbor, _ := path[i].IsNeighbor(path[i+1])
+		assertTrue(t, isNeighbor)
 	}
 
 	path, err = GridPath(1, -1)
