@@ -16,6 +16,7 @@
 package h3
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -108,8 +109,15 @@ var (
 
 func TestLatLngToCell(t *testing.T) {
 	t.Parallel()
-	c := LatLngToCell(validLatLng1, 5)
+
+	c, err := LatLngToCell(validLatLng1, 5)
 	assertEqual(t, validCell, c)
+	assertNoErr(t, err)
+
+	c, err = LatLngToCell(NewLatLng(0, 0), MaxResolution+1)
+	assertEqual(t, 0, c)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrResolutionDomain)
 }
 
 func TestCellToLatLng(t *testing.T) {
@@ -166,18 +174,22 @@ func TestIsValid(t *testing.T) {
 
 func TestRoundtrip(t *testing.T) {
 	t.Parallel()
+
 	t.Run("latlng", func(t *testing.T) {
 		t.Parallel()
 		expectedGeo := LatLng{Lat: 1, Lng: 2}
-		c := LatLngToCell(expectedGeo, MaxResolution)
+		c, _ := LatLngToCell(expectedGeo, MaxResolution)
 		actualGeo := CellToLatLng(c)
 		assertEqualLatLng(t, expectedGeo, actualGeo)
-		assertEqualLatLng(t, expectedGeo, expectedGeo.Cell(MaxResolution).LatLng())
+
+		expectedCell, _ := expectedGeo.Cell(MaxResolution)
+		assertEqualLatLng(t, expectedGeo, expectedCell.LatLng())
 	})
+
 	t.Run("cell", func(t *testing.T) {
 		t.Parallel()
 		geo := CellToLatLng(validCell)
-		actualCell := LatLngToCell(geo, validCell.Resolution())
+		actualCell, _ := LatLngToCell(geo, validCell.Resolution())
 		assertEqual(t, validCell, actualCell)
 	})
 }
@@ -186,7 +198,7 @@ func TestResolution(t *testing.T) {
 	t.Parallel()
 
 	for i := 1; i <= MaxResolution; i++ {
-		c := LatLngToCell(validLatLng1, i)
+		c, _ := LatLngToCell(validLatLng1, i)
 		assertEqual(t, i, c.Resolution())
 	}
 
@@ -393,14 +405,16 @@ func TestCellsToMultiPolygon(t *testing.T) {
 	t.Parallel()
 
 	// 7 cells in disk -> 1 polygon, 18-point loop, and no holes
-	cells := GridDisk(LatLngToCell(NewLatLng(0, 0), 10), 1)
+	c, _ := LatLngToCell(NewLatLng(0, 0), 10)
+	cells := GridDisk(c, 1)
 	res := CellsToMultiPolygon(cells)
 	assertEqual(t, len(res), 1)
 	assertEqual(t, len(res[0].GeoLoop), 18)
 	assertEqual(t, len(res[0].Holes), 0)
 
 	// 6 cells in ring -> 1 polygon, 18-point loop, and 1 6-point hole
-	cells = GridDisk(LatLngToCell(NewLatLng(0, 0), 10), 1)[1:]
+	c, _ = LatLngToCell(NewLatLng(0, 0), 10)
+	cells = GridDisk(c, 1)[1:]
 	res = CellsToMultiPolygon(cells)
 	assertEqual(t, len(res), 1)
 	assertEqual(t, len(res[0].GeoLoop), 18)
@@ -408,15 +422,19 @@ func TestCellsToMultiPolygon(t *testing.T) {
 	assertEqual(t, len(res[0].Holes[0]), 6)
 
 	// 2 hexagons connected -> 1 polygon, 10-point loop (2 shared points) and no holes
-	cells = GridDisk(LatLngToCell(NewLatLng(0, 0), 10), 1)[:2]
+	c, _ = LatLngToCell(NewLatLng(0, 0), 10)
+	cells = GridDisk(c, 1)[:2]
 	res = CellsToMultiPolygon(cells)
 	assertEqual(t, len(res), 1)
 	assertEqual(t, len(res[0].GeoLoop), 10)
 	assertEqual(t, len(res[0].Holes), 0)
 
 	// 2 distinct disks -> 2 polygons, 2 18-point loops, and no holes
-	cells1 := GridDisk(LatLngToCell(NewLatLng(0, 0), 10), 1)
-	cells2 := GridDisk(LatLngToCell(NewLatLng(10, 10), 10), 1)
+	c, _ = LatLngToCell(NewLatLng(0, 0), 10)
+	cells1 := GridDisk(c, 1)
+
+	c, _ = LatLngToCell(NewLatLng(10, 10), 10)
+	cells2 := GridDisk(c, 1)
 	cells = append(cells1, cells2...)
 	res = CellsToMultiPolygon(cells)
 	assertEqual(t, len(res), 2)
@@ -713,6 +731,16 @@ func assertErr(t *testing.T, err error) {
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	}
+}
+
+func assertErrIs(t *testing.T, err, target error) {
+	t.Helper()
+
+	if errors.Is(err, target) {
+		return
+	}
+
+	t.Errorf("errors don't match, err: %s, target err: %s", err, target)
 }
 
 func assertNoErr(t *testing.T, err error) {

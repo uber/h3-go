@@ -142,16 +142,16 @@ func NewLatLng(lat, lng float64) LatLng {
 }
 
 // LatLngToCell returns the Cell at resolution for a geographic coordinate.
-func LatLngToCell(latLng LatLng, resolution int) Cell {
+func LatLngToCell(latLng LatLng, resolution int) (Cell, error) {
 	var i C.H3Index
 
-	C.latLngToCell(latLng.toCPtr(), C.int(resolution), &i)
+	errC := C.latLngToCell(latLng.toCPtr(), C.int(resolution), &i)
 
-	return Cell(i)
+	return Cell(i), errMap[errC]
 }
 
 // Cell returns the Cell at resolution for a geographic coordinate.
-func (g LatLng) Cell(resolution int) Cell {
+func (g LatLng) Cell(resolution int) (Cell, error) {
 	return LatLngToCell(g, resolution)
 }
 

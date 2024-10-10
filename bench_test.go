@@ -10,7 +10,7 @@ var (
 		Lat: 37,
 		Lng: -122,
 	}
-	cell     = LatLngToCell(geo, 15)
+	cell, _  = LatLngToCell(geo, 15)
 	addr     = cell.String()
 	geoBndry CellBoundary
 	cells    []Cell
@@ -37,7 +37,7 @@ func BenchmarkToGeoRes15(b *testing.B) {
 
 func BenchmarkFromGeoRes15(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		cell = LatLngToCell(geo, 15)
+		cell, _ = LatLngToCell(geo, 15)
 	}
 }
 
