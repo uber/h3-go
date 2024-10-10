@@ -942,9 +942,10 @@ func TestCellToVertex(t *testing.T) {
 		cell           Cell
 		expectedVertex Cell
 		vertexNum      int
+		expectedErr    error
 	}{
-		{cell: validCell, expectedVertex: 0x2050dab63fffffff, vertexNum: 0},
-		{cell: validCell, expectedVertex: 0, vertexNum: 6}, // vertex num should be between 0 and 5 for hexagonal cells.
+		{cell: validCell, expectedVertex: 0x2050dab63fffffff, vertexNum: 0, expectedErr: nil},
+		{cell: validCell, expectedVertex: 0, vertexNum: 6, expectedErr: ErrDomain}, // vertex num should be between 0 and 5 for hexagonal cells.
 	}
 
 	for i, tc := range testCases {
@@ -953,7 +954,8 @@ func TestCellToVertex(t *testing.T) {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			t.Parallel()
 
-			vertex := CellToVertex(tc.cell, tc.vertexNum)
+			vertex, err := CellToVertex(tc.cell, tc.vertexNum)
+			assertErrIs(t, err, tc.expectedErr)
 			assertEqual(t, tc.expectedVertex, vertex)
 		})
 	}
@@ -965,10 +967,11 @@ func TestCellToVertexes(t *testing.T) {
 	testCases := []struct {
 		cell        Cell
 		numVertexes int
+		expectedErr error
 	}{
-		{cell: validCell, numVertexes: 6},
-		{cell: pentagonCell, numVertexes: 5},
-		{cell: -1, numVertexes: 0}, // Invalid cel.
+		{cell: validCell, numVertexes: 6, expectedErr: nil},
+		{cell: pentagonCell, numVertexes: 5, expectedErr: nil},
+		{cell: -1, numVertexes: 0, expectedErr: ErrFailed}, // Invalid cell.
 	}
 
 	for _, tc := range testCases {
@@ -976,7 +979,8 @@ func TestCellToVertexes(t *testing.T) {
 		t.Run(fmt.Sprint(tc.numVertexes), func(t *testing.T) {
 			t.Parallel()
 
-			vertexes := CellToVertexes(tc.cell)
+			vertexes, err := CellToVertexes(tc.cell)
+			assertErrIs(t, err, tc.expectedErr)
 			assertEqual(t, tc.numVertexes, len(vertexes))
 		})
 	}
@@ -985,12 +989,15 @@ func TestCellToVertexes(t *testing.T) {
 func TestVertexToLatLng(t *testing.T) {
 	t.Parallel()
 
+	vertex, _ := CellToVertex(validCell, 0)
+
 	testCases := []struct {
 		vertex         Cell
 		expectedLatLng LatLng
+		expectedErr    error
 	}{
-		{vertex: CellToVertex(validCell, 0), expectedLatLng: LatLng{Lat: 67.22475, Lng: -168.52301}},
-		{vertex: -1, expectedLatLng: LatLng{}}, // Invalid vertex.
+		{vertex: vertex, expectedLatLng: LatLng{Lat: 67.22475, Lng: -168.52301}, expectedErr: nil},
+		{vertex: -1, expectedLatLng: LatLng{}, expectedErr: ErrCellInvalid}, // Invalid vertex.
 	}
 
 	for i, tc := range testCases {
@@ -999,7 +1006,8 @@ func TestVertexToLatLng(t *testing.T) {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			t.Parallel()
 
-			latLng := VertexToLatLng(tc.vertex)
+			latLng, err := VertexToLatLng(tc.vertex)
+			assertErrIs(t, err, tc.expectedErr)
 			assertEqualLatLng(t, tc.expectedLatLng, latLng)
 		})
 	}

@@ -772,25 +772,27 @@ func LocalIJToCell(origin Cell, ij CoordIJ) (Cell, error) {
 	return Cell(out), errMap[errC]
 }
 
-func CellToVertex(c Cell, vertexNum int) Cell {
+func CellToVertex(c Cell, vertexNum int) (Cell, error) {
 	var out C.H3Index
-	C.cellToVertex(C.H3Index(c), C.int(vertexNum), &out)
+	errC := C.cellToVertex(C.H3Index(c), C.int(vertexNum), &out)
 
-	return Cell(out)
+	return Cell(out), errMap[errC]
 }
 
-func CellToVertexes(c Cell) []Cell {
+func CellToVertexes(c Cell) ([]Cell, error) {
 	out := make([]C.H3Index, numCellVertexes)
-	C.cellToVertexes(C.H3Index(c), &out[0])
+	if err := errMap[C.cellToVertexes(C.H3Index(c), &out[0])]; err != nil {
+		return nil, err
+	}
 
-	return cellsFromC(out, true, false)
+	return cellsFromC(out, true, false), nil
 }
 
-func VertexToLatLng(vertex Cell) LatLng {
+func VertexToLatLng(vertex Cell) (LatLng, error) {
 	var out C.LatLng
-	C.vertexToLatLng(C.H3Index(vertex), &out)
+	errC := C.vertexToLatLng(C.H3Index(vertex), &out)
 
-	return latLngFromC(out)
+	return latLngFromC(out), errMap[errC]
 }
 
 func IsValidVertex(c Cell) bool {
