@@ -434,8 +434,9 @@ func TestDirectedEdge(t *testing.T) {
 
 		// shadow origin/destination
 		cells, err := edge.Cells()
-		origin, destination := cells[0], cells[1]
 		assertNoErr(t, err)
+
+		origin, destination := cells[0], cells[1]
 		assertEqual(t, origin, edgeOrigin)
 		assertEqual(t, destination, edgeDestination)
 	})
@@ -535,7 +536,10 @@ func TestPolygonToCells(t *testing.T) {
 
 	t.Run("without holes", func(t *testing.T) {
 		t.Parallel()
+
 		cells, err := validGeoPolygonNoHoles.Cells(6)
+		assertNoErr(t, err)
+
 		expectedIndexes := []Cell{
 			0x860dab607ffffff,
 			0x860dab60fffffff,
@@ -545,13 +549,15 @@ func TestPolygonToCells(t *testing.T) {
 			0x860dab62fffffff,
 			0x860dab637ffffff,
 		}
-		assertNoErr(t, err)
 		assertEqualCells(t, expectedIndexes, cells)
 	})
 
 	t.Run("with hole", func(t *testing.T) {
 		t.Parallel()
+
 		cells, err := validGeoPolygonHoles.Cells(6)
+		assertNoErr(t, err)
+
 		expectedIndexes := []Cell{
 			0x860dab60fffffff,
 			0x860dab617ffffff,
@@ -560,7 +566,6 @@ func TestPolygonToCells(t *testing.T) {
 			0x860dab62fffffff,
 			0x860dab637ffffff,
 		}
-		assertNoErr(t, err)
 		assertEqualCells(t, expectedIndexes, cells)
 	})
 
@@ -658,27 +663,31 @@ func TestGridPath(t *testing.T) {
 	assertNil(t, path)
 }
 
-func TestHexAreaKm2(t *testing.T) {
+func TestHexAreaKm2(t *testing.T) { //nolint:dupl // // it's ok to have duplication in tests.
 	t.Parallel()
+
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
 		area, err := HexagonAreaAvgKm2(0)
 		assertNoErr(t, err)
 		assertEqualEps(t, float64(4357449.4161), area)
 	})
+
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
 		area, err := HexagonAreaAvgKm2(15)
 		assertNoErr(t, err)
 		assertEqualEps(t, float64(0.0000009), area)
 	})
+
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
 		area, err := HexagonAreaAvgKm2(8)
 		assertNoErr(t, err)
 		assertEqualEps(t, float64(0.7373276), area)
 	})
-	t.Run("error", func(t *testing.T) {
+
+	t.Run("resolution error", func(t *testing.T) {
 		t.Parallel()
 		_, err := HexagonAreaAvgKm2(-1)
 		assertErr(t, err)
@@ -686,27 +695,31 @@ func TestHexAreaKm2(t *testing.T) {
 	})
 }
 
-func TestHexAreaM2(t *testing.T) {
+func TestHexAreaM2(t *testing.T) { //nolint:dupl // // it's ok to have duplication in tests.
 	t.Parallel()
+
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
 		area, err := HexagonAreaAvgM2(0)
 		assertNoErr(t, err)
 		assertEqualEps(t, float64(4357449416078.3901), area)
 	})
+
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
 		area, err := HexagonAreaAvgM2(15)
 		assertNoErr(t, err)
 		assertEqualEps(t, float64(0.8953), area)
 	})
+
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
 		area, err := HexagonAreaAvgM2(8)
 		assertNoErr(t, err)
 		assertEqualEps(t, float64(737327.5976), area)
 	})
-	t.Run("error", func(t *testing.T) {
+
+	t.Run("resolution error", func(t *testing.T) {
 		t.Parallel()
 		_, err := HexagonAreaAvgM2(-1)
 		assertErr(t, err)
@@ -765,7 +778,7 @@ func TestCellAreaM2(t *testing.T) {
 	assertErrIs(t, err, ErrCellInvalid)
 }
 
-func TestHexagonEdgeLengthKm(t *testing.T) {
+func TestHexagonEdgeLengthKm(t *testing.T) { //nolint:dupl // // it's ok to have duplication in tests.
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
@@ -793,7 +806,7 @@ func TestHexagonEdgeLengthKm(t *testing.T) {
 	})
 }
 
-func TestHexagonEdgeLengthM(t *testing.T) {
+func TestHexagonEdgeLengthM(t *testing.T) { //nolint:dupl // // it's ok to have duplication in tests.
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
@@ -950,10 +963,10 @@ func TestCellToVertex(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
+		expectedErr    error
 		cell           Cell
 		expectedVertex Cell
 		vertexNum      int
-		expectedErr    error
 	}{
 		{cell: validCell, expectedVertex: 0x2050dab63fffffff, vertexNum: 0, expectedErr: nil},
 		{cell: validCell, expectedVertex: 0, vertexNum: 6, expectedErr: ErrDomain}, // vertex num should be between 0 and 5 for hexagonal cells.
@@ -976,9 +989,9 @@ func TestCellToVertexes(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
+		expectedErr error
 		cell        Cell
 		numVertexes int
-		expectedErr error
 	}{
 		{cell: validCell, numVertexes: 6, expectedErr: nil},
 		{cell: pentagonCell, numVertexes: 5, expectedErr: nil},
@@ -1003,9 +1016,9 @@ func TestVertexToLatLng(t *testing.T) {
 	vertex, _ := CellToVertex(validCell, 0)
 
 	testCases := []struct {
+		expectedErr    error
 		vertex         Cell
 		expectedLatLng LatLng
-		expectedErr    error
 	}{
 		{vertex: vertex, expectedLatLng: LatLng{Lat: 67.22475, Lng: -168.52301}, expectedErr: nil},
 		{vertex: -1, expectedLatLng: LatLng{}, expectedErr: ErrCellInvalid}, // Invalid vertex.
@@ -1272,6 +1285,9 @@ func assertNil(t *testing.T, val any) {
 		if value.IsNil() {
 			return
 		}
+	default:
+		t.Errorf("expected value to be nil, got: %v", val)
+		return
 	}
 
 	t.Errorf("expected value to be nil, got: %v", val)
