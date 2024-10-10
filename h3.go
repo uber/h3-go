@@ -644,11 +644,13 @@ func (e DirectedEdge) Destination() (Cell, error) {
 }
 
 // Cells returns the origin and destination cells in that order.
-func (e DirectedEdge) Cells() []Cell {
+func (e DirectedEdge) Cells() ([]Cell, error) {
 	out := make([]C.H3Index, numEdgeCells)
-	C.directedEdgeToCells(C.H3Index(e), &out[0])
+	if err := errMap[C.directedEdgeToCells(C.H3Index(e), &out[0])]; err != nil {
+		return nil, err
+	}
 
-	return cellsFromC(out, false, false)
+	return cellsFromC(out, false, false), nil
 }
 
 // Boundary provides the coordinates of the boundary of the directed edge. Note,

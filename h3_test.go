@@ -433,10 +433,19 @@ func TestDirectedEdge(t *testing.T) {
 		assertEqual(t, destination, edgeDestination)
 
 		// shadow origin/destination
-		cells := edge.Cells()
+		cells, err := edge.Cells()
 		origin, destination := cells[0], cells[1]
+		assertNoErr(t, err)
 		assertEqual(t, origin, edgeOrigin)
 		assertEqual(t, destination, edgeDestination)
+	})
+
+	t.Run("edge cells error", func(t *testing.T) {
+		t.Parallel()
+		cells, err := DirectedEdge(-1).Cells()
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDirectedEdgeInvalid)
+		assertNil(t, cells)
 	})
 
 	t.Run("get edges from hexagon", func(t *testing.T) {
@@ -461,6 +470,7 @@ func TestDirectedEdge(t *testing.T) {
 	})
 
 	t.Run("boundary error", func(t *testing.T) {
+		t.Parallel()
 		gb, err := DirectedEdge(-1).Boundary()
 		assertErr(t, err)
 		assertErrIs(t, err, ErrDirectedEdgeInvalid)
