@@ -114,16 +114,21 @@ func TestLatLngToCell(t *testing.T) {
 	assertEqual(t, validCell, c)
 	assertNoErr(t, err)
 
-	c, err = LatLngToCell(NewLatLng(0, 0), MaxResolution+1)
-	assertEqual(t, 0, c)
+	_, err = LatLngToCell(NewLatLng(0, 0), MaxResolution+1)
 	assertErr(t, err)
 	assertErrIs(t, err, ErrResolutionDomain)
 }
 
 func TestCellToLatLng(t *testing.T) {
 	t.Parallel()
-	g := CellToLatLng(validCell)
+
+	g, err := CellToLatLng(validCell)
 	assertEqualLatLng(t, validLatLng1, g)
+	assertNoErr(t, err)
+
+	_, err = CellToLatLng(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrCellInvalid)
 }
 
 func TestToCellBoundary(t *testing.T) {
@@ -179,16 +184,17 @@ func TestRoundtrip(t *testing.T) {
 		t.Parallel()
 		expectedGeo := LatLng{Lat: 1, Lng: 2}
 		c, _ := LatLngToCell(expectedGeo, MaxResolution)
-		actualGeo := CellToLatLng(c)
+		actualGeo, _ := CellToLatLng(c)
 		assertEqualLatLng(t, expectedGeo, actualGeo)
 
 		expectedCell, _ := expectedGeo.Cell(MaxResolution)
-		assertEqualLatLng(t, expectedGeo, expectedCell.LatLng())
+		expectedLatLng, _ := expectedCell.LatLng()
+		assertEqualLatLng(t, expectedGeo, expectedLatLng)
 	})
 
 	t.Run("cell", func(t *testing.T) {
 		t.Parallel()
-		geo := CellToLatLng(validCell)
+		geo, _ := CellToLatLng(validCell)
 		actualCell, _ := LatLngToCell(geo, validCell.Resolution())
 		assertEqual(t, validCell, actualCell)
 	})

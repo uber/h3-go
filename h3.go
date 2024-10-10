@@ -156,16 +156,16 @@ func (g LatLng) Cell(resolution int) (Cell, error) {
 }
 
 // CellToLatLng returns the geographic centerpoint of a Cell.
-func CellToLatLng(c Cell) LatLng {
+func CellToLatLng(c Cell) (LatLng, error) {
 	var g C.LatLng
 
-	C.cellToLatLng(C.H3Index(c), &g)
+	errC := C.cellToLatLng(C.H3Index(c), &g)
 
-	return latLngFromC(g)
+	return latLngFromC(g), errMap[errC]
 }
 
 // LatLng returns the Cell at resolution for a geographic coordinate.
-func (c Cell) LatLng() LatLng {
+func (c Cell) LatLng() (LatLng, error) {
 	return CellToLatLng(c)
 }
 

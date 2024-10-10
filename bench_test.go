@@ -31,7 +31,7 @@ func BenchmarkFromString(b *testing.B) {
 
 func BenchmarkToGeoRes15(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		geo = CellToLatLng(cell)
+		geo, _ = CellToLatLng(cell)
 	}
 }
 
