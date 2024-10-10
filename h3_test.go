@@ -632,10 +632,17 @@ func TestCenterChild(t *testing.T) {
 func TestIcosahedronFaces(t *testing.T) {
 	t.Parallel()
 
-	faces := validDiskDist3_1[1][1].IcosahedronFaces()
+	faces, err := validDiskDist3_1[1][1].IcosahedronFaces()
 
 	assertEqual(t, 1, len(faces))
 	assertEqual(t, 1, faces[0])
+	assertNoErr(t, err)
+
+	c := Cell(-1)
+
+	_, err = c.IcosahedronFaces()
+	assertErr(t, err)
+	assertErrIs(t, err, ErrCellInvalid)
 }
 
 func TestPentagons(t *testing.T) {

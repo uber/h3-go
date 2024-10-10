@@ -578,15 +578,16 @@ func (c Cell) IsPentagon() bool {
 }
 
 // IcosahedronFaces finds all icosahedron faces (0-19) intersected by this Cell.
-func (c Cell) IcosahedronFaces() []int {
+func (c Cell) IcosahedronFaces() ([]int, error) {
 	var outsz C.int
 
+	// Seems like this function always returns E_SUCCESS.
 	C.maxFaceCount(C.H3Index(c), &outsz)
+
 	out := make([]C.int, outsz)
+	errC := C.getIcosahedronFaces(C.H3Index(c), &out[0])
 
-	C.getIcosahedronFaces(C.H3Index(c), &out[0])
-
-	return intsFromC(out)
+	return intsFromC(out), errMap[errC]
 }
 
 // IsNeighbor returns true if this Cell is a neighbor of the other Cell.
