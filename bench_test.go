@@ -49,7 +49,7 @@ func BenchmarkToGeoBndryRes15(b *testing.B) {
 
 func BenchmarkHexRange(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		cells = cell.GridDisk(10)
+		cells, _ = cell.GridDisk(10)
 	}
 }
 

@@ -146,18 +146,35 @@ func TestToCellBoundary(t *testing.T) {
 
 func TestGridDisk(t *testing.T) {
 	t.Parallel()
+
 	t.Run("no pentagon", func(t *testing.T) {
 		t.Parallel()
+
+		gd, err := validCell.GridDisk(len(validDiskDist3_1) - 1)
 		assertEqualDisks(t,
 			flattenDisks(validDiskDist3_1),
-			validCell.GridDisk(len(validDiskDist3_1)-1))
+			gd,
+		)
+		assertNoErr(t, err)
 	})
+
 	t.Run("pentagon ok", func(t *testing.T) {
 		t.Parallel()
+
 		assertNoPanic(t, func() {
-			disk := GridDisk(pentagonCell, 1)
+			disk, err := GridDisk(pentagonCell, 1)
 			assertEqual(t, 6, len(disk), "expected pentagon disk to have 6 cells")
+			assertNoErr(t, err)
 		})
+	})
+
+	t.Run("invalid cell", func(t *testing.T) {
+		t.Parallel()
+
+		c := Cell(-1)
+		_, err := c.GridDisk(1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrCellInvalid)
 	})
 }
 
@@ -419,7 +436,7 @@ func TestCellsToMultiPolygon(t *testing.T) {
 
 	// 7 cells in disk -> 1 polygon, 18-point loop, and no holes
 	c, _ := LatLngToCell(NewLatLng(0, 0), 10)
-	cells := GridDisk(c, 1)
+	cells, _ := GridDisk(c, 1)
 	res := CellsToMultiPolygon(cells)
 	assertEqual(t, len(res), 1)
 	assertEqual(t, len(res[0].GeoLoop), 18)
@@ -427,8 +444,8 @@ func TestCellsToMultiPolygon(t *testing.T) {
 
 	// 6 cells in ring -> 1 polygon, 18-point loop, and 1 6-point hole
 	c, _ = LatLngToCell(NewLatLng(0, 0), 10)
-	cells = GridDisk(c, 1)[1:]
-	res = CellsToMultiPolygon(cells)
+	cells, _ = GridDisk(c, 1)
+	res = CellsToMultiPolygon(cells[1:])
 	assertEqual(t, len(res), 1)
 	assertEqual(t, len(res[0].GeoLoop), 18)
 	assertEqual(t, len(res[0].Holes), 1)
@@ -436,18 +453,18 @@ func TestCellsToMultiPolygon(t *testing.T) {
 
 	// 2 hexagons connected -> 1 polygon, 10-point loop (2 shared points) and no holes
 	c, _ = LatLngToCell(NewLatLng(0, 0), 10)
-	cells = GridDisk(c, 1)[:2]
-	res = CellsToMultiPolygon(cells)
+	cells, _ = GridDisk(c, 1)
+	res = CellsToMultiPolygon(cells[:2])
 	assertEqual(t, len(res), 1)
 	assertEqual(t, len(res[0].GeoLoop), 10)
 	assertEqual(t, len(res[0].Holes), 0)
 
 	// 2 distinct disks -> 2 polygons, 2 18-point loops, and no holes
 	c, _ = LatLngToCell(NewLatLng(0, 0), 10)
-	cells1 := GridDisk(c, 1)
+	cells1, _ := GridDisk(c, 1)
 
 	c, _ = LatLngToCell(NewLatLng(10, 10), 10)
-	cells2 := GridDisk(c, 1)
+	cells2, _ := GridDisk(c, 1)
 	cells = append(cells1, cells2...)
 	res = CellsToMultiPolygon(cells)
 	assertEqual(t, len(res), 2)

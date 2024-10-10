@@ -190,11 +190,11 @@ func (c Cell) Boundary() (CellBoundary, error) {
 //
 // Output is placed in an array in no particular order. Elements of the output
 // array may be left zero, as can happen when crossing a pentagon.
-func GridDisk(origin Cell, k int) []Cell {
+func GridDisk(origin Cell, k int) ([]Cell, error) {
 	out := make([]C.H3Index, maxGridDiskSize(k))
-	C.gridDisk(C.H3Index(origin), C.int(k), &out[0])
+	errC := C.gridDisk(C.H3Index(origin), C.int(k), &out[0])
 	// QUESTION: should we prune zeroes from the output?
-	return cellsFromC(out, true, false)
+	return cellsFromC(out, true, false), errMap[errC]
 }
 
 // GridDisk produces cells within grid distance k of the origin cell.
@@ -204,7 +204,7 @@ func GridDisk(origin Cell, k int) []Cell {
 //
 // Output is placed in an array in no particular order. Elements of the output
 // array may be left zero, as can happen when crossing a pentagon.
-func (c Cell) GridDisk(k int) []Cell {
+func (c Cell) GridDisk(k int) ([]Cell, error) {
 	return GridDisk(c, k)
 }
 
