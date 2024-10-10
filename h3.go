@@ -689,17 +689,17 @@ func UncompactCells(in []Cell, resolution int) []Cell {
 
 // ChildPosToCell returns the child of cell a at a given position within an ordered list of all
 // children at the specified resolution.
-func ChildPosToCell(position int, a Cell, resolution int) Cell {
+func ChildPosToCell(position int, a Cell, resolution int) (Cell, error) {
 	var out C.H3Index
 
-	C.childPosToCell(C.int64_t(position), C.H3Index(a), C.int(resolution), &out)
+	errC := C.childPosToCell(C.int64_t(position), C.H3Index(a), C.int(resolution), &out)
 
-	return Cell(out)
+	return Cell(out), errMap[errC]
 }
 
 // ChildPosToCell returns the child cell at a given position within an ordered list of all
 // children at the specified resolution.
-func (c Cell) ChildPosToCell(position int, resolution int) Cell {
+func (c Cell) ChildPosToCell(position int, resolution int) (Cell, error) {
 	return ChildPosToCell(position, c, resolution)
 }
 

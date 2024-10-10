@@ -330,8 +330,17 @@ func TestChildPosToCell(t *testing.T) {
 
 	children, _ := validCell.Children(6)
 
-	assertEqual(t, children[0], validCell.ChildPosToCell(0, 6))
-	assertEqual(t, children[0], ChildPosToCell(0, validCell, 6))
+	cell, err := validCell.ChildPosToCell(0, 6)
+	assertNoErr(t, err)
+	assertEqual(t, children[0], cell)
+
+	cell, err = ChildPosToCell(0, validCell, 6)
+	assertNoErr(t, err)
+	assertEqual(t, children[0], cell)
+
+	_, err = validCell.ChildPosToCell(0, -1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrResolutionDomain)
 }
 
 func TestChildPos(t *testing.T) {
