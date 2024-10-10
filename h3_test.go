@@ -339,8 +339,17 @@ func TestChildPos(t *testing.T) {
 
 	children, _ := validCell.Children(7)
 
-	assertEqual(t, 32, children[32].ChildPos(validCell.Resolution()))
-	assertEqual(t, 32, CellToChildPos(children[32], validCell.Resolution()))
+	pos, err := children[32].ChildPos(validCell.Resolution())
+	assertNoErr(t, err)
+	assertEqual(t, 32, pos)
+
+	pos, err = CellToChildPos(children[32], validCell.Resolution())
+	assertNoErr(t, err)
+	assertEqual(t, 32, pos)
+
+	_, err = validCell.ChildPos(-1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrResolutionDomain)
 }
 
 func TestIsResClassIII(t *testing.T) {

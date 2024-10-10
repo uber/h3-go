@@ -705,17 +705,17 @@ func (c Cell) ChildPosToCell(position int, resolution int) Cell {
 
 // CellToChildPos returns the position of the cell a within an ordered list of all children of the cell's parent
 // at the specified resolution.
-func CellToChildPos(a Cell, resolution int) int {
+func CellToChildPos(a Cell, resolution int) (int, error) {
 	var out C.int64_t
 
-	C.cellToChildPos(C.H3Index(a), C.int(resolution), &out)
+	errC := C.cellToChildPos(C.H3Index(a), C.int(resolution), &out)
 
-	return int(out)
+	return int(out), errMap[errC]
 }
 
 // ChildPos returns the position of the cell within an ordered list of all children of the cell's parent
 // at the specified resolution.
-func (c Cell) ChildPos(resolution int) int {
+func (c Cell) ChildPos(resolution int) (int, error) {
 	return CellToChildPos(c, resolution)
 }
 
