@@ -628,19 +628,19 @@ func (e DirectedEdge) IsValid() bool {
 }
 
 // Origin returns the origin cell of this directed edge.
-func (e DirectedEdge) Origin() Cell {
+func (e DirectedEdge) Origin() (Cell, error) {
 	var out C.H3Index
-	C.getDirectedEdgeOrigin(C.H3Index(e), &out)
+	errC := C.getDirectedEdgeOrigin(C.H3Index(e), &out)
 
-	return Cell(out)
+	return Cell(out), errMap[errC]
 }
 
 // Destination returns the destination cell of this directed edge.
-func (e DirectedEdge) Destination() Cell {
+func (e DirectedEdge) Destination() (Cell, error) {
 	var out C.H3Index
-	C.getDirectedEdgeDestination(C.H3Index(e), &out)
+	errC := C.getDirectedEdgeDestination(C.H3Index(e), &out)
 
-	return Cell(out)
+	return Cell(out), errMap[errC]
 }
 
 // Cells returns the origin and destination cells in that order.

@@ -397,7 +397,8 @@ func TestIsNeighbor(t *testing.T) {
 	assertFalse(t, isNeighbor)
 
 	edges, _ := validCell.DirectedEdges()
-	isNeighbor, err = edges[0].Destination().IsNeighbor(validCell)
+	dest, _ := edges[0].Destination()
+	isNeighbor, err = dest.IsNeighbor(validCell)
 	assertNoErr(t, err)
 	assertTrue(t, isNeighbor)
 }
@@ -409,7 +410,8 @@ func TestDirectedEdge(t *testing.T) {
 	edges, err := origin.DirectedEdges()
 	assertNoErr(t, err)
 
-	destination := edges[0].Destination()
+	destination, err := edges[0].Destination()
+	assertNoErr(t, err)
 
 	edge, err := origin.DirectedEdge(destination)
 	assertNoErr(t, err)
@@ -422,14 +424,19 @@ func TestDirectedEdge(t *testing.T) {
 
 	t.Run("get origin/destination from edge", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, origin, edge.Origin())
-		assertEqual(t, destination, edge.Destination())
+		edgeOrigin, err := edge.Origin()
+		assertNoErr(t, err)
+		assertEqual(t, origin, edgeOrigin)
+
+		edgeDestination, err := edge.Destination()
+		assertNoErr(t, err)
+		assertEqual(t, destination, edgeDestination)
 
 		// shadow origin/destination
 		cells := edge.Cells()
 		origin, destination := cells[0], cells[1]
-		assertEqual(t, origin, edge.Origin())
-		assertEqual(t, destination, edge.Destination())
+		assertEqual(t, origin, edgeOrigin)
+		assertEqual(t, destination, edgeDestination)
 	})
 
 	t.Run("get edges from hexagon", func(t *testing.T) {
