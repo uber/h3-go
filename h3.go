@@ -745,11 +745,11 @@ func (c Cell) GridPath(other Cell) ([]Cell, error) {
 	return GridPath(c, other)
 }
 
-func CellToLocalIJ(origin, cell Cell) CoordIJ {
+func CellToLocalIJ(origin, cell Cell) (CoordIJ, error) {
 	var out C.CoordIJ
-	C.cellToLocalIj(C.H3Index(origin), C.H3Index(cell), 0, &out)
+	errC := C.cellToLocalIj(C.H3Index(origin), C.H3Index(cell), 0, &out)
 
-	return CoordIJ{int(out.i), int(out.j)}
+	return CoordIJ{int(out.i), int(out.j)}, errMap[errC]
 }
 
 func LocalIJToCell(origin Cell, ij CoordIJ) Cell {

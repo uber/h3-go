@@ -145,6 +145,17 @@ func TestToCellBoundary(t *testing.T) {
 	assertErrIs(t, err, ErrCellInvalid)
 }
 
+func TestCellToLocalIJ(t *testing.T) {
+	t.Parallel()
+
+	_, err := CellToLocalIJ(validCell, validCell)
+	assertNoErr(t, err)
+
+	_, err = CellToLocalIJ(-1, -1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrCellInvalid)
+}
+
 func TestGridDisk(t *testing.T) {
 	t.Parallel()
 
