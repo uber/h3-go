@@ -133,8 +133,15 @@ func TestCellToLatLng(t *testing.T) {
 
 func TestToCellBoundary(t *testing.T) {
 	t.Parallel()
-	boundary := validCell.Boundary()
+
+	boundary, err := validCell.Boundary()
 	assertEqualLatLngs(t, validGeoLoop[:], boundary[:])
+	assertNoErr(t, err)
+
+	c := Cell(-1)
+	_, err = c.Boundary()
+	assertErr(t, err)
+	assertErrIs(t, err, ErrCellInvalid)
 }
 
 func TestGridDisk(t *testing.T) {

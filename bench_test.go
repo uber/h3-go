@@ -43,7 +43,7 @@ func BenchmarkFromGeoRes15(b *testing.B) {
 
 func BenchmarkToGeoBndryRes15(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		geoBndry = CellToBoundary(cell)
+		geoBndry, _ = CellToBoundary(cell)
 	}
 }
 

@@ -170,16 +170,16 @@ func (c Cell) LatLng() (LatLng, error) {
 }
 
 // CellToBoundary returns a CellBoundary of the Cell.
-func CellToBoundary(c Cell) CellBoundary {
+func CellToBoundary(c Cell) (CellBoundary, error) {
 	var cb C.CellBoundary
 
-	C.cellToBoundary(C.H3Index(c), &cb)
+	errC := C.cellToBoundary(C.H3Index(c), &cb)
 
-	return cellBndryFromC(&cb)
+	return cellBndryFromC(&cb), errMap[errC]
 }
 
 // Boundary returns a CellBoundary of the Cell.
-func (c Cell) Boundary() CellBoundary {
+func (c Cell) Boundary() (CellBoundary, error) {
 	return CellToBoundary(c)
 }
 
