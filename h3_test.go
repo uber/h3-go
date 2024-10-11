@@ -1347,3 +1347,22 @@ func copyCells(s []Cell) []Cell {
 
 	return c
 }
+
+func TestToErr(t *testing.T) {
+	t.Parallel()
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		assertNoErr(t, toErr(0))
+	})
+
+	t.Run("pentagon error", func(t *testing.T) {
+		t.Parallel()
+		assertErrIs(t, toErr(9), ErrPentagon)
+	})
+
+	t.Run("unknown error", func(t *testing.T) {
+		t.Parallel()
+		assertErrIs(t, toErr(999), ErrUnknown)
+	})
+}
