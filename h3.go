@@ -86,7 +86,7 @@ var (
 	ErrMemoryBounds          = errors.New("bounds of provided memory were not large enough")
 	ErrOptionInvalid         = errors.New("mode or flags argument was not valid")
 
-	errMap = map[C.uint]error{
+	errMap = map[C.uint32_t]error{
 		0:  nil, // Success error code.
 		1:  ErrFailed,
 		2:  ErrDomain,
