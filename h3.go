@@ -222,7 +222,7 @@ func GridDiskDistances(origin Cell, k int) ([][]Cell, error) {
 	rsz := maxGridDiskSize(k)
 	outHexes := make([]C.H3Index, rsz)
 	outDists := make([]C.int, rsz)
-	if err := errMap[C.gridDiskDistances(C.H3Index(origin), C.int(k), &outHexes[0], &outDists[0])]; err != nil {
+	if err := toErr(C.gridDiskDistances(C.H3Index(origin), C.int(k), &outHexes[0], &outDists[0])); err != nil {
 		return nil, err
 	}
 
@@ -266,7 +266,7 @@ func PolygonToCells(polygon GeoPolygon, resolution int) ([]Cell, error) {
 	defer freeCGeoPolygon(&cpoly)
 
 	maxLen := new(C.int64_t)
-	if err := errMap[C.maxPolygonToCellsSize(&cpoly, C.int(resolution), 0, maxLen)]; err != nil {
+	if err := toErr(C.maxPolygonToCellsSize(&cpoly, C.int(resolution), 0, maxLen)); err != nil {
 		return nil, err
 	}
 
@@ -301,7 +301,7 @@ func CellsToMultiPolygon(cells []Cell) ([]GeoPolygon, error) {
 	}
 	h3Indexes := cellsToC(cells)
 	cLinkedGeoPolygon := new(C.LinkedGeoPolygon)
-	if err := errMap[C.cellsToLinkedMultiPolygon(&h3Indexes[0], C.int(len(h3Indexes)), cLinkedGeoPolygon)]; err != nil {
+	if err := toErr(C.cellsToLinkedMultiPolygon(&h3Indexes[0], C.int(len(h3Indexes)), cLinkedGeoPolygon)); err != nil {
 		return nil, err
 	}
 
@@ -553,7 +553,7 @@ func (c Cell) ImmediateParent() (Cell, error) {
 func (c Cell) Children(resolution int) ([]Cell, error) {
 	var outsz C.int64_t
 
-	if err := errMap[C.cellToChildrenSize(C.H3Index(c), C.int(resolution), &outsz)]; err != nil {
+	if err := toErr(C.cellToChildrenSize(C.H3Index(c), C.int(resolution), &outsz)); err != nil {
 		return nil, err
 	}
 	out := make([]C.H3Index, outsz)
@@ -651,7 +651,7 @@ func (e DirectedEdge) Destination() (Cell, error) {
 // Cells returns the origin and destination cells in that order.
 func (e DirectedEdge) Cells() ([]Cell, error) {
 	out := make([]C.H3Index, numEdgeCells)
-	if err := errMap[C.directedEdgeToCells(C.H3Index(e), &out[0])]; err != nil {
+	if err := toErr(C.directedEdgeToCells(C.H3Index(e), &out[0])); err != nil {
 		return nil, err
 	}
 
@@ -664,7 +664,7 @@ func (e DirectedEdge) Cells() ([]Cell, error) {
 // 2 coordinates to account for crossing faces.
 func (e DirectedEdge) Boundary() (CellBoundary, error) {
 	var out C.CellBoundary
-	if err := errMap[C.directedEdgeToBoundary(C.H3Index(e), &out)]; err != nil {
+	if err := toErr(C.directedEdgeToBoundary(C.H3Index(e), &out)); err != nil {
 		return nil, err
 	}
 
@@ -689,7 +689,7 @@ func CompactCells(in []Cell) ([]Cell, error) {
 func UncompactCells(in []Cell, resolution int) ([]Cell, error) {
 	cin := cellsToC(in)
 	var csz C.int64_t
-	if err := errMap[C.uncompactCellsSize(&cin[0], C.int64_t(len(cin)), C.int(resolution), &csz)]; err != nil {
+	if err := toErr(C.uncompactCellsSize(&cin[0], C.int64_t(len(cin)), C.int(resolution), &csz)); err != nil {
 		return nil, err
 	}
 
@@ -747,12 +747,12 @@ func (c Cell) GridDistance(other Cell) (int, error) {
 
 func GridPath(a, b Cell) ([]Cell, error) {
 	var outsz C.int64_t
-	if err := errMap[C.gridPathCellsSize(C.H3Index(a), C.H3Index(b), &outsz)]; err != nil {
+	if err := toErr(C.gridPathCellsSize(C.H3Index(a), C.H3Index(b), &outsz)); err != nil {
 		return nil, err
 	}
 
 	out := make([]C.H3Index, outsz)
-	if err := errMap[C.gridPathCells(C.H3Index(a), C.H3Index(b), &out[0])]; err != nil {
+	if err := toErr(C.gridPathCells(C.H3Index(a), C.H3Index(b), &out[0])); err != nil {
 		return nil, err
 	}
 
@@ -786,7 +786,7 @@ func CellToVertex(c Cell, vertexNum int) (Cell, error) {
 
 func CellToVertexes(c Cell) ([]Cell, error) {
 	out := make([]C.H3Index, numCellVertexes)
-	if err := errMap[C.cellToVertexes(C.H3Index(c), &out[0])]; err != nil {
+	if err := toErr(C.cellToVertexes(C.H3Index(c), &out[0])); err != nil {
 		return nil, err
 	}
 
