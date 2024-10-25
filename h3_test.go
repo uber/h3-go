@@ -355,7 +355,7 @@ func TestPolygonToCells(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		t.Parallel()
-		cells := PolygonToCells(GeoPolygon{}, 6)
+		cells, _ := PolygonToCells(GeoPolygon{}, 6)
 		assertEqual(t, 0, len(cells))
 	})
 
