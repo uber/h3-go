@@ -245,9 +245,8 @@ func PolygonToCells(polygon GeoPolygon, resolution int) ([]Cell, error) {
 // hexagons, tests them and their neighbors to be contained by the geoloop(s),
 // and then any newly found hexagons are used to test again until no new
 // hexagons are found.
-func (p GeoPolygon) Cells(resolution int) []Cell {
-	cells, _ := PolygonToCells(p, resolution)
-	return cells
+func (p GeoPolygon) Cells(resolution int) ([]Cell, error) {
+	return PolygonToCells(p, resolution)
 }
 
 // CellsToMultiPolygon takes a set of cells and creates GeoPolygon(s)
