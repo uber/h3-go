@@ -232,7 +232,7 @@ func PolygonToCells(polygon GeoPolygon, resolution int) ([]Cell, error) {
 	out := make([]C.H3Index, *maxLen)
 	err = int(C.polygonToCells(&cpoly, C.int(resolution), 0, &out[0]))
 	if err != 0 {
-		return nil, fmt.Errorf("error returned from C.maxPolygonToCellsSize: %v", err)
+		return nil, fmt.Errorf("error returned from C.polygonToCells: %v", err)
 	}
 
 	return cellsFromC(out, true, false), nil
