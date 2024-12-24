@@ -511,15 +511,15 @@ func TestHexagonEdgeLengthKm(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(1281.256011), HexagonEdgeLengthAvgKm(0))
+		assertEqual(t, 1281.256011, HexagonEdgeLengthAvgKm(0))
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(0.000584169), HexagonEdgeLengthAvgKm(15))
+		assertEqual(t, 0.000584169, HexagonEdgeLengthAvgKm(15))
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(0.53141401), HexagonEdgeLengthAvgKm(8))
+		assertEqual(t, 0.53141401, HexagonEdgeLengthAvgKm(8))
 	})
 }
 
