@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2021 Uber Technologies, Inc.
+ * Copyright 2016-2021, 2024 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,43 @@
 #include "h3_h3Assert.h"
 #include "h3_iterators.h"
 #include "h3_mathExtensions.h"
+
+/** @var H3ErrorDescriptions
+ *  @brief An array of strings describing each of the H3ErrorCodes enum values
+ */
+static char *H3ErrorDescriptions[] = {
+    /* E_SUCCESS */ "Success",
+    /* E_FAILED */
+    "The operation failed but a more specific error is not available",
+    /* E_DOMAIN */ "Argument was outside of acceptable range",
+    /* E_LATLNG_DOMAIN */
+    "Latitude or longitude arguments were outside of acceptable range",
+    /* E_RES_DOMAIN */ "Resolution argument was outside of acceptable range",
+    /* E_CELL_INVALID */ "Cell argument was not valid",
+    /* E_DIR_EDGE_INVALID */ "Directed edge argument was not valid",
+    /* E_UNDIR_EDGE_INVALID */ "Undirected edge argument was not valid",
+    /* E_VERTEX_INVALID */ "Vertex argument was not valid",
+    /* E_PENTAGON */ "Pentagon distortion was encountered",
+    /* E_DUPLICATE_INPUT */ "Duplicate input",
+    /* E_NOT_NEIGHBORS */ "Cell arguments were not neighbors",
+    /* E_RES_MISMATCH */ "Cell arguments had incompatible resolutions",
+    /* E_MEMORY_ALLOC */ "Memory allocation failed",
+    /* E_MEMORY_BOUNDS */ "Bounds of provided memory were insufficient",
+    /* E_OPTION_INVALID */ "Mode or flags argument was not valid"};
+
+/**
+ * Returns the string describing the H3Error. This string is internally
+ * allocated and should not be `free`d.
+ * @param err The H3 error.
+ * @return The string describing the H3Error
+ */
+const char *H3_EXPORT(describeH3Error)(H3Error err) {
+    if (err >= 0 && err <= 15) {  // TODO: Better way to bounds check here?
+        return H3ErrorDescriptions[err];
+    } else {
+        return "Invalid error code";
+    }
+}
 
 /**
  * Returns the H3 resolution of an H3 index.
@@ -294,7 +331,6 @@ H3Error H3_EXPORT(cellToCenterChild)(H3Index h, int childRes, H3Index *child) {
  * contiguous regions exist in the set at all and no compression possible)
  * @return an error code on bad input data
  */
-// todo: update internal implementation for int64_t
 H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
                                 const int64_t numHexes) {
     if (numHexes == 0) {
@@ -303,7 +339,7 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
     int res = H3_GET_RESOLUTION(h3Set[0]);
     if (res == 0) {
         // No compaction possible, just copy the set to output
-        for (int i = 0; i < numHexes; i++) {
+        for (int64_t i = 0; i < numHexes; i++) {
             compactedSet[i] = h3Set[i];
         }
         return E_SUCCESS;
@@ -319,7 +355,7 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
         return E_MEMORY_ALLOC;
     }
     H3Index *compactedSetOffset = compactedSet;
-    int numRemainingHexes = numHexes;
+    int64_t numRemainingHexes = numHexes;
     while (numRemainingHexes) {
         res = H3_GET_RESOLUTION(remainingHexes[0]);
         int parentRes = res - 1;
@@ -330,7 +366,7 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
             // Put the parents of the hexagons into the temp array
             // via a hashing mechanism, and use the reserved bits
             // to track how many times a parent is duplicated
-            for (int i = 0; i < numRemainingHexes; i++) {
+            for (int64_t i = 0; i < numRemainingHexes; i++) {
                 H3Index currIndex = remainingHexes[i];
                 // TODO: This case is coverable (reachable by fuzzer)
                 if (currIndex != 0) {
@@ -356,8 +392,8 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
                         return parentError;
                     }
                     // Modulus hash the parent into the temp array
-                    int loc = (int)(parent % numRemainingHexes);
-                    int loopCount = 0;
+                    int64_t loc = (int64_t)(parent % numRemainingHexes);
+                    int64_t loopCount = 0;
                     while (hashSetArray[loc] != 0) {
                         if (NEVER(loopCount > numRemainingHexes)) {
                             // This case should not be possible because at
@@ -401,8 +437,8 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
 
         // Determine which parent hexagons have a complete set
         // of children and put them in the compactableHexes array
-        int compactableCount = 0;
-        int maxCompactableCount =
+        int64_t compactableCount = 0;
+        int64_t maxCompactableCount =
             numRemainingHexes / 6;  // Somehow all pentagons; conservative
         if (maxCompactableCount == 0) {
             memcpy(compactedSetOffset, remainingHexes,
@@ -416,7 +452,7 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
             H3_MEMORY(free)(hashSetArray);
             return E_MEMORY_ALLOC;
         }
-        for (int i = 0; i < numRemainingHexes; i++) {
+        for (int64_t i = 0; i < numRemainingHexes; i++) {
             if (hashSetArray[i] == 0) continue;
             int count = H3_GET_RESERVED_BITS(hashSetArray[i]) + 1;
             // Include the deleted direction for pentagons as implicitly "there"
@@ -438,48 +474,54 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
         }
         // Uncompactable hexes are immediately copied into the
         // output compactedSetOffset
-        int uncompactableCount = 0;
-        for (int i = 0; i < numRemainingHexes; i++) {
+        int64_t uncompactableCount = 0;
+        for (int64_t i = 0; i < numRemainingHexes; i++) {
             H3Index currIndex = remainingHexes[i];
             // TODO: This case is coverable (reachable by fuzzer)
             if (currIndex != H3_NULL) {
-                H3Index parent;
-                H3Error parentError =
-                    H3_EXPORT(cellToParent)(currIndex, parentRes, &parent);
-                if (parentError) {
-                    H3_MEMORY(free)(compactableHexes);
-                    H3_MEMORY(free)(remainingHexes);
-                    H3_MEMORY(free)(hashSetArray);
-                    return parentError;
-                }
-                // Modulus hash the parent into the temp array
-                // to determine if this index was included in
-                // the compactableHexes array
-                int loc = (int)(parent % numRemainingHexes);
-                int loopCount = 0;
                 bool isUncompactable = true;
-                do {
-                    if (NEVER(loopCount > numRemainingHexes)) {
-                        // This case should not be possible because at most one
-                        // index is placed into hashSetArray per input hexagon.
+                // Resolution 0 cells always uncompactable, and trying to take
+                // the res -1 parent of a cell is invalid.
+                if (parentRes >= 0) {
+                    H3Index parent;
+                    H3Error parentError =
+                        H3_EXPORT(cellToParent)(currIndex, parentRes, &parent);
+                    if (NEVER(parentError)) {
                         H3_MEMORY(free)(compactableHexes);
                         H3_MEMORY(free)(remainingHexes);
                         H3_MEMORY(free)(hashSetArray);
-                        return E_FAILED;
+                        return parentError;
                     }
-                    H3Index tempIndex =
-                        hashSetArray[loc] & H3_RESERVED_MASK_NEGATIVE;
-                    if (tempIndex == parent) {
-                        int count = H3_GET_RESERVED_BITS(hashSetArray[loc]) + 1;
-                        if (count == 7) {
-                            isUncompactable = false;
+                    // Modulus hash the parent into the temp array
+                    // to determine if this index was included in
+                    // the compactableHexes array
+                    int64_t loc = (int64_t)(parent % numRemainingHexes);
+                    int64_t loopCount = 0;
+                    do {
+                        if (NEVER(loopCount > numRemainingHexes)) {
+                            // This case should not be possible because at most
+                            // one index is placed into hashSetArray per input
+                            // hexagon.
+                            H3_MEMORY(free)(compactableHexes);
+                            H3_MEMORY(free)(remainingHexes);
+                            H3_MEMORY(free)(hashSetArray);
+                            return E_FAILED;
                         }
-                        break;
-                    } else {
-                        loc = (loc + 1) % numRemainingHexes;
-                    }
-                    loopCount++;
-                } while (hashSetArray[loc] != parent);
+                        H3Index tempIndex =
+                            hashSetArray[loc] & H3_RESERVED_MASK_NEGATIVE;
+                        if (tempIndex == parent) {
+                            int count =
+                                H3_GET_RESERVED_BITS(hashSetArray[loc]) + 1;
+                            if (count == 7) {
+                                isUncompactable = false;
+                            }
+                            break;
+                        } else {
+                            loc = (loc + 1) % numRemainingHexes;
+                        }
+                        loopCount++;
+                    } while (hashSetArray[loc] != parent);
+                }
                 if (isUncompactable) {
                     compactedSetOffset[uncompactableCount] = remainingHexes[i];
                     uncompactableCount++;
@@ -1019,7 +1061,7 @@ H3Error H3_EXPORT(getIcosahedronFaces)(H3Index h3, int *out) {
  *
  * @return int count of pentagon indexes
  */
-int H3_EXPORT(pentagonCount)() { return NUM_PENTAGONS; }
+int H3_EXPORT(pentagonCount)(void) { return NUM_PENTAGONS; }
 
 /**
  * Generates all pentagons at the specified resolution
