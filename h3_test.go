@@ -511,15 +511,15 @@ func TestHexagonEdgeLengthKm(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(1107.712591), HexagonEdgeLengthAvgKm(0))
+		assertEqual(t, float64(1281.256011), HexagonEdgeLengthAvgKm(0))
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(0.000509713), HexagonEdgeLengthAvgKm(15))
+		assertEqual(t, float64(0.000584169), HexagonEdgeLengthAvgKm(15))
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
-		assertEqual(t, float64(0.461354684), HexagonEdgeLengthAvgKm(8))
+		assertEqual(t, float64(0.53141401), HexagonEdgeLengthAvgKm(8))
 	})
 }
 
@@ -528,17 +528,17 @@ func TestHexagonEdgeLengthM(t *testing.T) {
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
 		area := HexagonEdgeLengthAvgM(0)
-		assertEqual(t, float64(1107712.591), area)
+		assertEqual(t, 1281256.011, area)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
 		area := HexagonEdgeLengthAvgM(15)
-		assertEqual(t, float64(0.509713273), area)
+		assertEqual(t, 0.584168630, area)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
 		area := HexagonEdgeLengthAvgM(8)
-		assertEqual(t, float64(461.3546837), area)
+		assertEqual(t, 531.4140101, area)
 	})
 }
 
