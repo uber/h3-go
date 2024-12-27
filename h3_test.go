@@ -778,7 +778,7 @@ func TestCellAreaM2(t *testing.T) {
 	assertErrIs(t, err, ErrCellInvalid)
 }
 
-func TestHexagonEdgeLengthKm(t *testing.T) { //nolint:dupl // // it's ok to have duplication in tests.
+func TestHexagonEdgeLengthKm(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
@@ -803,7 +803,7 @@ func TestHexagonEdgeLengthKm(t *testing.T) { //nolint:dupl // // it's ok to have
 	})
 }
 
-func TestHexagonEdgeLengthM(t *testing.T) { //nolint:dupl // // it's ok to have duplication in tests.
+func TestHexagonEdgeLengthM(t *testing.T) {
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
@@ -1083,8 +1083,11 @@ func assertEqual[T comparable](t *testing.T, expected, actual T, msgAndArgs ...a
 
 		switch e.(type) {
 		case Cell:
-			expStr = fmt.Sprintf("%s (res=%d)", e.(Cell), e.(Cell).Resolution())
-			actStr = fmt.Sprintf("%s (res=%d)", a.(Cell), a.(Cell).Resolution())
+			eC, _ := e.(Cell)
+			aC, _ := a.(Cell)
+
+			expStr = fmt.Sprintf("%s (res=%d)", eC, eC.Resolution())
+			actStr = fmt.Sprintf("%s (res=%d)", aC, aC.Resolution())
 		default:
 			expStr = fmt.Sprintf("%v", e)
 			actStr = fmt.Sprintf("%v", a)
@@ -1302,7 +1305,8 @@ func logMsgAndArgs(t *testing.T, msgAndArgs ...any) {
 	t.Helper()
 
 	if len(msgAndArgs) > 0 {
-		t.Logf(msgAndArgs[0].(string), msgAndArgs[1:]...)
+		format, _ := msgAndArgs[0].(string)
+		t.Logf(format, msgAndArgs[1:]...)
 	}
 }
 
