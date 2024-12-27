@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018, 2020-2022 Uber Technologies, Inc.
+ * Copyright 2016-2018, 2020-2023 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,20 +66,20 @@ void _hex2dToCoordIJK(const Vec2d *v, CoordIJK *h) {
     a2 = fabsl(v->y);
 
     // first do a reverse conversion
-    x2 = a2 / M_SIN60;
-    x1 = a1 + x2 / 2.0L;
+    x2 = a2 * M_RSIN60;
+    x1 = a1 + x2 / 2.0;
 
     // check if we have the center of a hex
-    m1 = x1;
-    m2 = x2;
+    m1 = (int)x1;
+    m2 = (int)x2;
 
     // otherwise round correctly
     r1 = x1 - m1;
     r2 = x2 - m2;
 
-    if (r1 < 0.5L) {
-        if (r1 < 1.0L / 3.0L) {
-            if (r2 < (1.0L + r1) / 2.0L) {
+    if (r1 < 0.5) {
+        if (r1 < 1.0 / 3.0) {
+            if (r2 < (1.0 + r1) / 2.0) {
                 h->i = m1;
                 h->j = m2;
             } else {
@@ -87,33 +87,33 @@ void _hex2dToCoordIJK(const Vec2d *v, CoordIJK *h) {
                 h->j = m2 + 1;
             }
         } else {
-            if (r2 < (1.0L - r1)) {
+            if (r2 < (1.0 - r1)) {
                 h->j = m2;
             } else {
                 h->j = m2 + 1;
             }
 
-            if ((1.0L - r1) <= r2 && r2 < (2.0 * r1)) {
+            if ((1.0 - r1) <= r2 && r2 < (2.0 * r1)) {
                 h->i = m1 + 1;
             } else {
                 h->i = m1;
             }
         }
     } else {
-        if (r1 < 2.0L / 3.0L) {
-            if (r2 < (1.0L - r1)) {
+        if (r1 < 2.0 / 3.0) {
+            if (r2 < (1.0 - r1)) {
                 h->j = m2;
             } else {
                 h->j = m2 + 1;
             }
 
-            if ((2.0L * r1 - 1.0L) < r2 && r2 < (1.0L - r1)) {
+            if ((2.0 * r1 - 1.0) < r2 && r2 < (1.0 - r1)) {
                 h->i = m1;
             } else {
                 h->i = m1 + 1;
             }
         } else {
-            if (r2 < (r1 / 2.0L)) {
+            if (r2 < (r1 / 2.0)) {
                 h->i = m1 + 1;
                 h->j = m2;
             } else {
@@ -125,20 +125,20 @@ void _hex2dToCoordIJK(const Vec2d *v, CoordIJK *h) {
 
     // now fold across the axes if necessary
 
-    if (v->x < 0.0L) {
+    if (v->x < 0.0) {
         if ((h->j % 2) == 0)  // even
         {
             long long int axisi = h->j / 2;
             long long int diff = h->i - axisi;
-            h->i = h->i - 2.0 * diff;
+            h->i = (int)(h->i - 2.0 * diff);
         } else {
             long long int axisi = (h->j + 1) / 2;
             long long int diff = h->i - axisi;
-            h->i = h->i - (2.0 * diff + 1);
+            h->i = (int)(h->i - (2.0 * diff + 1));
         }
     }
 
-    if (v->y < 0.0L) {
+    if (v->y < 0.0) {
         h->i = h->i - (2 * h->j + 1) / 2;
         h->j = -1 * h->j;
     }
@@ -156,7 +156,7 @@ void _ijkToHex2d(const CoordIJK *h, Vec2d *v) {
     int i = h->i - h->k;
     int j = h->j - h->k;
 
-    v->x = i - 0.5L * j;
+    v->x = i - 0.5 * j;
     v->y = j * M_SQRT3_2;
 }
 
@@ -345,9 +345,8 @@ H3Error _upAp7Checked(CoordIJK *ijk) {
         }
     }
 
-    // TODO: Do the int math parts here in long double?
-    ijk->i = (int)lroundl(((i * 3) - j) / 7.0L);
-    ijk->j = (int)lroundl((i + (j * 2)) / 7.0L);
+    ijk->i = (int)lround(((i * 3) - j) * M_ONESEVENTH);
+    ijk->j = (int)lround((i + (j * 2)) * M_ONESEVENTH);
     ijk->k = 0;
 
     // Expected not to be reachable, because max + min or max - min would need
@@ -394,9 +393,8 @@ H3Error _upAp7rChecked(CoordIJK *ijk) {
         }
     }
 
-    // TODO: Do the int math parts here in long double?
-    ijk->i = (int)lroundl(((i * 2) + j) / 7.0L);
-    ijk->j = (int)lroundl(((j * 3) - i) / 7.0L);
+    ijk->i = (int)lround(((i * 2) + j) * M_ONESEVENTH);
+    ijk->j = (int)lround(((j * 3) - i) * M_ONESEVENTH);
     ijk->k = 0;
 
     // Expected not to be reachable, because max + min or max - min would need
@@ -419,8 +417,8 @@ void _upAp7(CoordIJK *ijk) {
     int i = ijk->i - ijk->k;
     int j = ijk->j - ijk->k;
 
-    ijk->i = (int)lroundl((3 * i - j) / 7.0L);
-    ijk->j = (int)lroundl((i + 2 * j) / 7.0L);
+    ijk->i = (int)lround((3 * i - j) * M_ONESEVENTH);
+    ijk->j = (int)lround((i + 2 * j) * M_ONESEVENTH);
     ijk->k = 0;
     _ijkNormalize(ijk);
 }
@@ -436,8 +434,8 @@ void _upAp7r(CoordIJK *ijk) {
     int i = ijk->i - ijk->k;
     int j = ijk->j - ijk->k;
 
-    ijk->i = (int)lroundl((2 * i + j) / 7.0L);
-    ijk->j = (int)lroundl((3 * j - i) / 7.0L);
+    ijk->i = (int)lround((2 * i + j) * M_ONESEVENTH);
+    ijk->j = (int)lround((3 * j - i) * M_ONESEVENTH);
     ijk->k = 0;
     _ijkNormalize(ijk);
 }

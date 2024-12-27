@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2021 Uber Technologies, Inc.
+ * Copyright 2016-2023 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@
  * @return The normalized radians value.
  */
 double _posAngleRads(double rads) {
-    double tmp = ((rads < 0.0L) ? rads + M_2PI : rads);
+    double tmp = ((rads < 0.0) ? rads + M_2PI : rads);
     if (rads >= M_2PI) tmp -= M_2PI;
     return tmp;
 }
@@ -138,6 +138,24 @@ double constrainLng(double lng) {
 }
 
 /**
+ * Normalize an input longitude according to the specified normalization
+ * @param  lng           Input longitude
+ * @param  normalization Longitude normalization strategy
+ * @return               Normalized longitude
+ */
+double normalizeLng(const double lng,
+                    const LongitudeNormalization normalization) {
+    switch (normalization) {
+        case NORMALIZE_EAST:
+            return lng < 0 ? lng + (double)M_2PI : lng;
+        case NORMALIZE_WEST:
+            return lng > 0 ? lng - (double)M_2PI : lng;
+        default:
+            return lng;
+    }
+}
+
+/**
  * The great circle distance in radians between two spherical coordinates.
  *
  * This function uses the Haversine formula.
@@ -151,8 +169,8 @@ double constrainLng(double lng) {
  * @return    the great circle distance in radians between a and b
  */
 double H3_EXPORT(greatCircleDistanceRads)(const LatLng *a, const LatLng *b) {
-    double sinLat = sin((b->lat - a->lat) / 2.0);
-    double sinLng = sin((b->lng - a->lng) / 2.0);
+    double sinLat = sin((b->lat - a->lat) * 0.5);
+    double sinLng = sin((b->lng - a->lng) * 0.5);
 
     double A = sinLat * sinLat + cos(a->lat) * cos(b->lat) * sinLng * sinLng;
 
@@ -240,9 +258,10 @@ void _geoAzDistanceRads(const LatLng *p1, double az, double distance,
             p2->lat = -M_PI_2;
             p2->lng = 0.0;
         } else {
-            sinlng = sin(az) * sin(distance) / cos(p2->lat);
+            double invcosp2lat = 1.0 / cos(p2->lat);
+            sinlng = sin(az) * sin(distance) * invcosp2lat;
             coslng = (cos(distance) - sin(p1->lat) * sin(p2->lat)) /
-                     cos(p1->lat) / cos(p2->lat);
+                     cos(p1->lat) * invcosp2lat;
             if (sinlng > 1.0) sinlng = 1.0;
             if (sinlng < -1.0) sinlng = -1.0;
             if (coslng > 1.0) coslng = 1.0;
@@ -292,10 +311,10 @@ H3Error H3_EXPORT(getHexagonAreaAvgM2)(int res, double *out) {
 
 H3Error H3_EXPORT(getHexagonEdgeLengthAvgKm)(int res, double *out) {
     static const double lens[] = {
-        1107.712591, 418.6760055, 158.2446558, 59.81085794,
-        22.6063794,  8.544408276, 3.229482772, 1.220629759,
-        0.461354684, 0.174375668, 0.065907807, 0.024910561,
-        0.009415526, 0.003559893, 0.001348575, 0.000509713};
+        1281.256011, 483.0568391, 182.5129565, 68.97922179,
+        26.07175968, 9.854090990, 3.724532667, 1.406475763,
+        0.531414010, 0.200786148, 0.075863783, 0.028663897,
+        0.010830188, 0.004092010, 0.001546100, 0.000584169};
     if (res < 0 || res > MAX_H3_RES) {
         return E_RES_DOMAIN;
     }
@@ -305,10 +324,10 @@ H3Error H3_EXPORT(getHexagonEdgeLengthAvgKm)(int res, double *out) {
 
 H3Error H3_EXPORT(getHexagonEdgeLengthAvgM)(int res, double *out) {
     static const double lens[] = {
-        1107712.591, 418676.0055, 158244.6558, 59810.85794,
-        22606.3794,  8544.408276, 3229.482772, 1220.629759,
-        461.3546837, 174.3756681, 65.90780749, 24.9105614,
-        9.415526211, 3.559893033, 1.348574562, 0.509713273};
+        1281256.011, 483056.8391, 182512.9565, 68979.22179,
+        26071.75968, 9854.090990, 3724.532667, 1406.475763,
+        531.4140101, 200.7861476, 75.86378287, 28.66389748,
+        10.83018784, 4.092010473, 1.546099657, 0.584168630};
     if (res < 0 || res > MAX_H3_RES) {
         return E_RES_DOMAIN;
     }
@@ -337,12 +356,12 @@ H3Error H3_EXPORT(getNumCells)(int res, int64_t *out) {
  * @return     area in radians^2 of triangle on unit sphere
  */
 double triangleEdgeLengthsToArea(double a, double b, double c) {
-    double s = (a + b + c) / 2;
+    double s = (a + b + c) * 0.5;
 
-    a = (s - a) / 2;
-    b = (s - b) / 2;
-    c = (s - c) / 2;
-    s = s / 2;
+    a = (s - a) * 0.5;
+    b = (s - b) * 0.5;
+    c = (s - c) * 0.5;
+    s = s * 0.5;
 
     return 4 * atan(sqrt(tan(s) * tan(a) * tan(b) * tan(c)));
 }

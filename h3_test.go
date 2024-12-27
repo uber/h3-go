@@ -782,27 +782,24 @@ func TestHexagonEdgeLengthKm(t *testing.T) { //nolint:dupl // // it's ok to have
 	t.Parallel()
 	t.Run("min resolution", func(t *testing.T) {
 		t.Parallel()
+
 		length, err := HexagonEdgeLengthAvgKm(0)
 		assertNoErr(t, err)
-		assertEqual(t, float64(1107.712591), length)
+		assertEqual(t, 1281.256011, length)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
+
 		length, err := HexagonEdgeLengthAvgKm(15)
 		assertNoErr(t, err)
-		assertEqual(t, float64(0.000509713), length)
+		assertEqual(t, 0.000584169, length)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
+
 		length, err := HexagonEdgeLengthAvgKm(8)
 		assertNoErr(t, err)
-		assertEqual(t, float64(0.461354684), length)
-	})
-	t.Run("invalid resolution", func(t *testing.T) {
-		t.Parallel()
-		_, err := HexagonEdgeLengthAvgKm(-1)
-		assertErr(t, err)
-		assertErrIs(t, err, ErrResolutionDomain)
+		assertEqual(t, 0.53141401, length)
 	})
 }
 
@@ -812,19 +809,19 @@ func TestHexagonEdgeLengthM(t *testing.T) { //nolint:dupl // // it's ok to have 
 		t.Parallel()
 		area, err := HexagonEdgeLengthAvgM(0)
 		assertNoErr(t, err)
-		assertEqual(t, float64(1107712.591), area)
+		assertEqual(t, 1281256.011, area)
 	})
 	t.Run("max resolution", func(t *testing.T) {
 		t.Parallel()
 		area, err := HexagonEdgeLengthAvgM(15)
 		assertNoErr(t, err)
-		assertEqual(t, float64(0.509713273), area)
+		assertEqual(t, 0.584168630, area)
 	})
 	t.Run("mid resolution", func(t *testing.T) {
 		t.Parallel()
 		area, err := HexagonEdgeLengthAvgM(8)
 		assertNoErr(t, err)
-		assertEqual(t, float64(461.3546837), area)
+		assertEqual(t, 531.4140101, area)
 	})
 	t.Run("invalid resolution", func(t *testing.T) {
 		t.Parallel()

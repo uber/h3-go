@@ -2,10 +2,10 @@
 
 ![Build](https://github.com/uber/h3-go/workflows/Build/badge.svg?branch=master)
 [![Coverage Status](https://coveralls.io/repos/github/uber/h3-go/badge.svg)](https://coveralls.io/github/uber/h3-go)
-[![Go Report Card](https://goreportcard.com/badge/github.com/uber/h3-go)](https://goreportcard.com/report/github.com/uber/h3-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/uber/h3-go/v4)](https://goreportcard.com/report/github.com/uber/h3-go)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![GoDoc](http://img.shields.io/badge/go-doc-blue.svg)](https://godoc.org/github.com/uber/h3-go)
-[![H3 Version](https://img.shields.io/badge/h3-v3.7.0-blue.svg)](https://github.com/uber/h3/releases/tag/v3.7.0)
+[![H3 Version](https://img.shields.io/badge/h3-v4.1.0-blue.svg)](https://github.com/uber/h3/releases/tag/v4.1.0)
 
 <h1 align="center">H3-Go is looking for a maintainer familiar with Go, C, and H3. Volunteers welcome! Please get in touch with us on the <a href="https://join.slack.com/t/h3-core/shared_invite/zt-g6u5r1hf-W_~uVJmfeiWtMQuBGc1NNg">H3 Slack</a>.</h1>
 
