@@ -104,6 +104,14 @@ typedef enum {
     E_OPTION_INVALID = 15  // Mode or flags argument was not valid.
 } H3ErrorCodes;
 
+/** @defgroup describeH3Error describeH3Error
+ * Functions for describeH3Error
+ * @{
+ */
+/** @brief converts the provided H3Error value into a description string */
+DECLSPEC const char *H3_EXPORT(describeH3Error)(H3Error err);
+/** @} */
+
 /* library version numbers generated from VERSION file */
 // clang-format off
 #define H3_VERSION_MAJOR @H3_VERSION_MAJOR@
@@ -274,15 +282,30 @@ DECLSPEC H3Error H3_EXPORT(gridRingUnsafe)(H3Index origin, int k, H3Index *out);
  * Functions for polygonToCells
  * @{
  */
-/** @brief maximum number of hexagons that could be in the geoloop */
+/** @brief maximum number of cells that could be in the polygon */
 DECLSPEC H3Error H3_EXPORT(maxPolygonToCellsSize)(const GeoPolygon *geoPolygon,
                                                   int res, uint32_t flags,
                                                   int64_t *out);
 
-/** @brief hexagons within the given geopolygon */
+/** @brief cells within the given polygon */
 DECLSPEC H3Error H3_EXPORT(polygonToCells)(const GeoPolygon *geoPolygon,
                                            int res, uint32_t flags,
                                            H3Index *out);
+/** @} */
+
+/** @defgroup polygonToCellsExperimental polygonToCellsExperimental
+ * Functions for polygonToCellsExperimental.
+ * This is an experimental-only API and is subject to change in minor versions.
+ * @{
+ */
+/** @brief maximum number of cells that could be in the polygon */
+DECLSPEC H3Error H3_EXPORT(maxPolygonToCellsSizeExperimental)(
+    const GeoPolygon *polygon, int res, uint32_t flags, int64_t *out);
+
+/** @brief cells within the given polygon */
+DECLSPEC H3Error H3_EXPORT(polygonToCellsExperimental)(
+    const GeoPolygon *polygon, int res, uint32_t flags, int64_t size,
+    H3Index *out);
 /** @} */
 
 /** @defgroup cellsToMultiPolygon cellsToMultiPolygon
@@ -437,7 +460,7 @@ DECLSPEC H3Error H3_EXPORT(getNumCells)(int res, int64_t *out);
  * @{
  */
 /** @brief returns the number of resolution 0 cells (hexagons and pentagons) */
-DECLSPEC int H3_EXPORT(res0CellCount)();
+DECLSPEC int H3_EXPORT(res0CellCount)(void);
 
 /** @brief provides all base cells in H3Index format*/
 DECLSPEC H3Error H3_EXPORT(getRes0Cells)(H3Index *out);
@@ -448,7 +471,7 @@ DECLSPEC H3Error H3_EXPORT(getRes0Cells)(H3Index *out);
  * @{
  */
 /** @brief returns the number of pentagons per resolution */
-DECLSPEC int H3_EXPORT(pentagonCount)();
+DECLSPEC int H3_EXPORT(pentagonCount)(void);
 
 /** @brief generates all pentagons at the specified resolution */
 DECLSPEC H3Error H3_EXPORT(getPentagons)(int res, H3Index *out);
