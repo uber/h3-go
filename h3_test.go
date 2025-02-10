@@ -637,6 +637,90 @@ func TestCellsToMultiPolygon(t *testing.T) {
 	assertNil(t, res)
 }
 
+func TestPolygonToCellsExperimental(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
+		for _, flag := range []ContainmentMode{
+			ContainmentCenter,
+			ContainmentFull,
+			ContainmentOverlapping,
+			ContainmentOverlappingBbox,
+		} {
+			cells, err := PolygonToCellsExperimental(GeoPolygon{}, 6, flag)
+			if err != nil {
+				t.Error(t)
+			}
+
+			assertEqual(t, 0, len(cells))
+		}
+	})
+
+	t.Run("without holes", func(t *testing.T) {
+		t.Parallel()
+
+		for _, flag := range []ContainmentMode{
+			ContainmentCenter,
+			ContainmentFull,
+			ContainmentOverlapping,
+			ContainmentOverlappingBbox,
+		} {
+			cells, err := PolygonToCellsExperimental(validGeoPolygonNoHoles, 6, flag)
+			if err != nil {
+				t.Error(t)
+			}
+			expectedCellCounts := map[ContainmentMode]int{
+				ContainmentCenter:          7,
+				ContainmentFull:            1,
+				ContainmentOverlapping:     14,
+				ContainmentOverlappingBbox: 21,
+			}
+			assertEqual(t, expectedCellCounts[flag], len(cells))
+		}
+	})
+
+	t.Run("with holes", func(t *testing.T) {
+		t.Parallel()
+
+		for _, flag := range []ContainmentMode{
+			ContainmentCenter,
+			ContainmentFull,
+			ContainmentOverlapping,
+			ContainmentOverlappingBbox,
+		} {
+			cells, err := PolygonToCellsExperimental(validGeoPolygonHoles, 6, flag)
+			if err != nil {
+				t.Error(t)
+			}
+			expectedCellCounts := map[ContainmentMode]int{
+				ContainmentCenter:          6,
+				ContainmentFull:            0,
+				ContainmentOverlapping:     14,
+				ContainmentOverlappingBbox: 21,
+			}
+
+			assertEqual(t, expectedCellCounts[flag], len(cells))
+		}
+	})
+
+	t.Run("busting memory", func(t *testing.T) {
+		t.Parallel()
+
+		for _, flag := range []ContainmentMode{
+			ContainmentCenter,
+			ContainmentOverlapping,
+			ContainmentOverlappingBbox,
+		} {
+			_, err := PolygonToCellsExperimental(validGeoPolygonHoles, 6, flag, 3)
+			if err != ErrMemoryBounds {
+				t.Error(t)
+			}
+		}
+	})
+}
+
 func TestGridPath(t *testing.T) {
 	t.Parallel()
 	path, err := lineStartCell.GridPath(lineEndCell)
