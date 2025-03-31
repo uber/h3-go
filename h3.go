@@ -375,6 +375,7 @@ func CellsToMultiPolygon(cells []Cell) ([]GeoPolygon, error) {
 		currPoly = currPoly.next
 	}
 
+	C.destroyLinkedMultiPolygon(cLinkedGeoPolygon)
 	return ret, nil
 }
 
