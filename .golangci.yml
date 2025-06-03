@@ -1,51 +1,18 @@
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  exhaustive:
-    default-signifies-exhaustive: true
-  goconst:
-    min-len: 2
-    min-occurrences: 3
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-  govet:
-    enable-all: true
-  nolintlint:
-    require-explanation: true
-    require-specific: true
-  wsl:
-    allow-assign-and-anything: true
-    allow-cuddle-declarations: true
-    allow-assign-and-call: true
-  depguard:
-    rules:
-      main:
-        list-mode: lax
-        allow:
-          - "github.com/uber/h3-go/v4"
+version: "2"
 
 linters:
-  disable-all: true
   enable:
     - bodyclose
     - depguard
     - dogsled
     - dupl
     - errcheck
-    # - copyloopvar Enable this after upgrading go version to 1.22
+    - copyloopvar
     - exhaustive
     - goconst
-    - gofmt
-    - goimports
     - mnd
     - gocyclo
     - gosec
-    - gosimple
     - govet
     - ineffassign
     - misspell
@@ -55,14 +22,47 @@ linters:
     - predeclared
     - revive
     - staticcheck
-    - stylecheck
     - thelper
     - tparallel
-    - typecheck
     - unconvert
     - unparam
     - whitespace
     - wsl
+  settings:
+    errcheck:
+      check-type-assertions: true
+    exhaustive:
+      default-signifies-exhaustive: true
+    goconst:
+      min-len: 2
+      min-occurrences: 3
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    govet:
+      enable-all: true
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    wsl:
+      allow-assign-and-anything: true
+      allow-cuddle-declarations: true
+      allow-assign-and-call: true
+    depguard:
+      rules:
+        main:
+          list-mode: lax
+          allow:
+            - "github.com/uber/h3-go/v4"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
 
 run:
   issues-exit-code: 1
