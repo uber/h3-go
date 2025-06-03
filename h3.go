@@ -263,6 +263,50 @@ func (c Cell) GridDiskDistances(k int) ([][]Cell, error) {
 	return GridDiskDistances(c, k)
 }
 
+// GridRing produces the "hollow" ring of cells at exactly grid distance k from the origin cell.
+//
+// k-ring 0 returns just the origin hexagon.
+//
+// Elements of the output array may be left zero, as can happen when crossing a pentagon.
+func GridRing(origin Cell, k int) ([]Cell, error) {
+	if cells, err := GridRingUnsafe(origin, k); err == nil {
+		return cells, nil
+	}
+	diskDistances, err := GridDiskDistances(origin, k)
+	if err != nil {
+		return nil, err
+	}
+	return diskDistances[k], nil
+}
+
+// GridRing produces the "hollow" ring of cells at exactly grid distance k from the origin cell.
+//
+// k-ring 0 returns just the origin hexagon.
+//
+// Elements of the output array may be left zero, as can happen when crossing a pentagon.
+func (c Cell) GridRing(k int) ([]Cell, error) {
+	return GridRing(c, k)
+}
+
+// GridRingUnsafe produces the "hollow" ring of cells at exactly grid distance k from the origin cell.
+//
+// k-ring 0 returns just the origin hexagon.
+func GridRingUnsafe(origin Cell, k int) ([]Cell, error) {
+	if k < 0 {
+		return nil, ErrDomain
+	}
+	out := make([]C.H3Index, ringSize(k))
+	errC := C.gridRingUnsafe(C.H3Index(origin), C.int(k), &out[0])
+	return cellsFromC(out, true, false), toErr(errC)
+}
+
+// GridRingUnsafe produces the "hollow" ring of cells at exactly grid distance k from the origin cell.
+//
+// k-ring 0 returns just the origin hexagon.
+func (c Cell) GridRingUnsafe(k int) ([]Cell, error) {
+	return GridRingUnsafe(c, k)
+}
+
 // PolygonToCells takes a given GeoJSON-like data structure fills it with the
 // hexagon cells that are contained by the GeoJSON-like data structure.
 //
