@@ -47,13 +47,13 @@ const (
 	// MaxResolution is the maximum H3 resolution a LatLng can be indexed to.
 	MaxResolution = C.MAX_H3_RES
 
-	// The number of faces on an icosahedron
+	// NumIcosaFaces is the number of faces on an icosahedron.
 	NumIcosaFaces = C.NUM_ICOSA_FACES
 
-	// The number of H3 base cells
+	// NumBaseCells is the number of H3 base cells.
 	NumBaseCells = C.NUM_BASE_CELLS
 
-	// The number of H3 pentagon cells (same at every resolution)
+	// NumPentagons is the number of H3 pentagon cells (same at every resolution).
 	NumPentagons = C.NUM_PENTAGONS
 
 	// InvalidH3Index is a sentinel value for an invalid H3 index.
@@ -66,10 +66,14 @@ const (
 	numEdgeCells    = 2
 	numCellVertexes = 6
 
+	// DegsToRads converts degrees to radians by multiplying degrees by this constant.
 	DegsToRads = math.Pi / 180.0
+	// RadsToDegs converts radians to degrees by multiplying radians by this constant.
 	RadsToDegs = 180.0 / math.Pi
+)
 
-	// PolygonToCells containment modes
+// PolygonToCells containment modes
+const (
 	ContainmentCenter          ContainmentMode = C.CONTAINMENT_CENTER           // Cell center is contained in the shape
 	ContainmentFull            ContainmentMode = C.CONTAINMENT_FULL             // Cell is fully contained in the shape
 	ContainmentOverlapping     ContainmentMode = C.CONTAINMENT_OVERLAPPING      // Cell overlaps the shape at any point
@@ -125,6 +129,9 @@ type (
 	// DirectedEdge is an Index that identifies a directed edge between two cells.
 	DirectedEdge int64
 
+	// CoordIJ IJ hexagon coordinates
+	//
+	// Each axis is spaced 120 degrees apart.
 	CoordIJ struct {
 		I, J int
 	}
@@ -151,6 +158,7 @@ type (
 	ContainmentMode C.uint32_t
 )
 
+// NewLatLng is a helper function to create a LatLng.
 func NewLatLng(lat, lng float64) LatLng {
 	return LatLng{lat, lng}
 }
@@ -333,7 +341,7 @@ func PolygonToCells(polygon GeoPolygon, resolution int) ([]Cell, error) {
 	return cellsFromC(out, true, false), toErr(errC)
 }
 
-// PolygonToCells takes a given GeoJSON-like data structure fills it with the
+// PolygonToCellsExperimental takes a given GeoJSON-like data structure fills it with the
 // hexagon cells that are contained by the GeoJSON-like data structure.
 //
 // This implementation traces the GeoJSON geoloop(s) in cartesian space with
@@ -363,7 +371,7 @@ func PolygonToCellsExperimental(polygon GeoPolygon, resolution int, mode Contain
 	return cellsFromC(out, true, false), toErr(errC)
 }
 
-// PolygonToCells takes a given GeoJSON-like data structure fills it with the
+// Cells takes a given GeoJSON-like data structure fills it with the
 // hexagon cells that are contained by the GeoJSON-like data structure.
 //
 // This implementation traces the GeoJSON geoloop(s) in cartesian space with
@@ -423,25 +431,25 @@ func CellsToMultiPolygon(cells []Cell) ([]GeoPolygon, error) {
 	return ret, nil
 }
 
-// PointDistRads returns the "great circle" or "haversine" distance between
+// GreatCircleDistanceRads returns the "great circle" or "haversine" distance between
 // pairs of LatLng points (lat/lng pairs) in radians.
 func GreatCircleDistanceRads(a, b LatLng) float64 {
 	return float64(C.greatCircleDistanceRads(a.toCPtr(), b.toCPtr()))
 }
 
-// PointDistKm returns the "great circle" or "haversine" distance between pairs
+// GreatCircleDistanceKm returns the "great circle" or "haversine" distance between pairs
 // of LatLng points (lat/lng pairs) in kilometers.
 func GreatCircleDistanceKm(a, b LatLng) float64 {
 	return float64(C.greatCircleDistanceKm(a.toCPtr(), b.toCPtr()))
 }
 
-// PointDistM returns the "great circle" or "haversine" distance between pairs
+// GreatCircleDistanceM returns the "great circle" or "haversine" distance between pairs
 // of LatLng points (lat/lng pairs) in meters.
 func GreatCircleDistanceM(a, b LatLng) float64 {
 	return float64(C.greatCircleDistanceM(a.toCPtr(), b.toCPtr()))
 }
 
-// HexAreaKm2 returns the average hexagon area in square kilometers at the given
+// HexagonAreaAvgKm2 returns the average hexagon area in square kilometers at the given
 // resolution.
 func HexagonAreaAvgKm2(resolution int) (float64, error) {
 	var out C.double
@@ -451,7 +459,7 @@ func HexagonAreaAvgKm2(resolution int) (float64, error) {
 	return float64(out), toErr(errC)
 }
 
-// HexAreaM2 returns the average hexagon area in square meters at the given
+// HexagonAreaAvgM2 returns the average hexagon area in square meters at the given
 // resolution.
 func HexagonAreaAvgM2(resolution int) (float64, error) {
 	var out C.double
@@ -561,10 +569,12 @@ func Pentagons(resolution int) ([]Cell, error) {
 	return cellsFromC(out, false, false), toErr(errC)
 }
 
+// Resolution returns the resolution of the cell.
 func (c Cell) Resolution() int {
 	return int(C.getResolution(C.H3Index(c)))
 }
 
+// Resolution returns the resolution of the edge.
 func (e DirectedEdge) Resolution() int {
 	return int(C.getResolution(C.H3Index(e)))
 }
@@ -632,7 +642,7 @@ func (c Cell) Parent(resolution int) (Cell, error) {
 	return Cell(out), toErr(errC)
 }
 
-// Parent returns the parent or grandparent Cell of this Cell.
+// ImmediateParent returns the immediate parent of the cell.
 func (c Cell) ImmediateParent() (Cell, error) {
 	return c.Parent(c.Resolution() - 1)
 }
@@ -716,6 +726,7 @@ func (c Cell) DirectedEdges() ([]DirectedEdge, error) {
 	return edgesFromC(out), toErr(errC)
 }
 
+// IsValid determines if the directed edge is valid.
 func (e DirectedEdge) IsValid() bool {
 	return C.isValidDirectedEdge(C.H3Index(e)) == 1
 }
@@ -822,6 +833,10 @@ func (c Cell) ChildPos(resolution int) (int, error) {
 	return CellToChildPos(c, resolution)
 }
 
+// GridDistance returns grid distance between two cells.
+//
+// This function may fail to find the distance between two indexes, for example if they are very far apart. It may also
+// fail when finding distances for indexes on opposite sides of a pentagon.
 func GridDistance(a, b Cell) (int, error) {
 	var out C.int64_t
 	errC := C.gridDistance(C.H3Index(a), C.H3Index(b), &out)
@@ -829,10 +844,18 @@ func GridDistance(a, b Cell) (int, error) {
 	return int(out), toErr(errC)
 }
 
+// GridDistance returns grid distance between two cells.
+//
+// This function may fail to find the distance between two indexes, for example if they are very far apart. It may also
+// fail when finding distances for indexes on opposite sides of a pentagon.
 func (c Cell) GridDistance(other Cell) (int, error) {
 	return GridDistance(c, other)
 }
 
+// GridPath returns the line of cells between the two cells (inclusive).
+//
+// This function may fail to find the line between two indexes, for example if they are very far apart. It may also fail
+// when finding distances for indexes on opposite sides of a pentagon.
 func GridPath(a, b Cell) ([]Cell, error) {
 	var outsz C.int64_t
 	if err := toErr(C.gridPathCellsSize(C.H3Index(a), C.H3Index(b), &outsz)); err != nil {
@@ -847,10 +870,21 @@ func GridPath(a, b Cell) ([]Cell, error) {
 	return cellsFromC(out, false, false), nil
 }
 
+// GridPath returns the line of cells between the two cells (inclusive).
+//
+// This function may fail to find the line between two indexes, for example if they are very far apart. It may also fail
+// when finding distances for indexes on opposite sides of a pentagon.
 func (c Cell) GridPath(other Cell) ([]Cell, error) {
 	return GridPath(c, other)
 }
 
+// CellToLocalIJ produces ij coordinates for cell anchored by an origin.
+//
+// The coordinate space used by this function may have deleted regions or warping due to pentagonal distortion.
+//
+// Coordinates are only comparable if they come from the same origin index.
+//
+// Failure may occur if the index is too far away from the origin or if the index is on the other side of a pentagon.
 func CellToLocalIJ(origin, cell Cell) (CoordIJ, error) {
 	var out C.CoordIJ
 	errC := C.cellToLocalIj(C.H3Index(origin), C.H3Index(cell), 0, &out)
@@ -858,6 +892,11 @@ func CellToLocalIJ(origin, cell Cell) (CoordIJ, error) {
 	return CoordIJ{int(out.i), int(out.j)}, toErr(errC)
 }
 
+// LocalIJToCell produces a cell for ij coordinates anchored by an origin.
+//
+// The coordinate space used by this function may have deleted regions or warping due to pentagonal distortion.
+//
+// Failure may occur if the index is too far away from the origin or if the index is on the other side of a pentagon.
 func LocalIJToCell(origin Cell, ij CoordIJ) (Cell, error) {
 	var out C.H3Index
 	errC := C.localIjToCell(C.H3Index(origin), ij.toCPtr(), 0, &out)
@@ -865,6 +904,7 @@ func LocalIJToCell(origin Cell, ij CoordIJ) (Cell, error) {
 	return Cell(out), toErr(errC)
 }
 
+// CellToVertex returns a single vertex for a given cell, or InvalidH3Index if the vertex is invalid.
 func CellToVertex(c Cell, vertexNum int) (Cell, error) {
 	var out C.H3Index
 	errC := C.cellToVertex(C.H3Index(c), C.int(vertexNum), &out)
@@ -872,6 +912,7 @@ func CellToVertex(c Cell, vertexNum int) (Cell, error) {
 	return Cell(out), toErr(errC)
 }
 
+// CellToVertexes returns all vertexes for the given cell.
 func CellToVertexes(c Cell) ([]Cell, error) {
 	out := make([]C.H3Index, numCellVertexes)
 	if err := toErr(C.cellToVertexes(C.H3Index(c), &out[0])); err != nil {
@@ -881,6 +922,7 @@ func CellToVertexes(c Cell) ([]Cell, error) {
 	return cellsFromC(out, true, false), nil
 }
 
+// VertexToLatLng returns the geographic coordinates of the vertex.
 func VertexToLatLng(vertex Cell) (LatLng, error) {
 	var out C.LatLng
 	errC := C.vertexToLatLng(C.H3Index(vertex), &out)
@@ -888,6 +930,7 @@ func VertexToLatLng(vertex Cell) (LatLng, error) {
 	return latLngFromC(out), toErr(errC)
 }
 
+// IsValidVertex returns whether the cell is a valid vertex.
 func IsValidVertex(c Cell) bool {
 	return C.isValidVertex(C.H3Index(c)) == 1
 }

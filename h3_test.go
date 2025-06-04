@@ -1091,7 +1091,6 @@ func TestPentagons(t *testing.T) {
 	t.Parallel()
 
 	for _, res := range []int{0, 8, 15} {
-		res := res
 		t.Run(fmt.Sprintf("res=%d", res), func(t *testing.T) {
 			t.Parallel()
 
@@ -1125,8 +1124,6 @@ func TestCellToVertex(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		tc := tc
-
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			t.Parallel()
 
@@ -1151,7 +1148,6 @@ func TestCellToVertexes(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(fmt.Sprint(tc.numVertexes), func(t *testing.T) {
 			t.Parallel()
 
@@ -1177,8 +1173,6 @@ func TestVertexToLatLng(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		tc := tc
-
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			t.Parallel()
 
