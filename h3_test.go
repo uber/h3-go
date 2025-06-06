@@ -203,12 +203,63 @@ func TestGridDisk(t *testing.T) {
 	})
 }
 
+func TestGridDisksUnsafe(t *testing.T) {
+	t.Parallel()
+
+	t.Run("two cells", func(t *testing.T) {
+		t.Parallel()
+
+		gds, err := GridDisksUnsafe([]Cell{validCell, validCell}, len(validDiskDist3_1)-1)
+		assertNoErr(t, err)
+		assertEqual(t, 2, len(gds), "expected grid disks to have two arrays returned")
+		assertEqualDisks(t,
+			flattenDisks(validDiskDist3_1),
+			gds[0],
+			"expected grid disks[0] to be the same",
+		)
+		assertEqualDisks(t,
+			flattenDisks(validDiskDist3_1),
+			gds[1],
+			"expected grid disks[1] to be the same",
+		)
+	})
+
+	t.Run("pentagon", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := GridDisksUnsafe([]Cell{pentagonCell}, 1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrPentagon)
+	})
+
+	t.Run("invalid cell", func(t *testing.T) {
+		t.Parallel()
+
+		c := Cell(-1)
+		_, err := GridDisksUnsafe([]Cell{c}, 1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrCellInvalid)
+	})
+
+	t.Run("invalid k", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := GridDisksUnsafe([]Cell{validCell}, -1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDomain)
+	})
+}
+
 func TestGridDiskDistances(t *testing.T) {
 	t.Parallel()
 
 	t.Run("no pentagon", func(t *testing.T) {
 		t.Parallel()
 		rings, err := validCell.GridDiskDistances(len(validDiskDist3_1) - 1)
+		assertNoErr(t, err)
+		assertEqualDiskDistances(t, validDiskDist3_1, rings)
+
+		rings, err = validCell.GridDiskDistancesSafe(len(validDiskDist3_1) - 1)
 		assertNoErr(t, err)
 		assertEqualDiskDistances(t, validDiskDist3_1, rings)
 	})
@@ -220,11 +271,48 @@ func TestGridDiskDistances(t *testing.T) {
 			assertNoErr(t, err)
 			assertEqual(t, 2, len(rings), "expected 2 rings")
 			assertEqual(t, 5, len(rings[1]), "expected 5 cells in second ring")
+
+			rings, err = GridDiskDistancesSafe(pentagonCell, 1)
+			assertNoErr(t, err)
+			assertEqual(t, 2, len(rings), "expected 2 rings")
+			assertEqual(t, 5, len(rings[1]), "expected 5 cells in second ring")
 		})
 	})
 
 	t.Run("invalid k-ring", func(t *testing.T) {
 		rings, err := GridDiskDistances(pentagonCell, -1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDomain)
+		assertNil(t, rings)
+
+		rings, err = GridDiskDistancesSafe(pentagonCell, -1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDomain)
+		assertNil(t, rings)
+	})
+}
+
+func TestGridDiskDistancesUnsafe(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no pentagon", func(t *testing.T) {
+		t.Parallel()
+		rings, err := validCell.GridDiskDistancesUnsafe(len(validDiskDist3_1) - 1)
+		assertNoErr(t, err)
+		assertEqualDiskDistances(t, validDiskDist3_1, rings)
+	})
+
+	t.Run("pentagon centered", func(t *testing.T) {
+		t.Parallel()
+		assertNoPanic(t, func() {
+			_, err := GridDiskDistancesUnsafe(pentagonCell, 1)
+			assertErr(t, err)
+			assertErrIs(t, err, ErrPentagon)
+		})
+	})
+
+	t.Run("invalid k-ring", func(t *testing.T) {
+		rings, err := GridDiskDistancesUnsafe(pentagonCell, -1)
 		assertErr(t, err)
 		assertErrIs(t, err, ErrDomain)
 		assertNil(t, rings)
@@ -1354,11 +1442,13 @@ func assertEqualDiskDistances(t *testing.T, expected, actual [][]Cell) {
 	}
 }
 
-func assertEqualDisks(t *testing.T, expected, actual []Cell) {
+func assertEqualDisks(t *testing.T, expected, actual []Cell, msgAndArgs ...any) {
 	t.Helper()
 
 	if len(expected) != len(actual) {
 		t.Errorf("disk size mismatch: %v != %v", len(expected), len(actual))
+		logMsgAndArgs(t, msgAndArgs...)
+
 		return
 	}
 
@@ -1370,9 +1460,9 @@ func assertEqualDisks(t *testing.T, expected, actual []Cell) {
 	for i, cell := range expected {
 		if cell != actual[i] {
 			t.Errorf("cell[%d]: %v != %v", i, cell, actual[i])
+			logMsgAndArgs(t, msgAndArgs...)
 
 			count++
-
 			if count > 5 {
 				t.Logf("... and more")
 				break
@@ -1515,4 +1605,8 @@ func TestToErr(t *testing.T) {
 		t.Parallel()
 		assertErrIs(t, toErr(999), ErrUnknown)
 	})
+}
+
+func TestLatLngsToC_Nil(t *testing.T) {
+	assertEqual(t, nil, latLngsToC(nil))
 }
