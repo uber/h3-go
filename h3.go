@@ -247,7 +247,7 @@ func GridDisksUnsafe(origins []Cell, k int) ([][]Cell, error) {
 		inner := make([]C.H3Index, maxGridDiskSize(k))
 		errC := C.gridDiskUnsafe(C.H3Index(origins[i]), C.int(k), &inner[0])
 		if err := toErr(errC); err != nil {
-			return out, err
+			return nil, err
 		}
 		out[i] = cellsFromC(inner, true, false)
 	}
