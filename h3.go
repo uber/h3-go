@@ -243,8 +243,9 @@ func (c Cell) GridDisk(k int) ([]Cell, error) {
 // as it is slightly easier to do so to avoid unnecessary type conversions.
 func GridDisksUnsafe(origins []Cell, k int) ([][]Cell, error) {
 	out := make([][]Cell, len(origins))
+	gridDiskSize := maxGridDiskSize(k)
 	for i := range origins {
-		inner := make([]C.H3Index, maxGridDiskSize(k))
+		inner := make([]C.H3Index, gridDiskSize)
 		errC := C.gridDiskUnsafe(C.H3Index(origins[i]), C.int(k), &inner[0])
 		if err := toErr(errC); err != nil {
 			return nil, err
