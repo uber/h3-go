@@ -32,7 +32,6 @@ import "C"
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -468,7 +467,7 @@ func PolygonToCells(polygon GeoPolygon, resolution int) ([]Cell, error) {
 // and then any newly found hexagons are used to test again until no new
 // hexagons are found.
 func PolygonToCellsExperimental(polygon GeoPolygon, resolution int, mode ContainmentMode, maxNumCellsReturn ...int64) ([]Cell, error) {
-	var maxNumCells int64 = math.MaxInt64
+	maxNumCells := int64(math.MaxInt64)
 	if len(maxNumCellsReturn) > 0 {
 		maxNumCells = maxNumCellsReturn[0]
 	}
@@ -519,30 +518,56 @@ func CellsToMultiPolygon(cells []Cell) ([]GeoPolygon, error) {
 		return nil, err
 	}
 
-	ret := []GeoPolygon{}
+	currPoly := cLinkedGeoPolygon
+	var countPoly int
+	for currPoly != nil {
+		countPoly++
+		currPoly = currPoly.next
+	}
+
+	ret := make([]GeoPolygon, countPoly)
 
 	// traverse polygons for linked list of polygons
-	currPoly := cLinkedGeoPolygon
+	currPoly = cLinkedGeoPolygon
+	countPoly = 0
 	for currPoly != nil {
-		loops := []GeoLoop{}
+		currLoop := currPoly.first
+		var countLoop int
+		for currLoop != nil {
+			countLoop++
+			currLoop = currLoop.next
+		}
+		loops := make([]GeoLoop, countLoop)
 
 		// traverse loops for a polygon
-		currLoop := currPoly.first
+		currLoop = currPoly.first
+		countLoop = 0
 		for currLoop != nil {
-			loop := []LatLng{}
+
+			currPt := currLoop.first
+			var countPt int
+			for currPt != nil {
+				countPt++
+				currPt = currPt.next
+			}
+			loop := make([]LatLng, countPt)
 
 			// traverse points for a loop
-			currPt := currLoop.first
+			currPt = currLoop.first
+			countPt = 0
 			for currPt != nil {
-				loop = append(loop, latLngFromC(currPt.vertex))
+				loop[countPt] = latLngFromC(currPt.vertex)
+				countPt++
 				currPt = currPt.next
 			}
 
-			loops = append(loops, loop)
+			loops[countLoop] = loop
+			countLoop++
 			currLoop = currLoop.next
 		}
 
-		ret = append(ret, GeoPolygon{GeoLoop: loops[0], Holes: loops[1:]})
+		ret[countPoly] = GeoPolygon{GeoLoop: loops[0], Holes: loops[1:]}
+		countPoly++
 		currPoly = currPoly.next
 	}
 
@@ -669,7 +694,7 @@ func EdgeLengthM(e DirectedEdge) (float64, error) {
 func NumCells(resolution int) int {
 	// NOTE: this is a mathematical operation, no need to call into H3 library.
 	// See h3api.h for formula derivation.
-	return 2 + 120*intPow(7, (resolution)) //nolint:mnd // math formula
+	return 2 + 120*intPow(7, resolution) //nolint:mnd // math formula
 }
 
 // Res0Cells returns all the cells at resolution 0.
@@ -1059,11 +1084,10 @@ func maxGridDiskSize(k int) int {
 }
 
 func latLngFromC(cg C.LatLng) LatLng {
-	g := LatLng{}
-	g.Lat = RadsToDegs * float64(cg.lat)
-	g.Lng = RadsToDegs * float64(cg.lng)
-
-	return g
+	return LatLng{
+		Lat: RadsToDegs * float64(cg.lat),
+		Lng: RadsToDegs * float64(cg.lng),
+	}
 }
 
 func cellBndryFromC(cb *C.CellBoundary) CellBoundary {
@@ -1229,7 +1253,15 @@ func intsFromC(chs []C.int) []int {
 }
 
 func (g LatLng) String() string {
-	return fmt.Sprintf("(%.5f, %.5f)", g.Lat, g.Lng)
+	// Pre-allocate a buffer. A typical string is "(DD.DDDDD, -DDD.DDDDD)" which is ~25-30 bytes.
+	// 32 is a safe and efficient capacity to start with to avoid re-allocation.
+	buf := make([]byte, 0, 32)
+	buf = append(buf, '(')
+	buf = strconv.AppendFloat(buf, g.Lat, 'f', 5, 64)
+	buf = append(buf, ',', ' ')
+	buf = strconv.AppendFloat(buf, g.Lng, 'f', 5, 64)
+	buf = append(buf, ')')
+	return string(buf)
 }
 
 func (g LatLng) toCPtr() *C.LatLng {
