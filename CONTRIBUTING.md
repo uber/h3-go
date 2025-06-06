@@ -32,6 +32,12 @@ Generate coverage:
 go test -coverprofile=c.out && go tool cover -html=c.out
 ```
 
+### Using VSCode
+
+`golangci-lint` version 2 requires the pre-release version of the `golang.go` extension:
+
+https://golangci-lint.run/welcome/integrations/#visual-studio-code
+
 ## Other ways to contribute
 
 You may also be interested in [contributing to the @uber/h3
