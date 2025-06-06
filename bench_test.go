@@ -29,27 +29,33 @@ func BenchmarkFromString(b *testing.B) {
 	}
 }
 
-func BenchmarkToGeoRes15(b *testing.B) {
+func BenchmarkCellToLatLng(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		geo, _ = CellToLatLng(cell)
 	}
 }
 
-func BenchmarkFromGeoRes15(b *testing.B) {
+func BenchmarkLatLngToCell(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		cell, _ = LatLngToCell(geo, 15)
 	}
 }
 
-func BenchmarkToGeoBndryRes15(b *testing.B) {
+func BenchmarkCellToBoundary(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		geoBndry, _ = CellToBoundary(cell)
 	}
 }
 
-func BenchmarkHexRange(b *testing.B) {
+func BenchmarkGridDisk(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		cells, _ = cell.GridDisk(10)
+	}
+}
+
+func BenchmarkGridRing(b *testing.B) {
+	for range b.N {
+		cells, _ = cell.GridRing(10)
 	}
 }
 

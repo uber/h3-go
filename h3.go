@@ -1057,18 +1057,14 @@ func intPow(n, m int) int {
 }
 
 func cellsFromC(chs []C.H3Index, prune, refit bool) []Cell {
-	// OPT: This could be more efficient if we unsafely cast the C array to a
-	// []H3Index.
-	out := make([]Cell, 0, len(chs))
-
-	for i := range chs {
-		if prune && chs[i] <= 0 {
+	in := unsafe.Slice((*Cell)(unsafe.Pointer(&chs[0])), len(chs))
+	out := in[:0]
+	for i := range in {
+		if prune && in[i] <= 0 {
 			continue
 		}
-
-		out = append(out, Cell(chs[i]))
+		out = append(out, in[i])
 	}
-
 	if refit {
 		// Some algorithms require a maximum sized array, but only use a subset
 		// of the memory.  refit sizes the slice to the last non-empty element.
@@ -1078,7 +1074,6 @@ func cellsFromC(chs []C.H3Index, prune, refit bool) []Cell {
 			}
 		}
 	}
-
 	return out
 }
 
@@ -1097,14 +1092,7 @@ func edgesFromC(chs []C.H3Index) []DirectedEdge {
 }
 
 func cellsToC(chs []Cell) []C.H3Index {
-	// OPT: This could be more efficient if we unsafely cast the array to a
-	// []C.H3Index.
-	out := make([]C.H3Index, len(chs))
-	for i := range chs {
-		out[i] = C.H3Index(chs[i])
-	}
-
-	return out
+	return unsafe.Slice((*C.H3Index)(unsafe.Pointer(&chs[0])), len(chs))
 }
 
 func intsFromC(chs []C.int) []int {
