@@ -82,55 +82,58 @@ func ExampleLatLngToCell() {
 
 ## Bindings
 
-| C API                        | Go API                                             |
-| ---------------------------- | -------------------------------------------------- |
-| `latLngToCell`               | `LatLngToCell`, `LatLng#Cell`                      |
-| `cellToLatLng`               | `CellToLatLng`, `Cell#LatLng`                      |
-| `cellToBoundary`             | `CellToBoundary`, `Cell#Boundary`                  |
-| `gridDisk`                   | `GridDisk`, `Cell#GridDisk`                        |
-| `gridDiskDistances`          | `GridDiskDistances`, `Cell#GridDiskDistances`      |
-| `gridRingUnsafe`             | N/A                                                |
-| `polygonToCells`             | `PolygonToCells`, `GeoPolygon#Cells`               |
-| `cellsToMultiPolygon`        | `CellsToMultiPolygon`
-| `degsToRads`                 | `DegsToRads`                                       |
-| `radsToDegs`                 | `RadsToDegs`                                       |
-| `greatCircleDistance`        | `GreatCircleDistance* (3/3)`                       |
-| `getHexagonAreaAvg`          | `HexagonAreaAvg* (3/3)`                            |
-| `cellArea`                   | `CellArea* (3/3)`                                  |
-| `getHexagonEdgeLengthAvg`    | `HexagonEdgeLengthAvg* (2/2)`                      |
-| `exactEdgeLength`            | `EdgeLength* (3/3)`                                |
-| `getNumCells`                | `NumCells`                                         |
-| `getRes0Cells`               | `Res0Cells`                                        |
-| `getPentagons`               | `Pentagons`                                        |
-| `getResolution`              | `Resolution`                                       |
-| `getBaseCellNumber`          | `BaseCellNumber`, `Cell#BaseCellNumber`            |
-| `stringToH3`                 | `IndexFromString`, `Cell#UnmarshalText`            |
-| `h3ToString`                 | `IndexToString`, `Cell#String`, `Cell#MarshalText` |
-| `isValidCell`                | `Cell#IsValid`                                     |
-| `cellToParent`               | `Cell#Parent`, `Cell#ImmediateParent`              |
-| `cellToChildren`             | `Cell#Children` `Cell#ImmediateChildren`           |
-| `cellToCenterChild`          | `Cell#CenterChild`                                 |
-| `compactCells`               | `CompactCells`                                     |
-| `uncompactCells`             | `UncompactCells`                                   |
-| `isResClassIII`              | `Cell#IsResClassIII`                               |
-| `isPentagon`                 | `Cell#IsPentagon`                                  |
-| `getIcosahedronFaces`        | `Cell#IcosahedronFaces`                            |
-| `areNeighborCells`           | `Cell#IsNeighbor`                                  |
-| `cellsToDirectedEdge`        | `Cell#DirectedEdge`                                |
-| `isValidDirectedEdge`        | `DirectedEdge#IsValid`                             |
-| `getDirectedEdgeOrigin`      | `DirectedEdge#Origin`                              |
-| `getDirectedEdgeDestination` | `DirectedEdge#Destination`                         |
-| `directedEdgeToCells`        | `DirectedEdge#Cells`                               |
-| `originToDirectedEdges`      | `Cell#DirectedEdges`                               |
-| `directedEdgeToBoundary`     | `DirectedEdge#Boundary`                            |
-| `cellToVertex`               | `CellToVertex`                                     |
-| `cellToVertexes`             | `CellToVertexes`                                   |
-| `vertexToLatLng`             | `VertexToLatLng`                                   |
-| `isValidVertex`              | `IsValidVertex`                                    |
-| `gridDistance`               | `GridDistance`, `Cell#GridDistance`                |
-| `gridPathCells`              | `GridPath`, `Cell#GridPath`                        |
-| `cellToLocalIj`              | `CellToLocalIJ`                                    |
-| `localIjToCell`              | `LocalIJToCell`                                    |
+| C API                        | Go API                                                    |
+|------------------------------|-----------------------------------------------------------|
+| `latLngToCell`               | `LatLngToCell`, `LatLng#Cell`                             |
+| `cellToLatLng`               | `CellToLatLng`, `Cell#LatLng`                             |
+| `cellToBoundary`             | `CellToBoundary`, `Cell#Boundary`                         |
+| `gridDisk`                   | `GridDisk`, `Cell#GridDisk`                               |
+| `gridDisksUnsafe`            | `GridDisksUnsafe`                                         |
+| `gridDiskDistances`          | `GridDiskDistances`, `Cell#GridDiskDistances`             |
+| `gridDiskDistancesSafe`      | `GridDiskDistancesSafe`, `Cell#GridDiskDistancesSafe`     |
+| `gridDiskDistancesUnsafe`    | `GridDiskDistancesUnsafe`, `Cell#GridDiskDistancesUnsafe` |
+| `gridRingUnsafe`             | `GridRingUnsafe`, `Cell#GridRingUnsafe`                   |
+| `polygonToCells`             | `PolygonToCells`, `GeoPolygon#Cells`                      |
+| `cellsToMultiPolygon`        | `CellsToMultiPolygon`                                     |
+| `degsToRads`                 | `DegsToRads`                                              |
+| `radsToDegs`                 | `RadsToDegs`                                              |
+| `greatCircleDistance`        | `GreatCircleDistance* (3/3)`                              |
+| `getHexagonAreaAvg`          | `HexagonAreaAvg* (3/3)`                                   |
+| `cellArea`                   | `CellArea* (3/3)`                                         |
+| `getHexagonEdgeLengthAvg`    | `HexagonEdgeLengthAvg* (2/2)`                             |
+| `exactEdgeLength`            | `EdgeLength* (3/3)`                                       |
+| `getNumCells`                | `NumCells`                                                |
+| `getRes0Cells`               | `Res0Cells`                                               |
+| `getPentagons`               | `Pentagons`                                               |
+| `getResolution`              | `Resolution`                                              |
+| `getBaseCellNumber`          | `BaseCellNumber`, `Cell#BaseCellNumber`                   |
+| `stringToH3`                 | `IndexFromString`, `Cell#UnmarshalText`                   |
+| `h3ToString`                 | `IndexToString`, `Cell#String`, `Cell#MarshalText`        |
+| `isValidCell`                | `Cell#IsValid`                                            |
+| `cellToParent`               | `Cell#Parent`, `Cell#ImmediateParent`                     |
+| `cellToChildren`             | `Cell#Children` `Cell#ImmediateChildren`                  |
+| `cellToCenterChild`          | `Cell#CenterChild`                                        |
+| `compactCells`               | `CompactCells`                                            |
+| `uncompactCells`             | `UncompactCells`                                          |
+| `isResClassIII`              | `Cell#IsResClassIII`                                      |
+| `isPentagon`                 | `Cell#IsPentagon`                                         |
+| `getIcosahedronFaces`        | `Cell#IcosahedronFaces`                                   |
+| `areNeighborCells`           | `Cell#IsNeighbor`                                         |
+| `cellsToDirectedEdge`        | `Cell#DirectedEdge`                                       |
+| `isValidDirectedEdge`        | `DirectedEdge#IsValid`                                    |
+| `getDirectedEdgeOrigin`      | `DirectedEdge#Origin`                                     |
+| `getDirectedEdgeDestination` | `DirectedEdge#Destination`                                |
+| `directedEdgeToCells`        | `DirectedEdge#Cells`                                      |
+| `originToDirectedEdges`      | `Cell#DirectedEdges`                                      |
+| `directedEdgeToBoundary`     | `DirectedEdge#Boundary`                                   |
+| `cellToVertex`               | `CellToVertex`                                            |
+| `cellToVertexes`             | `CellToVertexes`                                          |
+| `vertexToLatLng`             | `VertexToLatLng`                                          |
+| `isValidVertex`              | `IsValidVertex`                                           |
+| `gridDistance`               | `GridDistance`, `Cell#GridDistance`                       |
+| `gridPathCells`              | `GridPath`, `Cell#GridPath`                               |
+| `cellToLocalIj`              | `CellToLocalIJ`                                           |
+| `localIjToCell`              | `LocalIJToCell`                                           |
 
 ## CGO
 

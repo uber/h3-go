@@ -230,7 +230,35 @@ func (c Cell) GridDisk(k int) ([]Cell, error) {
 	return GridDisk(c, k)
 }
 
+// GridDisksUnsafe produces cells within grid distance k of all provided origin
+// cells.
+//
+// k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+// all neighboring cells, and so on.
+//
+// Outer slice is ordered in the same order origins were passed in. Inner slices
+// are in no particular order.
+//
+// This does not call through to the underlying C.gridDisksUnsafe implementation
+// as it is slightly easier to do so to avoid unnecessary type conversions.
+func GridDisksUnsafe(origins []Cell, k int) ([][]Cell, error) {
+	out := make([][]Cell, len(origins))
+	gridDiskSize := maxGridDiskSize(k)
+	for i := range origins {
+		inner := make([]C.H3Index, gridDiskSize)
+		errC := C.gridDiskUnsafe(C.H3Index(origins[i]), C.int(k), &inner[0])
+		if err := toErr(errC); err != nil {
+			return nil, err
+		}
+		out[i] = cellsFromC(inner, true, false)
+	}
+	return out, nil
+}
+
 // GridDiskDistances produces cells within grid distance k of the origin cell.
+// This method optimistically tries the faster GridDiskDistancesUnsafe first.
+// If a cell was a pentagon or was in the pentagon distortion area, it falls
+// back to GridDiskDistancesSafe.
 //
 // k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
 // all neighboring cells, and so on.
@@ -260,6 +288,9 @@ func GridDiskDistances(origin Cell, k int) ([][]Cell, error) {
 }
 
 // GridDiskDistances produces cells within grid distance k of the origin cell.
+// This method optimistically tries the faster GridDiskDistancesUnsafe first.
+// If a cell was a pentagon or was in the pentagon distortion area, it falls
+// back to GridDiskDistancesSafe.
 //
 // k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
 // all neighboring cells, and so on.
@@ -269,6 +300,94 @@ func GridDiskDistances(origin Cell, k int) ([][]Cell, error) {
 // happen when crossing a pentagon.
 func (c Cell) GridDiskDistances(k int) ([][]Cell, error) {
 	return GridDiskDistances(c, k)
+}
+
+// GridDiskDistancesUnsafe produces cells within grid distance k of the origin cell.
+// Output behavior is undefined when one of the cells returned by this
+// function is a pentagon or is in the pentagon distortion area.
+//
+// k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+// all neighboring cells, and so on.
+//
+// Outer slice is ordered from origin outwards. Inner slices are in no
+// particular order. Elements of the output array may be left zero, as can
+// happen when crossing a pentagon.
+func GridDiskDistancesUnsafe(origin Cell, k int) ([][]Cell, error) {
+	rsz := maxGridDiskSize(k)
+	outHexes := make([]C.H3Index, rsz)
+	outDists := make([]C.int, rsz)
+
+	if err := toErr(C.gridDiskDistancesUnsafe(C.H3Index(origin), C.int(k), &outHexes[0], &outDists[0])); err != nil {
+		return nil, err
+	}
+
+	ret := make([][]Cell, k+1)
+	for i := 0; i <= k; i++ {
+		ret[i] = make([]Cell, 0, ringSize(i))
+	}
+
+	for i, d := range outDists {
+		ret[d] = append(ret[d], Cell(outHexes[i]))
+	}
+
+	return ret, nil
+}
+
+// GridDiskDistancesUnsafe produces cells within grid distance k of the origin cell.
+// Output behavior is undefined when one of the cells returned by this
+// function is a pentagon or is in the pentagon distortion area.
+//
+// k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+// all neighboring cells, and so on.
+//
+// Outer slice is ordered from origin outwards. Inner slices are in no
+// particular order. Elements of the output array may be left zero, as can
+// happen when crossing a pentagon.
+func (c Cell) GridDiskDistancesUnsafe(k int) ([][]Cell, error) {
+	return GridDiskDistancesUnsafe(c, k)
+}
+
+// GridDiskDistancesSafe produces cells within grid distance k of the origin cell.
+// This is the safe, but slow version of GridDiskDistances.
+//
+// k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+// all neighboring cells, and so on.
+//
+// Outer slice is ordered from origin outwards. Inner slices are in no
+// particular order. Elements of the output array may be left zero, as can
+// happen when crossing a pentagon.
+func GridDiskDistancesSafe(origin Cell, k int) ([][]Cell, error) {
+	rsz := maxGridDiskSize(k)
+	outHexes := make([]C.H3Index, rsz)
+	outDists := make([]C.int, rsz)
+
+	if err := toErr(C.gridDiskDistancesSafe(C.H3Index(origin), C.int(k), &outHexes[0], &outDists[0])); err != nil {
+		return nil, err
+	}
+
+	ret := make([][]Cell, k+1)
+	for i := 0; i <= k; i++ {
+		ret[i] = make([]Cell, 0, ringSize(i))
+	}
+
+	for i, d := range outDists {
+		ret[d] = append(ret[d], Cell(outHexes[i]))
+	}
+
+	return ret, nil
+}
+
+// GridDiskDistancesSafe produces cells within grid distance k of the origin cell.
+// This is the safe, but slow version of GridDiskDistances.
+//
+// k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+// all neighboring cells, and so on.
+//
+// Outer slice is ordered from origin outwards. Inner slices are in no
+// particular order. Elements of the output array may be left zero, as can
+// happen when crossing a pentagon.
+func (c Cell) GridDiskDistancesSafe(k int) ([][]Cell, error) {
+	return GridDiskDistancesSafe(c, k)
 }
 
 // GridRing produces the "hollow" ring of cells at exactly grid distance k from the origin cell.
