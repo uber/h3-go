@@ -1610,3 +1610,9 @@ func TestToErr(t *testing.T) {
 func TestLatLngsToC_Nil(t *testing.T) {
 	assertEqual(t, nil, latLngsToC(nil))
 }
+
+func TestLatLng_String(t *testing.T) {
+	t.Parallel()
+
+	assertEqual(t, "(67.15093, -168.39089)", validLatLng1.String())
+}
