@@ -34,6 +34,12 @@ go test -coverprofile=c.out && go tool cover -html=c.out
 
 ### Using VSCode
 
+Add VSCode configuration, or merge recommended settings into your existing settings:
+
+```sh
+git cherry-pick vscode
+```
+
 `golangci-lint` version 2 requires the pre-release version of the `golang.go` extension:
 
 https://golangci-lint.run/welcome/integrations/#visual-studio-code

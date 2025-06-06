@@ -30,5 +30,8 @@ _testmain.go
 # Intellij project files
 .idea
 
+# VSCode
+.vscode
+
 # Test coverage file
 covprofile
