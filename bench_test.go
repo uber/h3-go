@@ -14,6 +14,7 @@ var (
 	addr     = cell.String()
 	geoBndry CellBoundary
 	cells    []Cell
+	disks    [][]Cell
 )
 
 func BenchmarkToString(b *testing.B) {
@@ -61,6 +62,14 @@ func BenchmarkGridRing(b *testing.B) {
 
 func BenchmarkPolyfill(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		cells, _ = PolygonToCells(validGeoPolygonHoles, 15)
+		cells, _ = PolygonToCells(validGeoPolygonHoles, 13)
+	}
+}
+
+func BenchmarkGridDisksUnsafe(b *testing.B) {
+	cells, _ = PolygonToCells(validGeoPolygonHoles, 12)
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		disks, _ = GridDisksUnsafe(cells, 10)
 	}
 }
