@@ -71,6 +71,15 @@ const (
 	RadsToDegs = 180.0 / math.Pi
 )
 
+const (
+	latLngFloatPrecision = 5
+	// latLngStringSize is the size to pre-allocate the buffer for.
+	// Given latLngFloatPrecision, a typical string is "(DD.DDDDD, -DDD.DDDDD)"
+	// which is ~25-30 bytes. 32 is a safe and efficient capacity to start with
+	// to avoid re-allocation.
+	latLngStringSize = 32
+)
+
 // PolygonToCells containment modes
 const (
 	ContainmentCenter          ContainmentMode = C.CONTAINMENT_CENTER           // Cell center is contained in the shape
@@ -121,7 +130,6 @@ var (
 )
 
 type (
-
 	// Cell is an Index that identifies a single hexagon cell at a resolution.
 	Cell int64
 
@@ -543,7 +551,6 @@ func CellsToMultiPolygon(cells []Cell) ([]GeoPolygon, error) {
 		currLoop = currPoly.first
 		countLoop = 0
 		for currLoop != nil {
-
 			currPt := currLoop.first
 			var countPt int
 			for currPt != nil {
@@ -1253,13 +1260,11 @@ func intsFromC(chs []C.int) []int {
 }
 
 func (g LatLng) String() string {
-	// Pre-allocate a buffer. A typical string is "(DD.DDDDD, -DDD.DDDDD)" which is ~25-30 bytes.
-	// 32 is a safe and efficient capacity to start with to avoid re-allocation.
-	buf := make([]byte, 0, 32)
+	buf := make([]byte, 0, latLngStringSize)
 	buf = append(buf, '(')
-	buf = strconv.AppendFloat(buf, g.Lat, 'f', 5, 64)
+	buf = strconv.AppendFloat(buf, g.Lat, 'f', latLngFloatPrecision, 64)
 	buf = append(buf, ',', ' ')
-	buf = strconv.AppendFloat(buf, g.Lng, 'f', 5, 64)
+	buf = strconv.AppendFloat(buf, g.Lng, 'f', latLngFloatPrecision, 64)
 	buf = append(buf, ')')
 	return string(buf)
 }
