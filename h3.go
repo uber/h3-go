@@ -1262,9 +1262,9 @@ func intsFromC(chs []C.int) []int {
 func (g LatLng) String() string {
 	buf := make([]byte, 0, latLngStringSize)
 	buf = append(buf, '(')
-	buf = strconv.AppendFloat(buf, g.Lat, 'f', latLngFloatPrecision, 64)
+	buf = strconv.AppendFloat(buf, g.Lat, 'f', latLngFloatPrecision, 64) //nolint:mnd // float bit size
 	buf = append(buf, ',', ' ')
-	buf = strconv.AppendFloat(buf, g.Lng, 'f', latLngFloatPrecision, 64)
+	buf = strconv.AppendFloat(buf, g.Lng, 'f', latLngFloatPrecision, 64) //nolint:mnd // float bit size
 	buf = append(buf, ')')
 	return string(buf)
 }
