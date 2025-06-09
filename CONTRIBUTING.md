@@ -29,7 +29,7 @@ go test
 Generate coverage:
 
 ```bash
-go test -coverprofile=c.out && go tool cover -html=c.out
+go test -coverprofile=covprofile && go tool cover -html=covprofile
 ```
 
 ### Using VSCode
