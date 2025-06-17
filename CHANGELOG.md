@@ -4,6 +4,16 @@ This project tracks the **major** and **minor** versions set upstream by
 [h3](https://github.com/uber/h3) and introduces backwards-compatible updates and/or
 fixes via **patches** with patch version bumps.
 
+## 4.3.0 (17 Jun 2025)
+
+### Changed
+
+* [#89]: `GridRing` implementation was updated to use the C library directly.
+
+### Updated
+
+* [#89]: H3 Core was updated to v4.3.0.
+
 ## 4.2.4 (6 Jun 2025)
 
 ### Added
@@ -204,6 +214,7 @@ Thanks to [@jogly] for their contributions to this release.
 [#84]: https://github.com/uber/h3-go/pull/84
 [#85]: https://github.com/uber/h3-go/pull/85
 [#86]: https://github.com/uber/h3-go/pull/86
+[#89]: https://github.com/uber/h3-go/pull/89
 
 [c3cc4ae]: https://github.com/uber/h3-go/commit/c3cc4ae1af0472866452d998fe5576839450e342
 [migration guide]: https://h3geo.org/docs/library/migrating-3.x

@@ -403,14 +403,12 @@ func (c Cell) GridDiskDistancesSafe(k int) ([][]Cell, error) {
 //
 // Elements of the output array may be left zero, as can happen when crossing a pentagon.
 func GridRing(origin Cell, k int) ([]Cell, error) {
-	if cells, err := GridRingUnsafe(origin, k); err == nil {
-		return cells, nil
+	if k < 0 {
+		return nil, ErrDomain
 	}
-	diskDistances, err := GridDiskDistances(origin, k)
-	if err != nil {
-		return nil, err
-	}
-	return diskDistances[k], nil
+	out := make([]C.H3Index, ringSize(k))
+	errC := C.gridRing(C.H3Index(origin), C.int(k), &out[0])
+	return cellsFromC(out, true, false), toErr(errC)
 }
 
 // GridRing produces the "hollow" ring of cells at exactly grid distance k from the origin cell.
