@@ -9,15 +9,11 @@ jobs:
   golangci:
     name: lint
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ["1.22"]
-
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
-      - uses: actions/checkout@v4
+          go-version: 1.22
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
@@ -27,6 +23,7 @@ jobs:
     name: test
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         go-version: 
           - "1.22"
@@ -34,16 +31,31 @@ jobs:
           - "1.24"
 
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-      - uses: actions/checkout@v4
       - name: unit-tests
         run: |
           go test -count=2 -race -covermode atomic -coverprofile=covprofile ./...
-      - name: goveralls
+      - name: install-goveralls
+        run: go install github.com/mattn/goveralls@latest
+      - name: send-coverage
         env:
           COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          go install github.com/mattn/goveralls@latest
-          goveralls -coverprofile=covprofile -service=github
+        run: goveralls -coverprofile=covprofile -service=github -parallel -flagname=Go-${{ matrix.test_number }}
+
+  finish:
+    needs: test
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24
+      - name: install-goveralls
+        run: go install github.com/mattn/goveralls@latest
+      - name: finish-coverage-parallel
+        env:
+          COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: goveralls -parallel-finish -service=github
