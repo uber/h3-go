@@ -886,6 +886,8 @@ func TestPolygonToCellsExperimental(t *testing.T) {
 	})
 
 	t.Run("err/invalid_containment_mode", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := PolygonToCellsExperimental(validGeoPolygonHoles, 6, ContainmentInvalid)
 		assertErr(t, err)
 		assertErrIs(t, err, ErrOptionInvalid)
@@ -896,6 +898,8 @@ func TestGridPath(t *testing.T) {
 	t.Parallel()
 
 	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
 		path, err := lineStartCell.GridPath(lineEndCell)
 
 		assertNoErr(t, err)
@@ -909,12 +913,16 @@ func TestGridPath(t *testing.T) {
 	})
 
 	t.Run("err/res_mismatch", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := GridPath(1, -1)
 		assertErr(t, err)
 		assertErrIs(t, err, ErrRsolutionMismatch)
 	})
 
 	t.Run("err/failed", func(t *testing.T) {
+		t.Parallel()
+
 		c1, _ := NewLatLng(1, 1).Cell(5)
 		c2, _ := NewLatLng(50.10320148224132, -143.47849001502516).Cell(5)
 		_, err := GridPath(c1, c2)
@@ -923,9 +931,10 @@ func TestGridPath(t *testing.T) {
 	})
 
 	t.Run("err/pentagon", func(t *testing.T) {
+		t.Parallel()
 
-		start := Cell(IndexFromString("0x820807fffffffff"))
-		end := Cell(IndexFromString("0x8208e7fffffffff"))
+		start := Cell(IndexFromString("0x820807fffffffff")) //nolint:gosec // test
+		end := Cell(IndexFromString("0x8208e7fffffffff"))   //nolint:gosec // test
 
 		_, err := GridPath(start, end)
 		assertErr(t, err)
