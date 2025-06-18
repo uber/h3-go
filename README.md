@@ -1,10 +1,10 @@
-<img align="right" src="https://uber.github.io/img/h3Logo-color.svg" alt="H3 Logo" width="200">
+<img src="https://uber.github.io/img/h3Logo-color.svg" alt="H3 Logo" width="200" style="float: right;">
 
-![Build](https://github.com/uber/h3-go/workflows/Build/badge.svg?branch=master)
+[![Build](https://github.com/uber/h3-go/actions/workflows/build.yml/badge.svg)](https://github.com/uber/h3-go/actions/workflows/build.yml)
 [![Coverage Status](https://coveralls.io/repos/github/uber/h3-go/badge.svg)](https://coveralls.io/github/uber/h3-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/uber/h3-go/v4)](https://goreportcard.com/report/github.com/uber/h3-go)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![GoDoc](http://img.shields.io/badge/go-doc-blue.svg)](https://godoc.org/github.com/uber/h3-go)
+[![Go Reference](https://pkg.go.dev/badge/github.com/uber/h3-go/v4.svg)](https://pkg.go.dev/github.com/uber/h3-go/v4)
 [![H3 Version](https://img.shields.io/badge/h3-v4.3.0-blue.svg)](https://github.com/uber/h3/releases/tag/v4.3.0)
 
 # H3-Go
@@ -90,6 +90,7 @@ func ExampleLatLngToCell() {
 | `gridDiskDistances`          | `GridDiskDistances`, `Cell#GridDiskDistances`             |
 | `gridDiskDistancesSafe`      | `GridDiskDistancesSafe`, `Cell#GridDiskDistancesSafe`     |
 | `gridDiskDistancesUnsafe`    | `GridDiskDistancesUnsafe`, `Cell#GridDiskDistancesUnsafe` |
+| `gridRing`                   | `GridRing`, `Cell#GridRing`                               |
 | `gridRingUnsafe`             | `GridRingUnsafe`, `Cell#GridRingUnsafe`                   |
 | `polygonToCells`             | `PolygonToCells`, `GeoPolygon#Cells`                      |
 | `cellsToMultiPolygon`        | `CellsToMultiPolygon`                                     |
