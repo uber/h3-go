@@ -50,6 +50,9 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24
       - name: install-goveralls
         run: go install github.com/mattn/goveralls@latest
       - name: finish-coverage-parallel
