@@ -372,6 +372,12 @@ func TestGridRingUnsafe(t *testing.T) {
 		assertNoErr(t, err)
 	})
 
+	t.Run("err/invalid_k", func(t *testing.T) {
+		_, err := GridRingUnsafe(validCell, -1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDomain)
+	})
+
 	t.Run("err/pentagon", func(t *testing.T) {
 		t.Parallel()
 
@@ -878,32 +884,53 @@ func TestPolygonToCellsExperimental(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("err/invalid_containment_mode", func(t *testing.T) {
+		_, err := PolygonToCellsExperimental(validGeoPolygonHoles, 6, ContainmentInvalid)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrOptionInvalid)
+	})
 }
 
 func TestGridPath(t *testing.T) {
 	t.Parallel()
-	path, err := lineStartCell.GridPath(lineEndCell)
 
-	assertNoErr(t, err)
-	assertEqual(t, lineStartCell, path[0])
-	assertEqual(t, lineEndCell, path[len(path)-1])
+	t.Run("success", func(t *testing.T) {
+		path, err := lineStartCell.GridPath(lineEndCell)
 
-	for i := 0; i < len(path)-1; i++ {
-		isNeighbor, _ := path[i].IsNeighbor(path[i+1])
-		assertTrue(t, isNeighbor)
-	}
+		assertNoErr(t, err)
+		assertEqual(t, lineStartCell, path[0])
+		assertEqual(t, lineEndCell, path[len(path)-1])
 
-	path, err = GridPath(1, -1)
-	assertErr(t, err)
-	assertErrIs(t, err, ErrRsolutionMismatch)
-	assertNil(t, path)
+		for i := 0; i < len(path)-1; i++ {
+			isNeighbor, _ := path[i].IsNeighbor(path[i+1])
+			assertTrue(t, isNeighbor)
+		}
+	})
 
-	c1, _ := NewLatLng(1, 1).Cell(5)
-	c2, _ := NewLatLng(50.10320148224132, -143.47849001502516).Cell(5)
-	path, err = GridPath(c1, c2)
-	assertErr(t, err)
-	assertErrIs(t, err, ErrFailed)
-	assertNil(t, path)
+	t.Run("err/res_mismatch", func(t *testing.T) {
+		_, err := GridPath(1, -1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrRsolutionMismatch)
+	})
+
+	t.Run("err/failed", func(t *testing.T) {
+		c1, _ := NewLatLng(1, 1).Cell(5)
+		c2, _ := NewLatLng(50.10320148224132, -143.47849001502516).Cell(5)
+		_, err := GridPath(c1, c2)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrFailed)
+	})
+
+	t.Run("err/pentagon", func(t *testing.T) {
+
+		start := Cell(IndexFromString("0x820807fffffffff"))
+		end := Cell(IndexFromString("0x8208e7fffffffff"))
+
+		_, err := GridPath(start, end)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrPentagon)
+	})
 }
 
 func TestHexAreaKm2(t *testing.T) { //nolint:dupl // // it's ok to have duplication in tests.
