@@ -50,6 +50,8 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
+      - name: install-goveralls
+        run: go install github.com/mattn/goveralls@latest
       - name: finish-coverage-parallel
         env:
           COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
