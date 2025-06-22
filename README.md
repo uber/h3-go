@@ -1,7 +1,7 @@
-<img src="https://uber.github.io/img/h3Logo-color.svg" alt="H3 Logo" width="200" style="float: right;">
+<p style="float: right;"><img src="https://uber.github.io/img/h3Logo-color.svg" alt="H3 Logo" width="200" /></p>
 
 [![Build](https://github.com/uber/h3-go/actions/workflows/build.yml/badge.svg)](https://github.com/uber/h3-go/actions/workflows/build.yml)
-[![Coverage Status](https://coveralls.io/repos/github/uber/h3-go/badge.svg)](https://coveralls.io/github/uber/h3-go)
+[![Coverage Status](https://coveralls.io/repos/github/uber/h3-go/badge.svg?branch=master)](https://coveralls.io/github/uber/h3-go?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/uber/h3-go/v4)](https://goreportcard.com/report/github.com/uber/h3-go)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/uber/h3-go/v4.svg)](https://pkg.go.dev/github.com/uber/h3-go/v4)
