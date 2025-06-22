@@ -1,4 +1,4 @@
-<p style="float: right;"><img src="https://uber.github.io/img/h3Logo-color.svg" alt="H3 Logo" width="200" /></p>
+<img src="https://uber.github.io/img/h3Logo-color.svg" alt="H3 Logo" width="200" align="right" />
 
 [![Build](https://github.com/uber/h3-go/actions/workflows/build.yml/badge.svg)](https://github.com/uber/h3-go/actions/workflows/build.yml)
 [![Coverage Status](https://coveralls.io/repos/github/uber/h3-go/badge.svg?branch=master)](https://coveralls.io/github/uber/h3-go?branch=master)
@@ -11,7 +11,7 @@
 
 This library provides Golang bindings for the
 [H3 Core Library](https://github.com/uber/h3). For API reference, see the
-[H3 Documentation](https://uber.github.io/h3/).
+[H3 Documentation](https://h3geo.org/).
 
 **This is v4 of this library, supporting H3 v4.**
 
@@ -31,14 +31,15 @@ H3-Go requires [CGO](https://golang.org/cmd/cgo/) (`CGO_ENABLED=1`) in order to
 be built. Go should do the right thing when including this library:
 
 > The cgo tool is enabled by default for native builds on systems where it is
-> expected to work. It is disabled by default when cross-compiling. You can
-> control this by setting the CGO_ENABLED environment variable when running the go
-> tool: set it to 1 to enable the use of cgo, and to 0 to disable it. The go tool
-> will set the build constraint "cgo" if cgo is enabled. The special import "C"
-> implies the "cgo" build constraint, as though the file also said "// +build
-> cgo". Therefore, if cgo is disabled, files that import "C" will not be built by
-> the go tool. (For more about build constraints see
-> <https://golang.org/pkg/go/build/#hdr-Build_Constraints>).
+> expected to work. It is disabled by default when cross-compiling as well as
+> when the CC environment variable is unset and the default C compiler (typically
+> gcc or clang) cannot be found on the system PATH. You can override the default
+> by setting the CGO_ENABLED environment variable when running the go tool: set
+> it to 1 to enable the use of cgo, and to 0 to disable it. The go tool will set
+> the build constraint "cgo" if cgo is enabled. The special import "C" implies
+> the "cgo" build constraint, as though the file also said "//go:build cgo".
+> Therefore, if cgo is disabled, files that import "C" will not be built by the
+> go tool. (For more about build constraints see https://pkg.go.dev/go/build#hdr-Build_Constraints).
 
 If you see errors/warnings like _"build constraints exclude all Go files..."_,
 then the `cgo` build constraint is likely disabled; try setting `CGO_ENABLED=1`
@@ -74,7 +75,7 @@ func ExampleLatLngToCell() {
 
 * `LatLng` returns `Lat` and `Lng` as degrees, instead of radians.
 * H3 C API function prefixes of `get` have been dropped in support of Golang's
- `Getter` [naming style](https://golang.org/doc/effective_go.html#Getters).
+ `Getter` [naming style](https://go.dev/doc/effective_go#Getters).
 * Convenience methods have been added to various types where that type was the
   main or only argument.
 
