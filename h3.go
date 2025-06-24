@@ -740,7 +740,7 @@ func (c Cell) BaseCellNumber() int {
 	return BaseCellNumber(c)
 }
 
-// IndexFromString returns a Cell from a string. Should call c.IsValid() to check
+// IndexFromString returns an uint64 from a string. Should call c.IsValid() to check
 // if the Cell is valid before using it.
 func IndexFromString(s string) uint64 {
 	if len(s) > 2 && strings.ToLower(s[:2]) == "0x" {
@@ -751,15 +751,25 @@ func IndexFromString(s string) uint64 {
 	return c
 }
 
-// IndexToString returns a Cell from a string. Should call c.IsValid() to check
-// if the Cell is valid before using it.
+// IndexToString returns a string from a Cell.
 func IndexToString(i uint64) string {
 	return strconv.FormatUint(i, base16)
 }
 
+// CellFromString returns a Cell from a string. Should call c.IsValid() to check
+// if the Cell is valid before using it.
+func CellFromString(s string) Cell {
+	return Cell(IndexFromString(s))
+}
+
+// CellToString returns a string from a Cell.
+func CellToString(c Cell) string {
+	return IndexToString(uint64(c))
+}
+
 // String returns the string representation of the H3Index h.
 func (c Cell) String() string {
-	return IndexToString(uint64(c))
+	return CellToString(c)
 }
 
 // MarshalText implements the encoding.TextMarshaler interface.

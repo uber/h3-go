@@ -658,6 +658,9 @@ func TestStrings(t *testing.T) {
 		t.Parallel()
 		i := IndexFromString("oops")
 		assertEqual(t, 0, i)
+
+		c := CellFromString("oops")
+		assertEqual(t, 0, c)
 	})
 
 	t.Run("good string round trip", func(t *testing.T) {
@@ -666,6 +669,9 @@ func TestStrings(t *testing.T) {
 
 		//nolint:gosec // IndexFromString returns uint64 and fixing that to detect integer overflows will break package API. Let's skip it for now.
 		assertEqual(t, validCell, Cell(i))
+
+		c := CellFromString(validCell.String())
+		assertEqual(t, validCell, c)
 	})
 
 	t.Run("no 0x prefix", func(t *testing.T) {
