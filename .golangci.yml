@@ -63,8 +63,8 @@ linters:
       - path: _test\.go
         linters:
           - dupl
-          - fieldalignment
           - gosec
+          - govet
 
 formatters:
   enable:
