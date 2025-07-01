@@ -32,6 +32,7 @@ const (
 	pentagonCell  = Cell(0x821c07fffffffff)
 	lineStartCell = Cell(0x89283082803ffff)
 	lineEndCell   = Cell(0x8929a5653c3ffff)
+	validVertex   = Vertex(0x2050dab63fffffff)
 )
 
 var (
@@ -1243,21 +1244,22 @@ func TestPentagons(t *testing.T) {
 func TestCellToVertex(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		expectedErr    error
+	testCases := map[string]struct {
 		cell           Cell
-		expectedVertex Cell
 		vertexNum      int
+		expectedVertex Vertex
+		expectedErr    error
 	}{
-		{cell: validCell, expectedVertex: 0x2050dab63fffffff, vertexNum: 0, expectedErr: nil},
-		{cell: validCell, expectedVertex: 0, vertexNum: 6, expectedErr: ErrDomain}, // vertex num should be between 0 and 5 for hexagonal cells.
+		"success":             {cell: validCell, vertexNum: 0, expectedVertex: validVertex, expectedErr: nil},
+		"err/cell_domain":     {cell: validCell, vertexNum: 6, expectedVertex: 0, expectedErr: ErrDomain},    // vertex num should be between 0 and 5 for hexagonal cells.
+		"err/pentagon_domain": {cell: pentagonCell, vertexNum: 5, expectedVertex: 0, expectedErr: ErrDomain}, // vertex num should be between 0 and 4 for pentagon cells.
 	}
 
-	for i, tc := range testCases {
-		t.Run(fmt.Sprint(i), func(t *testing.T) {
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			vertex, err := CellToVertex(tc.cell, tc.vertexNum)
+			vertex, err := tc.cell.Vertex(tc.vertexNum)
 			assertErrIs(t, err, tc.expectedErr)
 			assertEqual(t, tc.expectedVertex, vertex)
 		})
@@ -1267,21 +1269,21 @@ func TestCellToVertex(t *testing.T) {
 func TestCellToVertexes(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		expectedErr error
+	testCases := map[string]struct {
 		cell        Cell
 		numVertexes int
+		expectedErr error
 	}{
-		{cell: validCell, numVertexes: 6, expectedErr: nil},
-		{cell: pentagonCell, numVertexes: 5, expectedErr: nil},
-		{cell: -1, numVertexes: 0, expectedErr: ErrFailed}, // Invalid cell.
+		"cell":     {cell: validCell, numVertexes: 6, expectedErr: nil},
+		"pentagon": {cell: pentagonCell, numVertexes: 5, expectedErr: nil},
+		"invalid":  {cell: -1, numVertexes: 0, expectedErr: ErrFailed}, // Invalid cell.
 	}
 
-	for _, tc := range testCases {
-		t.Run(fmt.Sprint(tc.numVertexes), func(t *testing.T) {
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			vertexes, err := CellToVertexes(tc.cell)
+			vertexes, err := tc.cell.Vertexes()
 			assertErrIs(t, err, tc.expectedErr)
 			assertEqual(t, tc.numVertexes, len(vertexes))
 		})
@@ -1291,22 +1293,20 @@ func TestCellToVertexes(t *testing.T) {
 func TestVertexToLatLng(t *testing.T) {
 	t.Parallel()
 
-	vertex, _ := CellToVertex(validCell, 0)
-
-	testCases := []struct {
-		expectedErr    error
-		vertex         Cell
+	testCases := map[string]struct {
+		vertex         Vertex
 		expectedLatLng LatLng
+		expectedErr    error
 	}{
-		{vertex: vertex, expectedLatLng: LatLng{Lat: 67.22475, Lng: -168.52301}, expectedErr: nil},
-		{vertex: -1, expectedLatLng: LatLng{}, expectedErr: ErrCellInvalid}, // Invalid vertex.
+		"success":     {vertex: validVertex, expectedLatLng: LatLng{Lat: 67.22475, Lng: -168.52301}, expectedErr: nil},
+		"err/invalid": {vertex: -1, expectedLatLng: LatLng{}, expectedErr: ErrCellInvalid}, // Invalid vertex.
 	}
 
-	for i, tc := range testCases {
-		t.Run(fmt.Sprint(i), func(t *testing.T) {
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			latLng, err := VertexToLatLng(tc.vertex)
+			latLng, err := tc.vertex.LatLng()
 			assertErrIs(t, err, tc.expectedErr)
 			assertEqualLatLng(t, tc.expectedLatLng, latLng)
 		})
@@ -1318,6 +1318,43 @@ func TestIsValidVertex(t *testing.T) {
 
 	assertFalse(t, IsValidVertex(0))
 	assertTrue(t, IsValidVertex(2473183460575936511))
+	assertTrue(t, validVertex.IsValid())
+}
+
+func TestVertex_Strings(t *testing.T) {
+	t.Parallel()
+
+	t.Run("bad string", func(t *testing.T) {
+		t.Parallel()
+		v := VertexFromString("invalid")
+		assertEqual(t, 0, v)
+	})
+
+	t.Run("good string round trip", func(t *testing.T) {
+		t.Parallel()
+		v := VertexFromString(validVertex.String())
+		assertEqual(t, validVertex, v)
+	})
+
+	t.Run("no 0x prefix", func(t *testing.T) {
+		t.Parallel()
+		h3addr := validVertex.String()
+		assertEqual(t, "2050dab63fffffff", h3addr)
+	})
+
+	t.Run("marshalling text", func(t *testing.T) {
+		t.Parallel()
+		text, err := validVertex.MarshalText()
+		assertNoErr(t, err)
+
+		var v Vertex
+		err = v.UnmarshalText([]byte("0x" + string(text)))
+		assertNoErr(t, err)
+		assertEqual(t, validVertex, v)
+
+		err = v.UnmarshalText([]byte(""))
+		assertErr(t, err)
+	})
 }
 
 func equalEps(expected, actual float64) bool {
