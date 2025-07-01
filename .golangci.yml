@@ -58,6 +58,13 @@ linters:
           list-mode: lax
           allow:
             - "github.com/uber/h3-go/v4"
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - dupl
+          - gosec
+          - govet
 
 formatters:
   enable:

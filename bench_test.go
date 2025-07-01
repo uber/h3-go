@@ -26,7 +26,6 @@ func BenchmarkToString(b *testing.B) {
 
 func BenchmarkFromString(b *testing.B) {
 	for range b.N {
-		//nolint:gosec // IndexFromString returns uint64 and fixing that to detect integer overflows will break package API. Let's skip it for now.
 		cell = Cell(IndexFromString("850dab63fffffff"))
 	}
 }

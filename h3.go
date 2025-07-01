@@ -31,6 +31,7 @@ package h3
 import "C"
 
 import (
+	"encoding"
 	"errors"
 	"math"
 	"strconv"
@@ -136,6 +137,11 @@ type (
 	// DirectedEdge is an Index that identifies a directed edge between two cells.
 	DirectedEdge int64
 
+	// Vertex is an Index that identifies a single topological vertex, shared by three cells.
+	// A vertex is arbitrarily assigned one of the three neighboring cells as its "owner", which is used to calculate
+	// the canonical index and geographic coordinates for the vertex.
+	Vertex int64
+
 	// CoordIJ IJ hexagon coordinates
 	//
 	// Each axis is spaced 120 degrees apart.
@@ -163,6 +169,14 @@ type (
 
 	// ContainmentMode is an int for specifying PolygonToCell containment behavior.
 	ContainmentMode C.uint32_t
+)
+
+// compile time checks that ensure interface implementation
+var (
+	_ encoding.TextMarshaler   = (*Cell)(nil)
+	_ encoding.TextUnmarshaler = (*Cell)(nil)
+	_ encoding.TextMarshaler   = (*Vertex)(nil)
+	_ encoding.TextUnmarshaler = (*Vertex)(nil)
 )
 
 // NewLatLng is a helper function to create a LatLng.
@@ -767,6 +781,12 @@ func CellToString(c Cell) string {
 	return IndexToString(uint64(c))
 }
 
+// VertexFromString returns a Vertex from a string. Should call v.IsValid() to check
+// if the Vertex is valid before using it.
+func VertexFromString(s string) Vertex {
+	return Vertex(IndexFromString(s))
+}
+
 // String returns the string representation of the H3Index h.
 func (c Cell) String() string {
 	return CellToString(c)
@@ -1063,35 +1083,73 @@ func LocalIJToCell(origin Cell, ij CoordIJ) (Cell, error) {
 	return Cell(out), toErr(errC)
 }
 
+// Vertex returns a single vertex for a given cell, or InvalidH3Index if the vertex is invalid.
+func (c Cell) Vertex(vertexNum int) (Vertex, error) {
+	return CellToVertex(c, vertexNum)
+}
+
 // CellToVertex returns a single vertex for a given cell, or InvalidH3Index if the vertex is invalid.
-func CellToVertex(c Cell, vertexNum int) (Cell, error) {
+func CellToVertex(c Cell, vertexNum int) (Vertex, error) {
 	var out C.H3Index
 	errC := C.cellToVertex(C.H3Index(c), C.int(vertexNum), &out)
 
-	return Cell(out), toErr(errC)
+	return Vertex(out), toErr(errC)
+}
+
+// Vertexes returns all vertexes for the given cell.
+func (c Cell) Vertexes() ([]Vertex, error) {
+	return CellToVertexes(c)
 }
 
 // CellToVertexes returns all vertexes for the given cell.
-func CellToVertexes(c Cell) ([]Cell, error) {
+func CellToVertexes(c Cell) ([]Vertex, error) {
 	out := make([]C.H3Index, numCellVertexes)
 	if err := toErr(C.cellToVertexes(C.H3Index(c), &out[0])); err != nil {
 		return nil, err
 	}
+	return vertexesFromC(out), nil
+}
 
-	return cellsFromC(out, true, false), nil
+// LatLng returns the geographic coordinates of the vertex.
+func (v Vertex) LatLng() (LatLng, error) {
+	return VertexToLatLng(v)
 }
 
 // VertexToLatLng returns the geographic coordinates of the vertex.
-func VertexToLatLng(vertex Cell) (LatLng, error) {
+func VertexToLatLng(vertex Vertex) (LatLng, error) {
 	var out C.LatLng
 	errC := C.vertexToLatLng(C.H3Index(vertex), &out)
-
 	return latLngFromC(out), toErr(errC)
 }
 
+// IsValid returns whether the cell is a valid vertex.
+func (v Vertex) IsValid() bool {
+	return IsValidVertex(v)
+}
+
 // IsValidVertex returns whether the cell is a valid vertex.
-func IsValidVertex(c Cell) bool {
-	return C.isValidVertex(C.H3Index(c)) == 1
+func IsValidVertex(v Vertex) bool {
+	return C.isValidVertex(C.H3Index(v)) == 1
+}
+
+// String returns a string from a Vertex.
+func (v Vertex) String() string {
+	return IndexToString(uint64(v))
+}
+
+// MarshalText implements the encoding.TextMarshaler interface.
+func (v Vertex) MarshalText() ([]byte, error) {
+	return []byte(v.String()), nil
+}
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+func (v *Vertex) UnmarshalText(text []byte) error {
+	*v = VertexFromString(string(text))
+	if !v.IsValid() {
+		return errors.New("invalid cell index")
+	}
+
+	return nil
 }
 
 func maxGridDiskSize(k int) int {
@@ -1231,6 +1289,18 @@ func cellsFromC(chs []C.H3Index, prune, refit bool) []Cell {
 				out = out[:i]
 			}
 		}
+	}
+	return out
+}
+
+func vertexesFromC(chs []C.H3Index) []Vertex {
+	in := unsafe.Slice((*Vertex)(unsafe.Pointer(&chs[0])), len(chs))
+	out := in[:0]
+	for i := range in {
+		if in[i] <= 0 {
+			continue
+		}
+		out = append(out, in[i])
 	}
 	return out
 }
