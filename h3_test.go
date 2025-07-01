@@ -668,7 +668,6 @@ func TestStrings(t *testing.T) {
 		t.Parallel()
 		i := IndexFromString(validCell.String())
 
-		//nolint:gosec // IndexFromString returns uint64 and fixing that to detect integer overflows will break package API. Let's skip it for now.
 		assertEqual(t, validCell, Cell(i))
 
 		c := CellFromString(validCell.String())
@@ -940,8 +939,8 @@ func TestGridPath(t *testing.T) {
 	t.Run("err/pentagon", func(t *testing.T) {
 		t.Parallel()
 
-		start := Cell(IndexFromString("0x820807fffffffff")) //nolint:gosec // test
-		end := Cell(IndexFromString("0x8208e7fffffffff"))   //nolint:gosec // test
+		start := Cell(IndexFromString("0x820807fffffffff"))
+		end := Cell(IndexFromString("0x8208e7fffffffff"))
 
 		_, err := GridPath(start, end)
 		assertErr(t, err)
@@ -949,7 +948,7 @@ func TestGridPath(t *testing.T) {
 	})
 }
 
-func TestHexAreaKm2(t *testing.T) { //nolint:dupl // // it's ok to have duplication in tests.
+func TestHexAreaKm2(t *testing.T) {
 	t.Parallel()
 
 	t.Run("min resolution", func(t *testing.T) {
@@ -981,7 +980,7 @@ func TestHexAreaKm2(t *testing.T) { //nolint:dupl // // it's ok to have duplicat
 	})
 }
 
-func TestHexAreaM2(t *testing.T) { //nolint:dupl // // it's ok to have duplication in tests.
+func TestHexAreaM2(t *testing.T) {
 	t.Parallel()
 
 	t.Run("min resolution", func(t *testing.T) {
