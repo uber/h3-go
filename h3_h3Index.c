@@ -26,10 +26,17 @@
 
 #include "h3_alloc.h"
 #include "h3_baseCells.h"
+#include "h3_directedEdge.h"
 #include "h3_faceijk.h"
 #include "h3_h3Assert.h"
 #include "h3_iterators.h"
 #include "h3_mathExtensions.h"
+#include "h3_vertex.h"
+
+// TODO: https://github.com/uber/h3/issues/984
+static const bool isBaseCellPentagonArr[128] = {
+    [4] = 1,  [14] = 1, [24] = 1, [38] = 1, [49] = 1,  [58] = 1,
+    [63] = 1, [72] = 1, [83] = 1, [97] = 1, [107] = 1, [117] = 1};
 
 /** @var H3ErrorDescriptions
  *  @brief An array of strings describing each of the H3ErrorCodes enum values
@@ -52,7 +59,11 @@ static char *H3ErrorDescriptions[] = {
     /* E_RES_MISMATCH */ "Cell arguments had incompatible resolutions",
     /* E_MEMORY_ALLOC */ "Memory allocation failed",
     /* E_MEMORY_BOUNDS */ "Bounds of provided memory were insufficient",
-    /* E_OPTION_INVALID */ "Mode or flags argument was not valid"};
+    /* E_OPTION_INVALID */ "Mode or flags argument was not valid",
+    /* E_INDEX_INVALID */ "Index argument was not valid",
+    /* E_BASE_CELL_DOMAIN */ "Base cell number was outside of acceptable range",
+    /* E_DIGIT_DOMAIN */ "Child digits invalid",
+    /* E_DELETED_DIGIT */ "Deleted subsequence indicates invalid index"};
 
 /**
  * Returns the string describing the H3Error. This string is internally
@@ -61,11 +72,11 @@ static char *H3ErrorDescriptions[] = {
  * @return The string describing the H3Error
  */
 const char *H3_EXPORT(describeH3Error)(H3Error err) {
-    if (err >= 0 && err <= 15) {  // TODO: Better way to bounds check here?
+    // err is always non-negative because it is an unsigned integer
+    if (err < H3_ERROR_END) {
         return H3ErrorDescriptions[err];
-    } else {
-        return "Invalid error code";
     }
+    return "Invalid error code";
 }
 
 /**
@@ -85,6 +96,80 @@ int H3_EXPORT(getResolution)(H3Index h) { return H3_GET_RESOLUTION(h); }
  * @return The base cell "number" of the H3 cell argument.
  */
 int H3_EXPORT(getBaseCellNumber)(H3Index h) { return H3_GET_BASE_CELL(h); }
+
+/**
+ * Returns the index digit at `res`, which starts with 1 for resolution
+ * 1, up to and including resolution 15.
+ *
+ * 0 is not a valid value for `res` because resolution 0 is specified by
+ * the base cell number, not an indexing digit.
+ *
+ * `res` may exceed the actual resolution of the index, in which case
+ * the actual digit stored in the index is returned. For valid cell indexes
+ * this will be 7.
+ *
+ * @param h The H3 index (e.g. cell).
+ * @param res Which indexing digit to retrieve, starting with 1.
+ * @param out Receives the value of the indexing digit.
+ * @return 0 (E_SUCCESS) on success, or another value otherwise.
+ */
+H3Error H3_EXPORT(getIndexDigit)(H3Index h, int res, int *out) {
+    if (res < 1 || res > MAX_H3_RES) {
+        return E_RES_DOMAIN;
+    }
+    *out = H3_GET_INDEX_DIGIT(h, res);
+    return E_SUCCESS;
+}
+
+/**
+ * Create a cell from its components (resolution, base cell, children digits).
+ * Only allows for constructing valid H3 cells.
+ *
+ * @param res  0--15
+ * @param baseCellNumber  0--121
+ * @param digits  Array of child digits (0--6) of length `res`.
+ *                NULL allowed for `res=0`.
+ * @param out  Created cell
+ * @return 0 (E_SUCCESS) on success, otherwise some H3Error
+ **/
+H3Error H3_EXPORT(constructCell)(int res, int baseCellNumber, const int *digits,
+                                 H3Index *out) {
+    if (res < 0 || res > MAX_H3_RES) {
+        return E_RES_DOMAIN;
+    }
+    if (baseCellNumber < 0 || baseCellNumber >= NUM_BASE_CELLS) {
+        return E_BASE_CELL_DOMAIN;
+    }
+
+    H3Index h = H3_INIT;
+    H3_SET_MODE(h, H3_CELL_MODE);
+    H3_SET_RESOLUTION(h, res);
+    H3_SET_BASE_CELL(h, baseCellNumber);
+
+    bool isPentagon = isBaseCellPentagonArr[baseCellNumber];
+
+    for (int r = 1; r <= res; r++) {
+        int d = digits[r - 1];
+        if (d < CENTER_DIGIT || d >= INVALID_DIGIT) {  // (d < 0 || d >= 7)
+            return E_DIGIT_DOMAIN;
+        }
+        if (isPentagon) {
+            // check for deleted subsequences of pentagons
+            if (d == CENTER_DIGIT) {  // d == 0
+                // do nothing; still a pentagon
+            } else if (d == K_AXES_DIGIT) {  // d == 1
+                return E_DELETED_DIGIT;
+            } else {
+                isPentagon = false;
+            }
+        }
+        H3_SET_INDEX_DIGIT(h, r, d);
+    }
+
+    *out = h;
+
+    return E_SUCCESS;
+}
 
 /**
  * Converts a string representation of an H3 index into an H3 index.
@@ -240,11 +325,6 @@ We can check that (in the lower 45 = 15*3 bits) the position of the
 first 1 bit isn't divisible by 3.
 */
 static inline bool _hasDeletedSubsequence(H3Index h, int base_cell) {
-    // TODO: https://github.com/uber/h3/issues/984
-    static const bool isBaseCellPentagonArr[128] = {
-        [4] = 1,  [14] = 1, [24] = 1, [38] = 1, [49] = 1,  [58] = 1,
-        [63] = 1, [72] = 1, [83] = 1, [97] = 1, [107] = 1, [117] = 1};
-
     if (isBaseCellPentagonArr[base_cell]) {
         h <<= 19;
         h >>= 19;
@@ -297,6 +377,17 @@ int H3_EXPORT(isValidCell)(H3Index h) {
 
     // If no disqualifications were identified, the index is a valid H3 cell.
     return true;
+}
+
+/**
+ * Returns whether or not an H3 index is valid for any mode (cell, directed
+ * edge, or vertex).
+ * @param h The H3 index to validate.
+ * @return 1 if the H3 index is valid for any supported type, 0 otherwise.
+ */
+int H3_EXPORT(isValidIndex)(H3Index h) {
+    return H3_EXPORT(isValidCell)(h) || H3_EXPORT(isValidDirectedEdge)(h) ||
+           H3_EXPORT(isValidVertex)(h);
 }
 
 /**
@@ -524,7 +615,7 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
                     }
                     // Modulus hash the parent into the temp array
                     int64_t loc = (int64_t)(parent % numRemainingHexes);
-                    int64_t loopCount = 0;
+                    DEFENSEONLY(int64_t loopCount = 0);
                     while (hashSetArray[loc] != 0) {
                         if (NEVER(loopCount > numRemainingHexes)) {
                             // This case should not be possible because at
@@ -559,7 +650,7 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
                         } else {
                             loc = (loc + 1) % numRemainingHexes;
                         }
-                        loopCount++;
+                        DEFENSEONLY(loopCount++);
                     }
                     hashSetArray[loc] = parent;
                 }
@@ -627,7 +718,7 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
                     // to determine if this index was included in
                     // the compactableHexes array
                     int64_t loc = (int64_t)(parent % numRemainingHexes);
-                    int64_t loopCount = 0;
+                    DEFENSEONLY(int64_t loopCount = 0);
                     do {
                         if (NEVER(loopCount > numRemainingHexes)) {
                             // This case should not be possible because at most
@@ -650,7 +741,7 @@ H3Error H3_EXPORT(compactCells)(const H3Index *h3Set, H3Index *compactedSet,
                         } else {
                             loc = (loc + 1) % numRemainingHexes;
                         }
-                        loopCount++;
+                        DEFENSEONLY(loopCount++;)
                     } while (hashSetArray[loc] != parent);
                 }
                 if (isUncompactable) {

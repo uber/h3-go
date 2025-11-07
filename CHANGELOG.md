@@ -4,6 +4,20 @@ This project tracks the **major** and **minor** versions set upstream by
 [h3](https://github.com/uber/h3) and introduces backwards-compatible updates and/or
 fixes via **patches** with patch version bumps.
 
+## Unreleased
+
+### Breaking Changes
+
+* [#96]: Vertex mode was updated to have its own typedef.
+
+### Added
+
+* [#95]: Introduced `CellFromString` and `CellToString`.
+
+### Updated
+
+* [#98]: H3 Core was updated to v4.4.0.
+
 ## 4.3.0 (17 Jun 2025)
 
 ### Changed
@@ -215,6 +229,9 @@ Thanks to [@jogly] for their contributions to this release.
 [#85]: https://github.com/uber/h3-go/pull/85
 [#86]: https://github.com/uber/h3-go/pull/86
 [#89]: https://github.com/uber/h3-go/pull/89
+[#95]: https://github.com/uber/h3-go/pull/95
+[#96]: https://github.com/uber/h3-go/pull/96
+[#98]: https://github.com/uber/h3-go/pull/98
 
 [c3cc4ae]: https://github.com/uber/h3-go/commit/c3cc4ae1af0472866452d998fe5576839450e342
 [migration guide]: https://h3geo.org/docs/library/migrating-3.x
