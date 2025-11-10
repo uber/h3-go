@@ -33,6 +33,7 @@ import "C"
 import (
 	"encoding"
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -142,6 +143,13 @@ type (
 	// the canonical index and geographic coordinates for the vertex.
 	Vertex int64
 
+	// Index refers to an [H3 index], which may be one of multiple modes to indicate the concept being indexed.
+	//
+	// [H3 index]: https://h3geo.org/docs/core-library/h3Indexing
+	Index interface {
+		Cell | DirectedEdge | Vertex
+	}
+
 	// CoordIJ IJ hexagon coordinates
 	//
 	// Each axis is spaced 120 degrees apart.
@@ -177,6 +185,8 @@ var (
 	_ encoding.TextUnmarshaler = (*Cell)(nil)
 	_ encoding.TextMarshaler   = (*Vertex)(nil)
 	_ encoding.TextUnmarshaler = (*Vertex)(nil)
+	_ encoding.TextMarshaler   = (*DirectedEdge)(nil)
+	_ encoding.TextUnmarshaler = (*DirectedEdge)(nil)
 )
 
 // NewLatLng is a helper function to create a LatLng.
@@ -734,12 +744,17 @@ func Pentagons(resolution int) ([]Cell, error) {
 
 // Resolution returns the resolution of the cell.
 func (c Cell) Resolution() int {
-	return int(C.getResolution(C.H3Index(c)))
+	return resolution(c)
 }
 
 // Resolution returns the resolution of the edge.
 func (e DirectedEdge) Resolution() int {
-	return int(C.getResolution(C.H3Index(e)))
+	return resolution(e)
+}
+
+// Resolution returns the resolution of the vertex.
+func (v Vertex) Resolution() int {
+	return resolution(v)
 }
 
 // BaseCellNumber returns the integer ID (0-121) of the base cell the H3Index h
@@ -787,23 +802,28 @@ func VertexFromString(s string) Vertex {
 	return Vertex(IndexFromString(s))
 }
 
+// DirectedEdgeFromString returns a DirectedEdge from a string. Should call e.IsValid() to check
+// if the DirectedEdge is valid before using it.
+func DirectedEdgeFromString(s string) DirectedEdge {
+	return DirectedEdge(IndexFromString(s))
+}
+
 // String returns the string representation of the H3Index h.
 func (c Cell) String() string {
-	return CellToString(c)
+	return indexToString(c)
 }
 
 // MarshalText implements the encoding.TextMarshaler interface.
 func (c Cell) MarshalText() ([]byte, error) {
-	return []byte(c.String()), nil
+	return marshalText(c)
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
 func (c *Cell) UnmarshalText(text []byte) error {
-	*c = Cell(IndexFromString(string(text)))
+	*c = CellFromString(string(text))
 	if !c.IsValid() {
 		return errors.New("invalid cell index")
 	}
-
 	return nil
 }
 
@@ -891,9 +911,7 @@ func (c Cell) IsNeighbor(other Cell) (bool, error) {
 //
 // [indexing digit]: https://h3geo.org/docs/library/index/cell
 func (c Cell) IndexDigit(resolution int) (int, error) {
-	var out C.int
-	errC := C.getIndexDigit(C.H3Index(c), C.int(resolution), &out)
-	return int(out), toErr(errC)
+	return indexDigit(c, resolution)
 }
 
 // DirectedEdge returns a DirectedEdge from this Cell to other.
@@ -962,9 +980,26 @@ func (e DirectedEdge) Boundary() (CellBoundary, error) {
 //
 // [indexing digit]: https://h3geo.org/docs/library/index/cell
 func (e DirectedEdge) IndexDigit(resolution int) (int, error) {
-	var out C.int
-	errC := C.getIndexDigit(C.H3Index(e), C.int(resolution), &out)
-	return int(out), toErr(errC)
+	return indexDigit(e, resolution)
+}
+
+// String returns the string representation.
+func (e DirectedEdge) String() string {
+	return indexToString(e)
+}
+
+// MarshalText implements the encoding.TextMarshaler interface.
+func (e DirectedEdge) MarshalText() ([]byte, error) {
+	return marshalText(e)
+}
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+func (e *DirectedEdge) UnmarshalText(text []byte) error {
+	*e = DirectedEdgeFromString(string(text))
+	if !e.IsValid() {
+		return errors.New("invalid directed edge index")
+	}
+	return nil
 }
 
 // CompactCells merges full sets of children into their parent H3Index
@@ -1152,12 +1187,12 @@ func IsValidVertex(v Vertex) bool {
 
 // String returns a string from a Vertex.
 func (v Vertex) String() string {
-	return IndexToString(uint64(v))
+	return indexToString(v)
 }
 
 // MarshalText implements the encoding.TextMarshaler interface.
 func (v Vertex) MarshalText() ([]byte, error) {
-	return []byte(v.String()), nil
+	return marshalText(v)
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
@@ -1166,7 +1201,6 @@ func (v *Vertex) UnmarshalText(text []byte) error {
 	if !v.IsValid() {
 		return errors.New("invalid cell index")
 	}
-
 	return nil
 }
 
@@ -1174,9 +1208,7 @@ func (v *Vertex) UnmarshalText(text []byte) error {
 //
 // [indexing digit]: https://h3geo.org/docs/library/index/cell
 func (v Vertex) IndexDigit(resolution int) (int, error) {
-	var out C.int
-	errC := C.getIndexDigit(C.H3Index(v), C.int(resolution), &out)
-	return int(out), toErr(errC)
+	return indexDigit(v, resolution)
 }
 
 func maxGridDiskSize(k int) int {
@@ -1393,6 +1425,23 @@ func toErr(errC C.uint32_t) error {
 	if ok {
 		return err
 	}
-
 	return ErrUnknown
+}
+
+func indexDigit[I Index](index I, resolution int) (int, error) {
+	var out C.int
+	errC := C.getIndexDigit(C.H3Index(index), C.int(resolution), &out)
+	return int(out), toErr(errC)
+}
+
+func resolution[I Index](index I) int {
+	return int(C.getResolution(C.H3Index(index)))
+}
+
+func indexToString[I Index](index I) string {
+	return strconv.FormatUint(uint64(index), base16)
+}
+
+func marshalText[S fmt.Stringer](s S) ([]byte, error) {
+	return []byte(s.String()), nil
 }
