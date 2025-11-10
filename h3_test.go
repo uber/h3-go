@@ -1694,3 +1694,25 @@ func TestLatLng_String(t *testing.T) {
 
 	assertEqual(t, "(67.15093, -168.39089)", validLatLng1.String())
 }
+
+func TestIndexDigit(t *testing.T) {
+	t.Run("cell", func(t *testing.T) {
+		indexDigit, err := validCell.IndexDigit(2)
+		assertEqual(t, 5, indexDigit)
+		assertNoErr(t, err)
+	})
+	t.Run("edge", func(t *testing.T) {
+		indexDigit, err := validEdge.IndexDigit(2)
+		assertEqual(t, 5, indexDigit)
+		assertNoErr(t, err)
+	})
+	t.Run("vertex", func(t *testing.T) {
+		indexDigit, err := validVertex.IndexDigit(2)
+		assertEqual(t, 5, indexDigit)
+		assertNoErr(t, err)
+	})
+	t.Run("err/invalid_res", func(t *testing.T) {
+		_, err := validVertex.IndexDigit(-1)
+		assertErrIs(t, err, ErrResolutionDomain)
+	})
+}

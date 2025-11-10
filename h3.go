@@ -887,6 +887,15 @@ func (c Cell) IsNeighbor(other Cell) (bool, error) {
 	return out == 1, toErr(errC)
 }
 
+// IndexDigit returns an [indexing digit] of the cell.
+//
+// [indexing digit]: https://h3geo.org/docs/library/index/cell
+func (c Cell) IndexDigit(resolution int) (int, error) {
+	var out C.int
+	errC := C.getIndexDigit(C.H3Index(c), C.int(resolution), &out)
+	return int(out), toErr(errC)
+}
+
 // DirectedEdge returns a DirectedEdge from this Cell to other.
 func (c Cell) DirectedEdge(other Cell) (DirectedEdge, error) {
 	var out C.H3Index
@@ -947,6 +956,15 @@ func (e DirectedEdge) Boundary() (CellBoundary, error) {
 	}
 
 	return cellBndryFromC(&out), nil
+}
+
+// IndexDigit returns an [indexing digit] of the edge.
+//
+// [indexing digit]: https://h3geo.org/docs/library/index/cell
+func (e DirectedEdge) IndexDigit(resolution int) (int, error) {
+	var out C.int
+	errC := C.getIndexDigit(C.H3Index(e), C.int(resolution), &out)
+	return int(out), toErr(errC)
 }
 
 // CompactCells merges full sets of children into their parent H3Index
@@ -1150,6 +1168,15 @@ func (v *Vertex) UnmarshalText(text []byte) error {
 	}
 
 	return nil
+}
+
+// IndexDigit returns an [indexing digit] of the vertex.
+//
+// [indexing digit]: https://h3geo.org/docs/library/index/cell
+func (v Vertex) IndexDigit(resolution int) (int, error) {
+	var out C.int
+	errC := C.getIndexDigit(C.H3Index(v), C.int(resolution), &out)
+	return int(out), toErr(errC)
 }
 
 func maxGridDiskSize(k int) int {
