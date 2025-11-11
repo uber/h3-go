@@ -438,6 +438,11 @@ func TestResolution(t *testing.T) {
 	for _, e := range edges {
 		assertEqual(t, validCell.Resolution(), e.Resolution())
 	}
+
+	vertexes, _ := validCell.Vertexes()
+	for _, v := range vertexes {
+		assertEqual(t, validCell.Resolution(), v.Resolution())
+	}
 }
 
 func TestBaseCellNumber(t *testing.T) {
@@ -1354,6 +1359,47 @@ func TestVertex_Strings(t *testing.T) {
 		err = v.UnmarshalText([]byte(""))
 		assertErr(t, err)
 	})
+}
+
+func TestDirectedEdge_Strings(t *testing.T) {
+	t.Parallel()
+
+	t.Run("bad string", func(t *testing.T) {
+		t.Parallel()
+		e := DirectedEdgeFromString("invalid")
+		assertEqual(t, 0, e)
+	})
+
+	t.Run("good string round trip", func(t *testing.T) {
+		t.Parallel()
+		e := DirectedEdgeFromString(validEdge.String())
+		assertEqual(t, validEdge, e)
+	})
+
+	t.Run("no 0x prefix", func(t *testing.T) {
+		t.Parallel()
+		h3addr := validEdge.String()
+		assertEqual(t, "1250dab73fffffff", h3addr)
+	})
+
+	t.Run("marshalling text", func(t *testing.T) {
+		t.Parallel()
+		text, err := validEdge.MarshalText()
+		assertNoErr(t, err)
+
+		var e DirectedEdge
+		err = e.UnmarshalText([]byte("0x" + string(text)))
+		assertNoErr(t, err)
+		assertEqual(t, validEdge, e)
+
+		err = e.UnmarshalText([]byte(""))
+		assertErr(t, err)
+	})
+}
+
+func TestStrings_Deprecated(t *testing.T) {
+	s := CellToString(validCell)
+	assertEqual(t, "850dab63fffffff", s)
 }
 
 func equalEps(expected, actual float64) bool {
