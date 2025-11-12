@@ -13,10 +13,17 @@ fixes via **patches** with patch version bumps.
 ### Added
 
 * [#95]: Introduced `CellFromString` and `CellToString`.
+* [#99]: Introduced `IndexDigit`.
+* [#100]: Introduced `DirectedEdgeFromString`.
+
+### Changed
+
+* [#100]: Used generics for some internal implementations.
 
 ### Updated
 
 * [#98]: H3 Core was updated to v4.4.0.
+* [#101]: Updated error codes to match H3 Core.
 
 ## 4.3.0 (17 Jun 2025)
 
@@ -232,6 +239,9 @@ Thanks to [@jogly] for their contributions to this release.
 [#95]: https://github.com/uber/h3-go/pull/95
 [#96]: https://github.com/uber/h3-go/pull/96
 [#98]: https://github.com/uber/h3-go/pull/98
+[#99]: https://github.com/uber/h3-go/pull/99
+[#100]: https://github.com/uber/h3-go/pull/100
+[#101]: https://github.com/uber/h3-go/pull/101
 
 [c3cc4ae]: https://github.com/uber/h3-go/commit/c3cc4ae1af0472866452d998fe5576839450e342
 [migration guide]: https://h3geo.org/docs/library/migrating-3.x
