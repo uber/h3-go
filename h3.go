@@ -108,6 +108,10 @@ var (
 	ErrMemoryAlloc           = errors.New("necessary memory allocation failed")
 	ErrMemoryBounds          = errors.New("bounds of provided memory were not large enough")
 	ErrOptionInvalid         = errors.New("mode or flags argument was not valid")
+	ErrIndexInvalid          = errors.New("index argument was not valid")
+	ErrBaseCellDomain        = errors.New("base cell number was outside of acceptable range")
+	ErrDigitDomain           = errors.New("child digits invalid")
+	ErrDeletedDigit          = errors.New("deleted subsequence indicates invalid index")
 
 	ErrUnknown = errors.New("unknown error code returned by H3")
 
@@ -128,6 +132,10 @@ var (
 		13: ErrMemoryAlloc,
 		14: ErrMemoryBounds,
 		15: ErrOptionInvalid,
+		16: ErrIndexInvalid,
+		17: ErrBaseCellDomain,
+		18: ErrDigitDomain,
+		19: ErrDeletedDigit,
 	}
 )
 
