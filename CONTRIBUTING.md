@@ -32,6 +32,11 @@ Generate coverage:
 go test -coverprofile=covprofile && go tool cover -html=covprofile
 ```
 
+Run lint:
+```bash
+golangci-lint run
+```
+
 ### Using VSCode
 
 Add VSCode configuration, or merge recommended settings into your existing settings:

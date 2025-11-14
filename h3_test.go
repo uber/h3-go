@@ -1619,6 +1619,7 @@ func assertNoPanic(t *testing.T, f func()) {
 			t.Errorf("panic: %v", r)
 		}
 	}()
+
 	f()
 }
 
