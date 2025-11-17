@@ -1727,7 +1727,7 @@ func TestToErr(t *testing.T) {
 
 	t.Run("unknown error", func(t *testing.T) {
 		t.Parallel()
-		assertErrIs(t, toErr(999), ErrUnknown)
+		assertErrIs(t, toErr(999), ErrFailed)
 	})
 }
 

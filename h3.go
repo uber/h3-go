@@ -113,8 +113,6 @@ var (
 	ErrDigitDomain           = errors.New("child digits invalid")
 	ErrDeletedDigit          = errors.New("deleted subsequence indicates invalid index")
 
-	ErrUnknown = errors.New("unknown error code returned by H3")
-
 	errMap = map[C.uint32_t]error{
 		0:  nil, // Success error code.
 		1:  ErrFailed,
@@ -1428,12 +1426,14 @@ func (ij CoordIJ) toCPtr() *C.CoordIJ {
 	}
 }
 
+// toErr converts H3 error codes to Go errors.
+// Error messages not recognized by the application should be treated as `E_FAILED`.
 func toErr(errC C.uint32_t) error {
 	err, ok := errMap[errC]
 	if ok {
 		return err
 	}
-	return ErrUnknown
+	return ErrFailed
 }
 
 func indexDigit[I Index](index I, resolution int) (int, error) {
