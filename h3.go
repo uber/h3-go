@@ -1210,6 +1210,10 @@ func (v *Vertex) UnmarshalText(text []byte) error {
 	return nil
 }
 
+func IsValidIndex[T Cell | Vertex | DirectedEdge](index T) bool {
+	return C.isValidIndex(C.H3Index(index)) == 1
+}
+
 // IndexDigit returns an [indexing digit] of the vertex.
 //
 // [indexing digit]: https://h3geo.org/docs/library/index/cell

@@ -1762,3 +1762,30 @@ func TestIndexDigit(t *testing.T) {
 		assertErrIs(t, err, ErrResolutionDomain)
 	})
 }
+
+func TestIsValidIndex(t *testing.T) {
+	testCases := []struct {
+		isValid bool
+		input   any
+	}{
+		{isValid: true, input: validCell},
+		{isValid: true, input: validVertex},
+		{isValid: true, input: validEdge},
+		{isValid: false, input: Cell(0)},
+		{isValid: false, input: Vertex(0)},
+		{isValid: false, input: DirectedEdge(0)},
+	}
+
+	for _, tc := range testCases {
+		var result bool
+		switch v := tc.input.(type) {
+		case Cell:
+			result = v.IsValid()
+		case Vertex:
+			result = v.IsValid()
+		case DirectedEdge:
+			result = v.IsValid()
+		}
+		assertEqual(t, tc.isValid, result)
+	}
+}
