@@ -1778,14 +1778,16 @@ func TestIsValidIndex(t *testing.T) {
 
 	for _, tc := range testCases {
 		var result bool
+
 		switch v := tc.input.(type) {
 		case Cell:
-			result = v.IsValid()
+			result = IsValidIndex(v)
 		case Vertex:
-			result = v.IsValid()
+			result = IsValidIndex(v)
 		case DirectedEdge:
-			result = v.IsValid()
+			result = IsValidIndex(v)
 		}
+
 		assertEqual(t, tc.isValid, result)
 	}
 }
