@@ -1210,6 +1210,8 @@ func (v *Vertex) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// IsValidIndex returns whether the given index is valid.
+// This is a generic function that accepts any H3 index type (Cell, DirectedEdge, or Vertex).
 func IsValidIndex[T Index](index T) bool {
 	return C.isValidIndex(C.H3Index(index)) == 1
 }
