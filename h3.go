@@ -1210,7 +1210,7 @@ func (v *Vertex) UnmarshalText(text []byte) error {
 	return nil
 }
 
-func IsValidIndex[T Cell | Vertex | DirectedEdge](index T) bool {
+func IsValidIndex[T Index](index T) bool {
 	return C.isValidIndex(C.H3Index(index)) == 1
 }
 
