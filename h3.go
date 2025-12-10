@@ -113,8 +113,6 @@ var (
 	ErrDigitDomain           = errors.New("child digits invalid")
 	ErrDeletedDigit          = errors.New("deleted subsequence indicates invalid index")
 
-	ErrUnknown = errors.New("unknown error code returned by H3")
-
 	errMap = map[C.uint32_t]error{
 		0:  nil, // Success error code.
 		1:  ErrFailed,
@@ -1212,6 +1210,12 @@ func (v *Vertex) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// IsValidIndex returns whether the given index is valid.
+// This is a generic function that accepts any H3 index type (Cell, DirectedEdge, or Vertex).
+func IsValidIndex[T Index](index T) bool {
+	return C.isValidIndex(C.H3Index(index)) == 1
+}
+
 // IndexDigit returns an [indexing digit] of the vertex.
 //
 // [indexing digit]: https://h3geo.org/docs/library/index/cell
@@ -1428,12 +1432,14 @@ func (ij CoordIJ) toCPtr() *C.CoordIJ {
 	}
 }
 
+// toErr converts H3 error codes to Go errors.
+// Error messages not recognized by the application should be treated as `E_FAILED`.
 func toErr(errC C.uint32_t) error {
 	err, ok := errMap[errC]
 	if ok {
 		return err
 	}
-	return ErrUnknown
+	return ErrFailed
 }
 
 func indexDigit[I Index](index I, resolution int) (int, error) {

@@ -1728,7 +1728,7 @@ func TestToErr(t *testing.T) {
 
 	t.Run("unknown error", func(t *testing.T) {
 		t.Parallel()
-		assertErrIs(t, toErr(999), ErrUnknown)
+		assertErrIs(t, toErr(999), ErrFailed)
 	})
 }
 
@@ -1762,4 +1762,38 @@ func TestIndexDigit(t *testing.T) {
 		_, err := validVertex.IndexDigit(-1)
 		assertErrIs(t, err, ErrResolutionDomain)
 	})
+}
+
+func TestIsValidIndex(t *testing.T) {
+	testCases := []struct {
+		name    string
+		isValid bool
+		input   any
+	}{
+		{name: "valid cell", isValid: true, input: validCell},
+		{name: "valid vertex", isValid: true, input: validVertex},
+		{name: "valid edge", isValid: true, input: validEdge},
+		{name: "invalid cell", isValid: false, input: Cell(0)},
+		{name: "invalid vertex", isValid: false, input: Vertex(0)},
+		{name: "invalid edge", isValid: false, input: DirectedEdge(0)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var result bool
+
+			switch v := tc.input.(type) {
+			case Cell:
+				result = IsValidIndex(v)
+			case Vertex:
+				result = IsValidIndex(v)
+			case DirectedEdge:
+				result = IsValidIndex(v)
+			default:
+				t.Errorf("unexpected input type, input: %v", tc.input)
+			}
+
+			assertEqual(t, tc.isValid, result)
+		})
+	}
 }
