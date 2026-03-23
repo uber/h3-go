@@ -82,6 +82,30 @@ const (
 	latLngStringSize = 32
 )
 
+var (
+	// pow7 holds precomputed powers of 7: pow7[i] == 7^i for i in [0, MaxResolution].
+	pow7 = [16]int{
+		1,
+		7,
+		49,
+		343,
+		2401,
+		16807,
+		117649,
+		823543,
+		5764801,
+		40353607,
+		282475249,
+		1977326743,
+		13841287201,
+		96889010407,
+		678223072849,
+		4747561509943,
+	}
+	// compile-time check: pow7 must have exactly MaxResolution+1 entries.
+	_ = pow7[MaxResolution]
+)
+
 // PolygonToCells containment modes
 const (
 	ContainmentCenter          ContainmentMode = C.CONTAINMENT_CENTER           // Cell center is contained in the shape
@@ -729,7 +753,7 @@ func EdgeLengthM(e DirectedEdge) (float64, error) {
 func NumCells(resolution int) int {
 	// NOTE: this is a mathematical operation, no need to call into H3 library.
 	// See h3api.h for formula derivation.
-	return 2 + 120*intPow(7, resolution) //nolint:mnd // math formula
+	return 2 + 120*pow7[resolution] //nolint:mnd // math formula
 }
 
 // Res0Cells returns all the cells at resolution 0.
@@ -1327,20 +1351,6 @@ func freeCGeoPolygon(cgp *C.GeoPolygon) {
 
 	C.free(unsafe.Pointer(cgp.holes))
 	cgp.holes = nil
-}
-
-// https://stackoverflow.com/questions/64108933/how-to-use-math-pow-with-integers-in-golang
-func intPow(n, m int) int {
-	if m == 0 {
-		return 1
-	}
-	result := n
-
-	for i := 2; i <= m; i++ {
-		result *= n
-	}
-
-	return result
 }
 
 func cellsFromC(chs []C.H3Index, prune, refit bool) []Cell {
