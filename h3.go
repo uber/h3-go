@@ -204,7 +204,8 @@ func NewLatLng(lat, lng float64) LatLng {
 func LatLngToCell(latLng LatLng, resolution int) (Cell, error) {
 	var i C.H3Index
 
-	errC := C.latLngToCell(latLng.toCPtr(), C.int(resolution), &i)
+	cLatLng := latLng.toC()
+	errC := C.latLngToCell(&cLatLng, C.int(resolution), &i)
 
 	return Cell(i), toErr(errC)
 }
@@ -613,19 +614,22 @@ func CellsToMultiPolygon(cells []Cell) ([]GeoPolygon, error) {
 // GreatCircleDistanceRads returns the "great circle" or "haversine" distance between
 // pairs of LatLng points (lat/lng pairs) in radians.
 func GreatCircleDistanceRads(a, b LatLng) float64 {
-	return float64(C.greatCircleDistanceRads(a.toCPtr(), b.toCPtr()))
+	ca, cb := a.toC(), b.toC()
+	return float64(C.greatCircleDistanceRads(&ca, &cb))
 }
 
 // GreatCircleDistanceKm returns the "great circle" or "haversine" distance between pairs
 // of LatLng points (lat/lng pairs) in kilometers.
 func GreatCircleDistanceKm(a, b LatLng) float64 {
-	return float64(C.greatCircleDistanceKm(a.toCPtr(), b.toCPtr()))
+	ca, cb := a.toC(), b.toC()
+	return float64(C.greatCircleDistanceKm(&ca, &cb))
 }
 
 // GreatCircleDistanceM returns the "great circle" or "haversine" distance between pairs
 // of LatLng points (lat/lng pairs) in meters.
 func GreatCircleDistanceM(a, b LatLng) float64 {
-	return float64(C.greatCircleDistanceM(a.toCPtr(), b.toCPtr()))
+	ca, cb := a.toC(), b.toC()
+	return float64(C.greatCircleDistanceM(&ca, &cb))
 }
 
 // HexagonAreaAvgKm2 returns the average hexagon area in square kilometers at the given
@@ -1264,7 +1268,7 @@ func latLngsToC(coords []LatLng) *C.LatLng {
 	pv := cverts
 
 	for _, gc := range coords {
-		*((*C.LatLng)(pv)) = *gc.toCPtr()
+		*((*C.LatLng)(pv)) = gc.toC()
 		pv = unsafe.Pointer(uintptr(pv) + C.sizeof_LatLng)
 	}
 
@@ -1418,8 +1422,8 @@ func (g LatLng) String() string {
 	return string(buf)
 }
 
-func (g LatLng) toCPtr() *C.LatLng {
-	return &C.LatLng{
+func (g LatLng) toC() C.LatLng {
+	return C.LatLng{
 		lat: C.double(DegsToRads * g.Lat),
 		lng: C.double(DegsToRads * g.Lng),
 	}
