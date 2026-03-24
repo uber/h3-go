@@ -275,19 +275,20 @@ func (c Cell) GridDisk(k int) ([]Cell, error) {
 //
 // Outer slice is ordered in the same order origins were passed in. Inner slices
 // are in no particular order.
-//
-// This does not call through to the underlying C.gridDisksUnsafe implementation
-// as it is slightly easier to do so to avoid unnecessary type conversions.
 func GridDisksUnsafe(origins []Cell, k int) ([][]Cell, error) {
-	out := make([][]Cell, len(origins))
+	if len(origins) == 0 {
+		return nil, nil
+	}
 	gridDiskSize := maxGridDiskSize(k)
+	flat := make([]C.H3Index, len(origins)*gridDiskSize)
+	cin := cellsToC(origins)
+	errC := C.gridDisksUnsafe(&cin[0], C.int(len(origins)), C.int(k), &flat[0])
+	if err := toErr(errC); err != nil {
+		return nil, err
+	}
+	out := make([][]Cell, len(origins))
 	for i := range origins {
-		inner := make([]C.H3Index, gridDiskSize)
-		errC := C.gridDiskUnsafe(C.H3Index(origins[i]), C.int(k), &inner[0])
-		if err := toErr(errC); err != nil {
-			return nil, err
-		}
-		out[i] = cellsFromC(inner, true, false)
+		out[i] = cellsFromC(flat[i*gridDiskSize:(i+1)*gridDiskSize], true, false)
 	}
 	return out, nil
 }
