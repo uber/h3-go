@@ -1377,16 +1377,14 @@ func vertexesFromC(chs []C.H3Index) []Vertex {
 }
 
 func edgesFromC(chs []C.H3Index) []DirectedEdge {
-	out := make([]DirectedEdge, 0, len(chs))
-
-	for i := range chs {
-		if chs[i] <= 0 {
+	in := unsafe.Slice((*DirectedEdge)(unsafe.Pointer(&chs[0])), len(chs))
+	out := in[:0]
+	for i := range in {
+		if in[i] <= 0 {
 			continue
 		}
-
-		out = append(out, DirectedEdge(chs[i]))
+		out = append(out, in[i])
 	}
-
 	return out
 }
 
