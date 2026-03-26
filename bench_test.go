@@ -10,12 +10,17 @@ var (
 		Lat: 37,
 		Lng: -122,
 	}
-	latlngStr string
-	cell, _   = LatLngToCell(geo, 15)
-	addr      = cell.String()
-	geoBndry  CellBoundary
-	cells     []Cell
-	disks     [][]Cell
+	geo2 = LatLng{
+		Lat: 38,
+		Lng: -121,
+	}
+	latlngStr  string
+	cell, _    = LatLngToCell(geo, 15)
+	addr       = cell.String()
+	geoBndry   CellBoundary
+	cells      []Cell
+	disks      [][]Cell
+	distResult float64
 )
 
 func BenchmarkToString(b *testing.B) {
@@ -79,5 +84,23 @@ func BenchmarkGridDisksUnsafe(b *testing.B) {
 
 	for range b.N {
 		disks, _ = GridDisksUnsafe(cells, 10)
+	}
+}
+
+func BenchmarkGreatCircleDistanceRads(b *testing.B) {
+	for range b.N {
+		distResult = GreatCircleDistanceRads(geo, geo2)
+	}
+}
+
+func BenchmarkGreatCircleDistanceKm(b *testing.B) {
+	for range b.N {
+		distResult = GreatCircleDistanceKm(geo, geo2)
+	}
+}
+
+func BenchmarkGreatCircleDistanceM(b *testing.B) {
+	for range b.N {
+		distResult = GreatCircleDistanceM(geo, geo2)
 	}
 }
