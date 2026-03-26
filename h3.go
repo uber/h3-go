@@ -1259,9 +1259,10 @@ func latLngFromC(cg C.LatLng) LatLng {
 }
 
 func cellBndryFromC(cb *C.CellBoundary) CellBoundary {
-	g := make(CellBoundary, 0, MaxCellBndryVerts)
-	for i := C.int(0); i < cb.numVerts; i++ {
-		g = append(g, latLngFromC(cb.verts[i]))
+	numVerts := int(cb.numVerts)
+	g := make(CellBoundary, numVerts)
+	for i := range numVerts {
+		g[i] = latLngFromC(cb.verts[i])
 	}
 
 	return g
