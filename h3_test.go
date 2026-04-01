@@ -225,6 +225,12 @@ func TestGridDisksUnsafe(t *testing.T) {
 		)
 	})
 
+	t.Run("empty", func(t *testing.T) {
+		gds, err := GridDisksUnsafe([]Cell{}, 1)
+		assertNil(t, gds)
+		assertNil(t, err)
+	})
+
 	t.Run("pentagon", func(t *testing.T) {
 		t.Parallel()
 
