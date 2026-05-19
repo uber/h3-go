@@ -27,6 +27,23 @@ package h3
 #include <h3_h3Index.h>
 #include <h3_polygon.h>
 #include <h3_polyfill.h>
+
+// latLngToCellBatch converts n LatLng points to cells at a single resolution.
+// Returns 0 on success, or the H3 error code of the first failing point
+// (with failIdx set to its index).
+static uint32_t latLngToCellBatch(
+    const LatLng *lls, int n, int res, H3Index *out, int *failIdx
+) {
+    for (int i = 0; i < n; i++) {
+        uint32_t err = latLngToCell(&lls[i], res, &out[i]);
+        if (err != 0) {
+            *failIdx = i;
+            return err;
+        }
+    }
+    *failIdx = -1;
+    return 0;
+}
 */
 import "C"
 
@@ -237,6 +254,53 @@ func LatLngToCell(latLng LatLng, resolution int) (Cell, error) {
 // Cell returns the Cell at resolution for a geographic coordinate.
 func (g LatLng) Cell(resolution int) (Cell, error) {
 	return LatLngToCell(g, resolution)
+}
+
+// LatLngToCellsBatch computes cells for multiple points at a single resolution
+// in one cgo call, reducing per-call cgo transition overhead for bulk workloads.
+//
+// Returns a slice of Cells corresponding to each input LatLng. If any single
+// point fails to convert, the function returns an error indicating the first
+// failing index.
+func LatLngToCellsBatch(lls []LatLng, resolution int) ([]Cell, error) {
+	n := len(lls)
+	if n == 0 {
+		return nil, nil
+	}
+
+	if resolution < 0 || resolution > MaxResolution {
+		return nil, ErrResDomain
+	}
+
+	// Pre-convert all Go LatLngs to C LatLngs.
+	cLLs := make([]C.LatLng, n)
+	for i, ll := range lls {
+		cLLs[i] = ll.toC()
+	}
+
+	// Allocate output buffer.
+	cCells := make([]C.H3Index, n)
+
+	// Single cgo transition: the C helper loops over all points internally.
+	var failIdx C.int
+	errC := C.latLngToCellBatch(
+		&cLLs[0],
+		C.int(n),
+		C.int(resolution),
+		&cCells[0],
+		&failIdx,
+	)
+	if err := toErr(errC); err != nil {
+		return nil, fmt.Errorf("index %d: %w", int(failIdx), err)
+	}
+
+	// Convert C output to Go slice.
+	cells := make([]Cell, n)
+	for i, c := range cCells {
+		cells[i] = Cell(c)
+	}
+
+	return cells, nil
 }
 
 // CellToLatLng returns the geographic centerpoint of a Cell.

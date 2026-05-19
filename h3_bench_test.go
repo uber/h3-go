@@ -33,3 +33,34 @@ func BenchmarkNumCells(b *testing.B) {
 		})
 	}
 }
+
+var cellSink []Cell
+
+func BenchmarkLatLngToCellsBatch(b *testing.B) {
+	sizes := []int{64, 1024, 16384}
+	for _, n := range sizes {
+		lls := make([]LatLng, n)
+		for i := range lls {
+			lls[i] = NewLatLng(
+				float64(i%180)-90.0,
+				float64(i%360)-180.0,
+			)
+		}
+		b.Run("batch_"+strconv.Itoa(n), func(b *testing.B) {
+			var cells []Cell
+			for b.Loop() {
+				cells, _ = LatLngToCellsBatch(lls, 6)
+			}
+			cellSink = cells
+		})
+		b.Run("percall_"+strconv.Itoa(n), func(b *testing.B) {
+			cells := make([]Cell, n)
+			for b.Loop() {
+				for i, ll := range lls {
+					cells[i], _ = LatLngToCell(ll, 6)
+				}
+			}
+			cellSink = cells
+		})
+	}
+}

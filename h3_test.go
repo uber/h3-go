@@ -121,6 +121,46 @@ func TestLatLngToCell(t *testing.T) {
 	assertErrIs(t, err, ErrResolutionDomain)
 }
 
+func TestLatLngToCellsBatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("single point matches LatLngToCell", func(t *testing.T) {
+		t.Parallel()
+		cells, err := LatLngToCellsBatch([]LatLng{validLatLng1}, 5)
+		assertNoErr(t, err)
+		assertEqual(t, 1, len(cells))
+		assertEqual(t, validCell, cells[0])
+	})
+
+	t.Run("multiple points", func(t *testing.T) {
+		t.Parallel()
+		lls := []LatLng{validLatLng1, validLatLng2, NewLatLng(0, 0)}
+		cells, err := LatLngToCellsBatch(lls, 5)
+		assertNoErr(t, err)
+		assertEqual(t, 3, len(cells))
+
+		// Verify each result matches individual calls.
+		for i, ll := range lls {
+			expected, err := LatLngToCell(ll, 5)
+			assertNoErr(t, err)
+			assertEqual(t, expected, cells[i])
+		}
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		t.Parallel()
+		cells, err := LatLngToCellsBatch(nil, 5)
+		assertNoErr(t, err)
+		assertEqual(t, 0, len(cells))
+	})
+
+	t.Run("invalid resolution", func(t *testing.T) {
+		t.Parallel()
+		_, err := LatLngToCellsBatch([]LatLng{validLatLng1}, MaxResolution+1)
+		assertErr(t, err)
+	})
+}
+
 func TestCellToLatLng(t *testing.T) {
 	t.Parallel()
 
