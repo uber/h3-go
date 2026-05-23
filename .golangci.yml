@@ -27,7 +27,7 @@ linters:
     - unconvert
     - unparam
     - whitespace
-    - wsl
+    - wsl_v5
   settings:
     errcheck:
       check-type-assertions: true
@@ -48,10 +48,13 @@ linters:
     nolintlint:
       require-explanation: true
       require-specific: true
-    wsl:
-      allow-assign-and-anything: true
-      allow-cuddle-declarations: true
-      allow-assign-and-call: true
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
+      disable:
+        - assign
+        - decl
     depguard:
       rules:
         main:

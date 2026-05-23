@@ -82,6 +82,30 @@ const (
 	latLngStringSize = 32
 )
 
+var (
+	// pow7 holds precomputed powers of 7: pow7[i] == 7^i for i in [0, MaxResolution].
+	pow7 = [16]int{
+		1,
+		7,
+		49,
+		343,
+		2401,
+		16807,
+		117649,
+		823543,
+		5764801,
+		40353607,
+		282475249,
+		1977326743,
+		13841287201,
+		96889010407,
+		678223072849,
+		4747561509943,
+	}
+	// compile-time check: pow7 must have exactly MaxResolution+1 entries.
+	_ = pow7[MaxResolution]
+)
+
 // PolygonToCells containment modes
 const (
 	ContainmentCenter          ContainmentMode = C.CONTAINMENT_CENTER           // Cell center is contained in the shape
@@ -204,7 +228,8 @@ func NewLatLng(lat, lng float64) LatLng {
 func LatLngToCell(latLng LatLng, resolution int) (Cell, error) {
 	var i C.H3Index
 
-	errC := C.latLngToCell(latLng.toCPtr(), C.int(resolution), &i)
+	cLatLng := latLng.toC()
+	errC := C.latLngToCell(&cLatLng, C.int(resolution), &i)
 
 	return Cell(i), toErr(errC)
 }
@@ -275,19 +300,20 @@ func (c Cell) GridDisk(k int) ([]Cell, error) {
 //
 // Outer slice is ordered in the same order origins were passed in. Inner slices
 // are in no particular order.
-//
-// This does not call through to the underlying C.gridDisksUnsafe implementation
-// as it is slightly easier to do so to avoid unnecessary type conversions.
 func GridDisksUnsafe(origins []Cell, k int) ([][]Cell, error) {
-	out := make([][]Cell, len(origins))
+	if len(origins) == 0 {
+		return nil, nil
+	}
 	gridDiskSize := maxGridDiskSize(k)
+	flat := make([]C.H3Index, len(origins)*gridDiskSize)
+	cin := cellsToC(origins)
+	errC := C.gridDisksUnsafe(&cin[0], C.int(len(origins)), C.int(k), &flat[0])
+	if err := toErr(errC); err != nil {
+		return nil, err
+	}
+	out := make([][]Cell, len(origins))
 	for i := range origins {
-		inner := make([]C.H3Index, gridDiskSize)
-		errC := C.gridDiskUnsafe(C.H3Index(origins[i]), C.int(k), &inner[0])
-		if err := toErr(errC); err != nil {
-			return nil, err
-		}
-		out[i] = cellsFromC(inner, true, false)
+		out[i] = cellsFromC(flat[i*gridDiskSize:(i+1)*gridDiskSize], true, false)
 	}
 	return out, nil
 }
@@ -613,19 +639,22 @@ func CellsToMultiPolygon(cells []Cell) ([]GeoPolygon, error) {
 // GreatCircleDistanceRads returns the "great circle" or "haversine" distance between
 // pairs of LatLng points (lat/lng pairs) in radians.
 func GreatCircleDistanceRads(a, b LatLng) float64 {
-	return float64(C.greatCircleDistanceRads(a.toCPtr(), b.toCPtr()))
+	ca, cb := a.toC(), b.toC()
+	return float64(C.greatCircleDistanceRads(&ca, &cb))
 }
 
 // GreatCircleDistanceKm returns the "great circle" or "haversine" distance between pairs
 // of LatLng points (lat/lng pairs) in kilometers.
 func GreatCircleDistanceKm(a, b LatLng) float64 {
-	return float64(C.greatCircleDistanceKm(a.toCPtr(), b.toCPtr()))
+	ca, cb := a.toC(), b.toC()
+	return float64(C.greatCircleDistanceKm(&ca, &cb))
 }
 
 // GreatCircleDistanceM returns the "great circle" or "haversine" distance between pairs
 // of LatLng points (lat/lng pairs) in meters.
 func GreatCircleDistanceM(a, b LatLng) float64 {
-	return float64(C.greatCircleDistanceM(a.toCPtr(), b.toCPtr()))
+	ca, cb := a.toC(), b.toC()
+	return float64(C.greatCircleDistanceM(&ca, &cb))
 }
 
 // HexagonAreaAvgKm2 returns the average hexagon area in square kilometers at the given
@@ -729,7 +758,7 @@ func EdgeLengthM(e DirectedEdge) (float64, error) {
 func NumCells(resolution int) int {
 	// NOTE: this is a mathematical operation, no need to call into H3 library.
 	// See h3api.h for formula derivation.
-	return 2 + 120*intPow(7, resolution) //nolint:mnd // math formula
+	return 2 + 120*pow7[resolution] //nolint:mnd // math formula
 }
 
 // Res0Cells returns all the cells at resolution 0.
@@ -1235,9 +1264,10 @@ func latLngFromC(cg C.LatLng) LatLng {
 }
 
 func cellBndryFromC(cb *C.CellBoundary) CellBoundary {
-	g := make(CellBoundary, 0, MaxCellBndryVerts)
-	for i := C.int(0); i < cb.numVerts; i++ {
-		g = append(g, latLngFromC(cb.verts[i]))
+	numVerts := int(cb.numVerts)
+	g := make(CellBoundary, numVerts)
+	for i := range numVerts {
+		g[i] = latLngFromC(cb.verts[i])
 	}
 
 	return g
@@ -1264,7 +1294,7 @@ func latLngsToC(coords []LatLng) *C.LatLng {
 	pv := cverts
 
 	for _, gc := range coords {
-		*((*C.LatLng)(pv)) = *gc.toCPtr()
+		*((*C.LatLng)(pv)) = gc.toC()
 		pv = unsafe.Pointer(uintptr(pv) + C.sizeof_LatLng)
 	}
 
@@ -1329,20 +1359,6 @@ func freeCGeoPolygon(cgp *C.GeoPolygon) {
 	cgp.holes = nil
 }
 
-// https://stackoverflow.com/questions/64108933/how-to-use-math-pow-with-integers-in-golang
-func intPow(n, m int) int {
-	if m == 0 {
-		return 1
-	}
-	result := n
-
-	for i := 2; i <= m; i++ {
-		result *= n
-	}
-
-	return result
-}
-
 func cellsFromC(chs []C.H3Index, prune, refit bool) []Cell {
 	in := unsafe.Slice((*Cell)(unsafe.Pointer(&chs[0])), len(chs))
 	out := in[:0]
@@ -1377,16 +1393,14 @@ func vertexesFromC(chs []C.H3Index) []Vertex {
 }
 
 func edgesFromC(chs []C.H3Index) []DirectedEdge {
-	out := make([]DirectedEdge, 0, len(chs))
-
-	for i := range chs {
-		if chs[i] <= 0 {
+	in := unsafe.Slice((*DirectedEdge)(unsafe.Pointer(&chs[0])), len(chs))
+	out := in[:0]
+	for i := range in {
+		if in[i] <= 0 {
 			continue
 		}
-
-		out = append(out, DirectedEdge(chs[i]))
+		out = append(out, in[i])
 	}
-
 	return out
 }
 
@@ -1418,8 +1432,8 @@ func (g LatLng) String() string {
 	return string(buf)
 }
 
-func (g LatLng) toCPtr() *C.LatLng {
-	return &C.LatLng{
+func (g LatLng) toC() C.LatLng {
+	return C.LatLng{
 		lat: C.double(DegsToRads * g.Lat),
 		lng: C.double(DegsToRads * g.Lng),
 	}

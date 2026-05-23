@@ -6,6 +6,18 @@ fixes via **patches** with patch version bumps.
 
 ## Unreleased
 
+## 4.4.1 (6 Apr 2026)
+
+### Changed
+
+* [#107]: Minor optimization for the integer power function.
+* [#108]: Minor optimization for `cellBndryFromC`.
+* [#109]: `GridDisksUnsafe` now calls into Cgo directly instead of looping over `GridDiskUnsafe`.
+* [#110]: LatLng.toC is now stack allocated.
+* [#111]: `edgesFromC` now uses zero-copy casting like `cellsFromC` and `vertexesFromC`.
+
+## 4.4.0 (10 Dec 2025)
+
 ### Breaking Changes
 
 * [#96]: Vertex mode was updated to have its own typedef.
@@ -15,6 +27,7 @@ fixes via **patches** with patch version bumps.
 * [#95]: Introduced `CellFromString` and `CellToString`.
 * [#99]: Introduced `IndexDigit`.
 * [#100]: Introduced `DirectedEdgeFromString`.
+* [#103]: Introduced `IsValidIndex`.
 
 ### Changed
 
@@ -242,6 +255,12 @@ Thanks to [@jogly] for their contributions to this release.
 [#99]: https://github.com/uber/h3-go/pull/99
 [#100]: https://github.com/uber/h3-go/pull/100
 [#101]: https://github.com/uber/h3-go/pull/101
+[#103]: https://github.com/uber/h3-go/pull/103
+[#107]: https://github.com/uber/h3-go/pull/107
+[#108]: https://github.com/uber/h3-go/pull/108
+[#109]: https://github.com/uber/h3-go/pull/109
+[#110]: https://github.com/uber/h3-go/pull/110
+[#111]: https://github.com/uber/h3-go/pull/111
 
 [c3cc4ae]: https://github.com/uber/h3-go/commit/c3cc4ae1af0472866452d998fe5576839450e342
 [migration guide]: https://h3geo.org/docs/library/migrating-3.x
