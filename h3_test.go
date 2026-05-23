@@ -947,15 +947,31 @@ func TestGridPath(t *testing.T) {
 		assertErrIs(t, err, ErrFailed)
 	})
 
-	t.Run("err/pentagon", func(t *testing.T) {
+	t.Run("success/pentagon_reverse_interpolation", func(t *testing.T) {
 		t.Parallel()
 
+		// Previously failed with ErrPentagon; now resolved via reverse
+		// interpolation (see https://github.com/uber/h3/pull/1111).
 		start := Cell(IndexFromString("0x820807fffffffff"))
 		end := Cell(IndexFromString("0x8208e7fffffffff"))
 
+		path, err := GridPath(start, end)
+		assertNoErr(t, err)
+		assertEqual(t, start, path[0])
+		assertEqual(t, end, path[len(path)-1])
+	})
+
+	t.Run("err/pentagon_known_failure", func(t *testing.T) {
+		t.Parallel()
+
+		// Known limitation: both forward and reverse interpolation fail for
+		// this pair (see https://github.com/uber/h3/pull/1111).
+		start := Cell(IndexFromString("0x8411b61ffffffff"))
+		end := Cell(IndexFromString("0x84016d3ffffffff"))
+
 		_, err := GridPath(start, end)
 		assertErr(t, err)
-		assertErrIs(t, err, ErrPentagon)
+		assertErrIs(t, err, ErrFailed)
 	})
 }
 
@@ -1067,7 +1083,7 @@ func TestCellAreaM2(t *testing.T) {
 	t.Parallel()
 	area, err := CellAreaM2(validCell)
 	assertNoErr(t, err)
-	assertEqualEps(t, float64(269676877.95093215), area)
+	assertEqualEps(t, float64(269676877.9511), area)
 
 	_, err = CellAreaM2(-1)
 	assertErr(t, err)
