@@ -6,6 +6,16 @@ fixes via **patches** with patch version bumps.
 
 ## Unreleased
 
+## 4.5.0 (26 May 2026)
+
+### Added
+
+* [#117]: Introduced `Reverse` for `DirectedEdge`s.
+
+### Updated
+
+* [#116]: H3 Core was updated to v4.5.0.
+
 ## 4.4.1 (6 Apr 2026)
 
 ### Changed
@@ -261,6 +271,8 @@ Thanks to [@jogly] for their contributions to this release.
 [#109]: https://github.com/uber/h3-go/pull/109
 [#110]: https://github.com/uber/h3-go/pull/110
 [#111]: https://github.com/uber/h3-go/pull/111
+[#116]: https://github.com/uber/h3-go/pull/116
+[#117]: https://github.com/uber/h3-go/pull/117
 
 [c3cc4ae]: https://github.com/uber/h3-go/commit/c3cc4ae1af0472866452d998fe5576839450e342
 [migration guide]: https://h3geo.org/docs/library/migrating-3.x

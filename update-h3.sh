@@ -91,3 +91,6 @@ pushd "$H3_SRC_DIR" || badexit
         sed -E 's/#include "(.*)"/#include "h3_\1"/' "h3api.h.in" > "$CWD/h3_h3api.h" || badexit
     popd || badexit
 popd || badexit
+
+echo Updating H3 version badge in README.md
+sed -i.bak -E "s|/badge/h3-v[^-]+-blue\.svg|/badge/h3-$H3_VERSION-blue.svg|; s|/uber/h3/releases/tag/v[^)]+|/uber/h3/releases/tag/$H3_VERSION|" "$CWD/README.md" && rm "$CWD/README.md.bak"
