@@ -663,6 +663,41 @@ func TestDirectedEdge(t *testing.T) {
 	})
 }
 
+func TestDirectedEdge_Reverse(t *testing.T) {
+	t.Parallel()
+
+	origin := validDiskDist3_1[1][0]
+	edges, err := origin.DirectedEdges()
+	assertNoErr(t, err)
+
+	destination, err := edges[0].Destination()
+	assertNoErr(t, err)
+
+	edge, err := origin.DirectedEdge(destination)
+	assertNoErr(t, err)
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		reversed, err := edge.Reverse()
+		assertNoErr(t, err)
+
+		revOrigin, err := reversed.Origin()
+		assertNoErr(t, err)
+		revDestination, err := reversed.Destination()
+		assertNoErr(t, err)
+
+		assertEqual(t, destination, revOrigin)
+		assertEqual(t, origin, revDestination)
+	})
+
+	t.Run("err", func(t *testing.T) {
+		t.Parallel()
+		_, err := DirectedEdge(-1).Reverse()
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDirectedEdgeInvalid)
+	})
+}
+
 func TestStrings(t *testing.T) {
 	t.Parallel()
 

@@ -988,6 +988,13 @@ func (e DirectedEdge) Destination() (Cell, error) {
 	return Cell(out), toErr(errC)
 }
 
+// Reverse returns the directed edge from destination to origin cell.
+func (e DirectedEdge) Reverse() (DirectedEdge, error) {
+	var out C.H3Index
+	errC := C.reverseDirectedEdge(C.H3Index(e), &out)
+	return DirectedEdge(out), toErr(errC)
+}
+
 // Cells returns the origin and destination cells in that order.
 func (e DirectedEdge) Cells() ([]Cell, error) {
 	out := make([]C.H3Index, numEdgeCells)
