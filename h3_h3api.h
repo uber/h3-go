@@ -339,7 +339,7 @@ DECLSPEC H3Error H3_EXPORT(polygonToCellsExperimental)(
  * Functions for cellsToMultiPolygon (currently a binding-only concept)
  * @{
  */
-/** @brief Create a LinkedGeoPolygon from a set of contiguous hexagons */
+/** @brief Create a LinkedGeoPolygon from a set of cells */
 DECLSPEC H3Error H3_EXPORT(cellsToLinkedMultiPolygon)(const H3Index *h3Set,
                                                       const int numHexes,
                                                       LinkedGeoPolygon *out);
@@ -769,6 +769,15 @@ DECLSPEC H3Error H3_EXPORT(originToDirectedEdges)(H3Index origin,
 /** @brief Returns the CellBoundary containing the coordinates of the edge */
 DECLSPEC H3Error H3_EXPORT(directedEdgeToBoundary)(H3Index edge,
                                                    CellBoundary *gb);
+/** @} */
+
+/** @defgroup reverseDirectedEdge reverseDirectedEdge
+ * Functions for reverseDirectedEdge
+ * @{
+ */
+/** @brief Returns the directed edge with origin and destination cells reversed
+ */
+DECLSPEC H3Error H3_EXPORT(reverseDirectedEdge)(H3Index edge, H3Index *out);
 /** @} */
 
 /** @defgroup cellToVertex cellToVertex

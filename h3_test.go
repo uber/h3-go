@@ -920,13 +920,18 @@ func TestGridPath(t *testing.T) {
 		path, err := lineStartCell.GridPath(lineEndCell)
 
 		assertNoErr(t, err)
-		assertEqual(t, lineStartCell, path[0])
-		assertEqual(t, lineEndCell, path[len(path)-1])
+		assertValidPath(t, lineStartCell, lineEndCell, path)
+	})
 
-		for i := 0; i < len(path)-1; i++ {
-			isNeighbor, _ := path[i].IsNeighbor(path[i+1])
-			assertTrue(t, isNeighbor)
-		}
+	t.Run("success/pentagon", func(t *testing.T) {
+		t.Parallel()
+
+		start := Cell(IndexFromString("0x820807fffffffff"))
+		end := Cell(IndexFromString("0x8208e7fffffffff"))
+
+		path, err := GridPath(start, end)
+		assertNoErr(t, err)
+		assertValidPath(t, start, end, path)
 	})
 
 	t.Run("err/res_mismatch", func(t *testing.T) {
@@ -950,12 +955,12 @@ func TestGridPath(t *testing.T) {
 	t.Run("err/pentagon", func(t *testing.T) {
 		t.Parallel()
 
-		start := Cell(IndexFromString("0x820807fffffffff"))
-		end := Cell(IndexFromString("0x8208e7fffffffff"))
+		start := CellFromString("0x8411b61ffffffff")
+		end := CellFromString("0x84016d3ffffffff")
 
 		_, err := GridPath(start, end)
 		assertErr(t, err)
-		assertErrIs(t, err, ErrPentagon)
+		assertErrIs(t, err, ErrFailed)
 	})
 }
 
@@ -1067,7 +1072,7 @@ func TestCellAreaM2(t *testing.T) {
 	t.Parallel()
 	area, err := CellAreaM2(validCell)
 	assertNoErr(t, err)
-	assertEqualEps(t, float64(269676877.95093215), area)
+	assertEqualEps(t, float64(269676877.9511), area)
 
 	_, err = CellAreaM2(-1)
 	assertErr(t, err)
@@ -1801,5 +1806,16 @@ func TestIsValidIndex(t *testing.T) {
 
 			assertEqual(t, tc.isValid, result)
 		})
+	}
+}
+
+func assertValidPath(t *testing.T, start Cell, end Cell, path []Cell) {
+	t.Helper()
+	assertEqual(t, start, path[0])
+	assertEqual(t, end, path[len(path)-1])
+
+	for i := 0; i < len(path)-1; i++ {
+		isNeighbor, _ := path[i].IsNeighbor(path[i+1])
+		assertTrue(t, isNeighbor)
 	}
 }
