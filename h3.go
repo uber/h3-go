@@ -27,6 +27,7 @@ package h3
 #include <h3_h3Index.h>
 #include <h3_polygon.h>
 #include <h3_polyfill.h>
+#include <h3_latLngBatch.h>
 */
 import "C"
 
@@ -232,6 +233,41 @@ func LatLngToCell(latLng LatLng, resolution int) (Cell, error) {
 	errC := C.latLngToCell(&cLatLng, C.int(resolution), &i)
 
 	return Cell(i), toErr(errC)
+}
+
+// LatLngToCellsBatch resolves a slice of LatLng to H3 cells at the
+// provided resolution with one cgo transition for the whole batch.
+//
+// Equivalent to calling LatLngToCell once per element, but amortizes
+// the per-call cgo overhead.
+//
+// Output cell ordering matches the input ordering. Returns nil and
+// the first H3 error encountered if any LatLng fails resolution;
+// partial results are not returned.
+func LatLngToCellsBatch(lls []LatLng, resolution int) ([]Cell, error) {
+	n := len(lls)
+	if n == 0 {
+		return nil, nil
+	}
+	cLLs := make([]C.LatLng, n)
+	for i, ll := range lls {
+		cLLs[i] = ll.toC()
+	}
+	cOut := make([]C.H3Index, n)
+	errC := C.latLngToCellsBatch(
+		&cLLs[0],
+		C.size_t(n),
+		C.int(resolution),
+		&cOut[0],
+	)
+	if err := toErr(errC); err != nil {
+		return nil, err
+	}
+	out := make([]Cell, n)
+	for i := range cOut {
+		out[i] = Cell(cOut[i])
+	}
+	return out, nil
 }
 
 // Cell returns the Cell at resolution for a geographic coordinate.

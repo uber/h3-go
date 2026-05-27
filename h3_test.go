@@ -121,6 +121,55 @@ func TestLatLngToCell(t *testing.T) {
 	assertErrIs(t, err, ErrResolutionDomain)
 }
 
+func TestLatLngToCellsBatch(t *testing.T) {
+	t.Parallel()
+	t.Run("matches per-call result across resolutions", func(t *testing.T) {
+		t.Parallel()
+
+		lls := []LatLng{validLatLng1, validLatLng2}
+		for res := 0; res <= MaxResolution; res++ {
+			want := make([]Cell, len(lls))
+			for i, ll := range lls {
+				c, err := LatLngToCell(ll, res)
+				assertNoErr(t, err)
+				want[i] = c
+			}
+			got, err := LatLngToCellsBatch(lls, res)
+			assertNoErr(t, err)
+			assertEqual(t, len(want), len(got))
+
+			for i := range got {
+				assertEqual(t, want[i], got[i])
+			}
+		}
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
+		cells, err := LatLngToCellsBatch(nil, 9)
+		assertNil(t, cells)
+		assertNil(t, err)
+	})
+
+	t.Run("single element", func(t *testing.T) {
+		t.Parallel()
+
+		cells, err := LatLngToCellsBatch([]LatLng{validLatLng1}, 5)
+		assertNoErr(t, err)
+		assertEqual(t, 1, len(cells))
+		assertEqual(t, validCell, cells[0])
+	})
+
+	t.Run("invalid resolution surfaces error", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := LatLngToCellsBatch([]LatLng{validLatLng1}, MaxResolution+1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrResolutionDomain)
+	})
+}
+
 func TestCellToLatLng(t *testing.T) {
 	t.Parallel()
 
