@@ -1,14 +1,16 @@
 #include <h3_latLngBatch.h>
 
-H3Error latLngToCellsBatch(
-    const LatLng* lls,
+H3Error latLngToCellBatch(
+    const LatLng *lls,
     size_t n,
     int res,
-    H3Index* out
-) {
-    for (size_t i = 0; i < n; i++) {
+    H3Index *out)
+{
+    for (size_t i = 0; i < n; i++)
+    {
         H3Error err = latLngToCell(&lls[i], res, &out[i]);
-        if (err != E_SUCCESS) {
+        if (err != E_SUCCESS)
+        {
             return err;
         }
     }

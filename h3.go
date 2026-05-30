@@ -235,7 +235,7 @@ func LatLngToCell(latLng LatLng, resolution int) (Cell, error) {
 	return Cell(i), toErr(errC)
 }
 
-// LatLngToCellsBatch resolves a slice of LatLng to H3 cells at the
+// LatLngToCellBatch resolves a slice of LatLng to H3 cells at the
 // provided resolution with one cgo transition for the whole batch.
 //
 // Equivalent to calling LatLngToCell once per element, but amortizes
@@ -244,7 +244,7 @@ func LatLngToCell(latLng LatLng, resolution int) (Cell, error) {
 // Output cell ordering matches the input ordering. Returns nil and
 // the first H3 error encountered if any LatLng fails resolution;
 // partial results are not returned.
-func LatLngToCellsBatch(lls []LatLng, resolution int) ([]Cell, error) {
+func LatLngToCellBatch(lls []LatLng, resolution int) ([]Cell, error) {
 	n := len(lls)
 	if n == 0 {
 		return nil, nil
@@ -254,7 +254,7 @@ func LatLngToCellsBatch(lls []LatLng, resolution int) ([]Cell, error) {
 		cLLs[i] = ll.toC()
 	}
 	cOut := make([]C.H3Index, n)
-	errC := C.latLngToCellsBatch(
+	errC := C.latLngToCellBatch(
 		&cLLs[0],
 		C.size_t(n),
 		C.int(resolution),

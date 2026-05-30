@@ -14,20 +14,20 @@
 #include <stddef.h>
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-// latLngToCellsBatch resolved n LatLng inputs (already in radians) to
-// H3 cells at a single resolution. Output buffer must be sized n by
-// the caller. Returns E_SUCCESS on success, or the first H3Error
-// encountered (and stops). Output for rows past the failing index is
-// undefined.
-H3Error latLngToCellsBatch(
-    const LatLng* lls,
-    size_t n,
-    int res,
-    H3Index* out
-);
+    // latLngToCellBatch resolved n LatLng inputs (already in radians) to
+    // H3 cells at a single resolution. Output buffer must be sized n by
+    // the caller. Returns E_SUCCESS on success, or the first H3Error
+    // encountered (and stops). Output for rows past the failing index is
+    // undefined.
+    H3Error latLngToCellBatch(
+        const LatLng *lls,
+        size_t n,
+        int res,
+        H3Index *out);
 
 #ifdef __cplusplus
 }

@@ -54,7 +54,7 @@ func BenchmarkLatLngToCell(b *testing.B) {
 	}
 }
 
-func BenchmarkLatLngToCellsBatch(b *testing.B) {
+func BenchmarkLatLngToCellBatch(b *testing.B) {
 	for _, n := range []int{1, 64, 1024, 16384, 1_000_000, 10_000_000} {
 		lls := make([]LatLng, n)
 		for i := range lls {
@@ -72,7 +72,7 @@ func BenchmarkLatLngToCellsBatch(b *testing.B) {
 // Baseline: same workload via the per-call LatLngToCell in a Go loop,
 // so reviewers can confirm the speedup at each batch size by comparing
 // matching sub-benchmark names with benchstat.
-func BenchmarkLatLngToCellsBaseline(b *testing.B) {
+func BenchmarkLatLngToCellBaseline(b *testing.B) {
 	for _, n := range []int{1, 64, 1024, 16384, 1_000_000, 10_000_000} {
 		lls := make([]LatLng, n)
 		for i := range lls {
