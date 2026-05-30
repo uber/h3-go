@@ -63,7 +63,7 @@ func BenchmarkLatLngToCellBatch(b *testing.B) {
 
 		b.Run(strconv.Itoa(n), func(b *testing.B) {
 			for b.Loop() {
-				cells, _ = LatLngToCellsBatch(lls, 15)
+				cells, _ = LatLngToCellBatch(lls, 15)
 			}
 		})
 	}
