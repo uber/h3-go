@@ -92,6 +92,7 @@ const (
 	baseCellOffset   = C.H3_BC_OFFSET
 	perDigitOffset   = C.H3_PER_DIGIT_OFFSET
 	digitMask        = C.H3_DIGIT_MASK
+	earthRadiusKm    = C.EARTH_RADIUS_KM
 
 	resolutionMask = 0xF  // 4 bits
 	baseCellMask   = 0x7F // 7 bits
@@ -671,22 +672,28 @@ func CellsToMultiPolygon(cells []Cell) ([]GeoPolygon, error) {
 // GreatCircleDistanceRads returns the "great circle" or "haversine" distance between
 // pairs of LatLng points (lat/lng pairs) in radians.
 func GreatCircleDistanceRads(a, b LatLng) float64 {
-	ca, cb := a.toC(), b.toC()
-	return float64(C.greatCircleDistanceRads(&ca, &cb))
+	aLat := DegsToRads * a.Lat
+	aLng := DegsToRads * a.Lng
+	bLat := DegsToRads * b.Lat
+	bLng := DegsToRads * b.Lng
+
+	sinLat := math.Sin((bLat - aLat) * 0.5) //nolint:mnd // haversine formula
+	sinLng := math.Sin((bLng - aLng) * 0.5) //nolint:mnd // haversine formula
+
+	h := sinLat*sinLat + math.Cos(aLat)*math.Cos(bLat)*sinLng*sinLng
+	return 2 * math.Atan2(math.Sqrt(h), math.Sqrt(1-h)) //nolint:mnd // haversine formula
 }
 
 // GreatCircleDistanceKm returns the "great circle" or "haversine" distance between pairs
 // of LatLng points (lat/lng pairs) in kilometers.
 func GreatCircleDistanceKm(a, b LatLng) float64 {
-	ca, cb := a.toC(), b.toC()
-	return float64(C.greatCircleDistanceKm(&ca, &cb))
+	return GreatCircleDistanceRads(a, b) * earthRadiusKm
 }
 
 // GreatCircleDistanceM returns the "great circle" or "haversine" distance between pairs
 // of LatLng points (lat/lng pairs) in meters.
 func GreatCircleDistanceM(a, b LatLng) float64 {
-	ca, cb := a.toC(), b.toC()
-	return float64(C.greatCircleDistanceM(&ca, &cb))
+	return GreatCircleDistanceKm(a, b) * 1000 //nolint:mnd // unit conversion
 }
 
 // HexagonAreaAvgKm2 returns the average hexagon area in square kilometers at the given
