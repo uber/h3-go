@@ -407,6 +407,28 @@ func TestIsValid(t *testing.T) {
 	t.Parallel()
 	assertTrue(t, validCell.IsValid())
 	assertFalse(t, Cell(0).IsValid())
+
+	// Resolution 15 exercises hasAll7AfterRes with res == MaxResolution.
+	res15Cell, _ := LatLngToCell(validLatLng1, MaxResolution)
+	assertTrue(t, res15Cell.IsValid())
+
+	// Wrong mode (directed edge mode in top bits).
+	assertFalse(t, Cell(0x1000000000000000).IsValid())
+
+	// Base cell number >= NumBaseCells (122).
+	assertFalse(t, Cell(0x080f500000000000|0x1fffffffffff).IsValid())
+
+	// Digit 7 in active position (base cell 1, res 1, digit 1 = 7).
+	assertFalse(t, Cell(0x08103fffffffffff).IsValid())
+
+	// Digits after resolution not all 7 (res 1, digit 1 = 2, rest zeroed).
+	assertFalse(t, Cell(0x0810080000000000).IsValid())
+
+	// Deleted subsequence: pentagon base cell 4, res 1, digit 1 = 1 (K_AXES_DIGIT).
+	assertFalse(t, Cell(0x081087ffffffffff).IsValid())
+
+	// Pentagon base cell 4 at res 15 with all digits 0 is a valid pentagon center.
+	assertTrue(t, Cell(0x08f0800000000000).IsValid())
 }
 
 func TestRoundtrip(t *testing.T) {
@@ -563,6 +585,9 @@ func TestIsPentagon(t *testing.T) {
 	t.Parallel()
 	assertFalse(t, validCell.IsPentagon())
 	assertTrue(t, pentagonCell.IsPentagon())
+
+	// Pentagon base cell 4, res 1, digit 1 = 2: valid cell but not a pentagon.
+	assertFalse(t, Cell(0x08108bffffffffff).IsPentagon())
 }
 
 func TestIsNeighbor(t *testing.T) {

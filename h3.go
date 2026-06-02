@@ -35,6 +35,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/bits"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -60,6 +61,14 @@ const (
 	// InvalidH3Index is a sentinel value for an invalid H3 index.
 	InvalidH3Index = C.H3_NULL
 
+	// DegsToRads converts degrees to radians by multiplying degrees by this constant.
+	DegsToRads = math.Pi / 180.0
+	// RadsToDegs converts radians to degrees by multiplying radians by this constant.
+	RadsToDegs = 180.0 / math.Pi
+)
+
+// Internal constants
+const (
 	base16  = 16
 	bitSize = 64
 
@@ -67,19 +76,34 @@ const (
 	numEdgeCells    = 2
 	numCellVertexes = 6
 
-	// DegsToRads converts degrees to radians by multiplying degrees by this constant.
-	DegsToRads = math.Pi / 180.0
-	// RadsToDegs converts radians to degrees by multiplying radians by this constant.
-	RadsToDegs = 180.0 / math.Pi
-)
-
-const (
 	latLngFloatPrecision = 5
 	// latLngStringSize is the size to pre-allocate the buffer for.
 	// Given latLngFloatPrecision, a typical string is "(DD.DDDDD, -DDD.DDDDD)"
 	// which is ~25-30 bytes. 32 is a safe and efficient capacity to start with
 	// to avoid re-allocation.
 	latLngStringSize = 32
+
+	cellMode         = C.H3_CELL_MODE
+	directedEdgeMode = C.H3_DIRECTEDEDGE_MODE
+	vertexMode       = C.H3_VERTEX_MODE
+	modeOffset       = C.H3_MODE_OFFSET
+	reservedOffset   = C.H3_RESERVED_OFFSET
+	resolutionOffset = C.H3_RES_OFFSET
+	baseCellOffset   = C.H3_BC_OFFSET
+	perDigitOffset   = C.H3_PER_DIGIT_OFFSET
+	digitMask        = C.H3_DIGIT_MASK
+
+	resolutionMask = 0xF  // 4 bits
+	baseCellMask   = 0x7F // 7 bits
+	modeMask       = 0xF  // 4 bits
+
+	// digitRegionOffset is the number of non-digit bits above the 15×3-bit
+	// digit region (high + mode + reserved + resolution + base cell = 19).
+	digitRegionOffset = bitSize - MaxResolution*perDigitOffset
+
+	// validCellTopBits is the expected value of the top 8 bits of a valid cell:
+	// high bit=0, mode=1 (cell), reserved=000.
+	validCellTopBits = 0b00001000
 )
 
 var (
@@ -104,6 +128,14 @@ var (
 	}
 	// compile-time check: pow7 must have exactly MaxResolution+1 entries.
 	_ = pow7[MaxResolution]
+
+	// isBaseCellPentagonArr maps base cell number to whether it is a pentagon.
+	// There are exactly 12 pentagons at every resolution, one for each vertex
+	// of the icosahedron.
+	isBaseCellPentagonArr = [128]bool{
+		4: true, 14: true, 24: true, 38: true, 49: true, 58: true,
+		63: true, 72: true, 83: true, 97: true, 107: true, 117: true,
+	}
 )
 
 // PolygonToCells containment modes
@@ -795,7 +827,7 @@ func (v Vertex) Resolution() int {
 // BaseCellNumber returns the integer ID (0-121) of the base cell the H3Index h
 // belongs to.
 func BaseCellNumber(h Cell) int {
-	return int(C.getBaseCellNumber(C.H3Index(h)))
+	return baseCellNumber(h)
 }
 
 // BaseCellNumber returns the integer ID (0-121) of the base cell the H3Index h
@@ -864,7 +896,7 @@ func (c *Cell) UnmarshalText(text []byte) error {
 
 // IsValid returns if a Cell is a valid cell (hexagon or pentagon).
 func (c Cell) IsValid() bool {
-	return c != 0 && C.isValidCell(C.H3Index(c)) == 1
+	return c != 0 && isValidCell(c)
 }
 
 // Parent returns the parent or grandparent Cell of this Cell.
@@ -913,12 +945,12 @@ func (c Cell) CenterChild(resolution int) (Cell, error) {
 // IsResClassIII returns true if this is a class III index. If false, this is a
 // class II index.
 func (c Cell) IsResClassIII() bool {
-	return C.isResClassIII(C.H3Index(c)) == 1
+	return c.Resolution()%2 == 1
 }
 
 // IsPentagon returns true if this is a pentagon.
 func (c Cell) IsPentagon() bool {
-	return C.isPentagon(C.H3Index(c)) == 1
+	return isPentagonCell(c)
 }
 
 // IcosahedronFaces finds all icosahedron faces (0-19) intersected by this Cell.
@@ -1248,8 +1280,20 @@ func (v *Vertex) UnmarshalText(text []byte) error {
 
 // IsValidIndex returns whether the given index is valid.
 // This is a generic function that accepts any H3 index type (Cell, DirectedEdge, or Vertex).
+// Cell validation is pure Go bit manipulation. DirectedEdge and Vertex validation
+// call through to CGo because they require coordinate geometry (cell traversal
+// and canonical vertex reconstruction) beyond bit operations.
 func IsValidIndex[T Index](index T) bool {
-	return C.isValidIndex(C.H3Index(index)) == 1
+	switch mode(index) {
+	case cellMode:
+		return index != 0 && isValidCell(Cell(index))
+	case directedEdgeMode:
+		return C.isValidDirectedEdge(C.H3Index(index)) == 1
+	case vertexMode:
+		return C.isValidVertex(C.H3Index(index)) == 1
+	default:
+		return false
+	}
 }
 
 // IndexDigit returns an [indexing digit] of the vertex.
@@ -1432,9 +1476,9 @@ func intsFromC(chs []C.int) []int {
 func (g LatLng) String() string {
 	buf := make([]byte, 0, latLngStringSize)
 	buf = append(buf, '(')
-	buf = strconv.AppendFloat(buf, g.Lat, 'f', latLngFloatPrecision, 64) //nolint:mnd // float bit size
+	buf = strconv.AppendFloat(buf, g.Lat, 'f', latLngFloatPrecision, bitSize)
 	buf = append(buf, ',', ' ')
-	buf = strconv.AppendFloat(buf, g.Lng, 'f', latLngFloatPrecision, 64) //nolint:mnd // float bit size
+	buf = strconv.AppendFloat(buf, g.Lng, 'f', latLngFloatPrecision, bitSize)
 	buf = append(buf, ')')
 	return string(buf)
 }
@@ -1470,7 +1514,95 @@ func indexDigit[I Index](index I, resolution int) (int, error) {
 }
 
 func resolution[I Index](index I) int {
-	return int(C.getResolution(C.H3Index(index)))
+	return int(index>>resolutionOffset) & resolutionMask
+}
+
+func baseCellNumber[I Index](index I) int {
+	return int(index>>baseCellOffset) & baseCellMask
+}
+
+func mode[I Index](index I) int {
+	return int(index>>modeOffset) & modeMask
+}
+
+func isValidCell(c Cell) bool {
+	h := uint64(c)
+	// Top 8 bits: high=0, mode=1 (cell), reserved=0 => 0b00001000.
+	if h>>reservedOffset != validCellTopBits {
+		return false
+	}
+	bc := baseCellNumber(c)
+	if bc >= NumBaseCells {
+		return false
+	}
+	res := resolution(c)
+	if hasAny7UptoRes(h, res) {
+		return false
+	}
+	if !hasAll7AfterRes(h, res) {
+		return false
+	}
+	if hasDeletedSubsequence(h, bc) {
+		return false
+	}
+	return true
+}
+
+// hasAny7UptoRes detects whether any digit from 1 to res is 7 (invalid)
+// without looping, using the carry-based trick from h3_h3Index.c:_hasAny7UptoRes.
+//
+// mhi selects the high bit of each 3-bit digit (100 100 100 ...), and
+// mlo selects the low bit (001 001 001 ...). For a digit that is 7 (0b111),
+// its complement is 0b000, and subtracting mlo borrows into the high bit.
+// The final AND keeps only high bits where this borrow occurred, so any
+// non-zero result means at least one digit is 7.
+func hasAny7UptoRes(h uint64, res int) bool {
+	const mhi uint64 = 0b100100100100100100100100100100100100100100100
+	const mlo = mhi >> 2
+	shift := perDigitOffset * (MaxResolution - res)
+	h >>= shift
+	h <<= shift
+	h = h & mhi & (^h - mlo)
+	return h != 0
+}
+
+func hasAll7AfterRes(h uint64, res int) bool {
+	if res >= MaxResolution {
+		return true
+	}
+	shift := digitRegionOffset + perDigitOffset*res
+	h = ^h
+	h <<= shift
+	h >>= shift
+	return h == 0
+}
+
+func hasDeletedSubsequence(h uint64, baseCell int) bool {
+	if !isBaseCellPentagonArr[baseCell] {
+		return false
+	}
+	h <<= digitRegionOffset
+	h >>= digitRegionOffset
+	if h == 0 {
+		return false
+	}
+	return firstOneIndex(h)%perDigitOffset == 0
+}
+
+func firstOneIndex(h uint64) int {
+	return (bitSize - 1) - bits.LeadingZeros64(h)
+}
+
+func isPentagonCell(c Cell) bool {
+	if !isBaseCellPentagonArr[baseCellNumber(c)] {
+		return false
+	}
+	for r := 1; r <= resolution(c); r++ {
+		if (c>>((MaxResolution-r)*perDigitOffset))&digitMask != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func indexToString[I Index](index I) string {

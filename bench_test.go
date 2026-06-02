@@ -14,13 +14,16 @@ var (
 		Lat: 38,
 		Lng: -121,
 	}
-	latlngStr  string
-	cell, _    = LatLngToCell(geo, 15)
-	addr       = cell.String()
-	geoBndry   CellBoundary
-	cells      []Cell
-	disks      [][]Cell
-	distResult float64
+	latlngStr   string
+	cell, _     = LatLngToCell(geo, 15)
+	addr        = cell.String()
+	geoBndry    CellBoundary
+	cells       []Cell
+	disks       [][]Cell
+	distResult  float64
+	boolResult  bool
+	intResult   int
+	validResult bool
 )
 
 func BenchmarkToString(b *testing.B) {
@@ -102,5 +105,41 @@ func BenchmarkGreatCircleDistanceKm(b *testing.B) {
 func BenchmarkGreatCircleDistanceM(b *testing.B) {
 	for range b.N {
 		distResult = GreatCircleDistanceM(geo, geo2)
+	}
+}
+
+func BenchmarkResolution(b *testing.B) {
+	for range b.N {
+		intResult = cell.Resolution()
+	}
+}
+
+func BenchmarkBaseCellNumber(b *testing.B) {
+	for range b.N {
+		intResult = cell.BaseCellNumber()
+	}
+}
+
+func BenchmarkIsValid(b *testing.B) {
+	for range b.N {
+		boolResult = cell.IsValid()
+	}
+}
+
+func BenchmarkIsPentagon(b *testing.B) {
+	for range b.N {
+		boolResult = cell.IsPentagon()
+	}
+}
+
+func BenchmarkIsResClassIII(b *testing.B) {
+	for range b.N {
+		boolResult = cell.IsResClassIII()
+	}
+}
+
+func BenchmarkIsValidIndex(b *testing.B) {
+	for range b.N {
+		validResult = IsValidIndex(cell)
 	}
 }
