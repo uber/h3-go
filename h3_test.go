@@ -121,6 +121,18 @@ func TestLatLngToCell(t *testing.T) {
 	assertErrIs(t, err, ErrResolutionDomain)
 }
 
+func TestLatLngToCellString(t *testing.T) {
+	t.Parallel()
+
+	cellStr, err := LatLngToCellString(validLatLng1.Lat, validLatLng1.Lng, 5)
+	assertEqual(t, validCell.String(), cellStr)
+	assertNoErr(t, err)
+
+	_, err = LatLngToCellString(0, 0, MaxResolution+1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrResolutionDomain)
+}
+
 func TestCellToLatLng(t *testing.T) {
 	t.Parallel()
 
