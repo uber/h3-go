@@ -39,6 +39,8 @@ import (
 	"strconv"
 	"strings"
 	"unsafe"
+
+	"github.com/uber/h3-go/v4/internal/h3core"
 )
 
 const (
@@ -47,7 +49,7 @@ const (
 	MaxCellBndryVerts = C.MAX_CELL_BNDRY_VERTS
 
 	// MaxResolution is the maximum H3 resolution a LatLng can be indexed to.
-	MaxResolution = C.MAX_H3_RES
+	MaxResolution = h3core.MaxResolution
 
 	// NumIcosaFaces is the number of faces on an icosahedron.
 	NumIcosaFaces = C.NUM_ICOSA_FACES
@@ -83,18 +85,18 @@ const (
 	// to avoid re-allocation.
 	latLngStringSize = 32
 
-	cellMode         = C.H3_CELL_MODE
-	directedEdgeMode = C.H3_DIRECTEDEDGE_MODE
-	vertexMode       = C.H3_VERTEX_MODE
-	modeOffset       = C.H3_MODE_OFFSET
-	reservedOffset   = C.H3_RESERVED_OFFSET
-	resolutionOffset = C.H3_RES_OFFSET
-	baseCellOffset   = C.H3_BC_OFFSET
-	perDigitOffset   = C.H3_PER_DIGIT_OFFSET
-	digitMask        = C.H3_DIGIT_MASK
+	cellMode         = h3core.CellMode
+	directedEdgeMode = h3core.DirectedEdgeMode
+	vertexMode       = h3core.VertexMode
+	modeOffset       = h3core.ModeOffset
+	reservedOffset   = 56 // H3_RESERVED_OFFSET
+	resolutionOffset = h3core.ResolutionOffset
+	baseCellOffset   = h3core.BaseCellOffset
+	perDigitOffset   = h3core.PerDigitOffset
+	digitMask        = h3core.DigitMask
 	earthRadiusKm    = C.EARTH_RADIUS_KM
 
-	resolutionMask = 0xF  // 4 bits
+	resolutionMask = h3core.ResolutionMask
 	baseCellMask   = 0x7F // 7 bits
 	modeMask       = 0xF  // 4 bits
 
@@ -129,14 +131,6 @@ var (
 	}
 	// compile-time check: pow7 must have exactly MaxResolution+1 entries.
 	_ = pow7[MaxResolution]
-
-	// isBaseCellPentagonArr maps base cell number to whether it is a pentagon.
-	// There are exactly 12 pentagons at every resolution, one for each vertex
-	// of the icosahedron.
-	isBaseCellPentagonArr = [128]bool{
-		4: true, 14: true, 24: true, 38: true, 49: true, 58: true,
-		63: true, 72: true, 83: true, 97: true, 107: true, 117: true,
-	}
 )
 
 // PolygonToCells containment modes
@@ -1585,7 +1579,7 @@ func hasAll7AfterRes(h uint64, res int) bool {
 }
 
 func hasDeletedSubsequence(h uint64, baseCell int) bool {
-	if !isBaseCellPentagonArr[baseCell] {
+	if !h3core.IsBaseCellPentagon[baseCell] {
 		return false
 	}
 	h <<= digitRegionOffset
@@ -1601,7 +1595,7 @@ func firstOneIndex(h uint64) int {
 }
 
 func isPentagonCell(c Cell) bool {
-	if !isBaseCellPentagonArr[baseCellNumber(c)] {
+	if !h3core.IsBaseCellPentagon[baseCellNumber(c)] {
 		return false
 	}
 	for r := 1; r <= resolution(c); r++ {

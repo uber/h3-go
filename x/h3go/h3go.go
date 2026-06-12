@@ -1,0 +1,764 @@
+/*
+ * Copyright 2026 Uber Technologies, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Package h3go is an implementation of the H3 library entirely in Go.
+package h3go
+
+import (
+	"errors"
+	"math"
+	"strconv"
+
+	"github.com/uber/h3-go/v4/internal/h3core"
+)
+
+// Cell is an Index that identifies a single hexagon cell at a resolution.
+type Cell int64
+
+// LatLng is a struct for geographic coordinates in degrees.
+type LatLng struct {
+	Lat, Lng float64
+}
+
+// Error codes.
+var (
+	ErrFailed           = errors.New("the operation failed")
+	ErrLatLngDomain     = errors.New("latitude or longitude arguments were outside of acceptable range")
+	ErrResolutionDomain = errors.New("resolution argument was outside of acceptable range")
+)
+
+// Resolution returns the resolution of the cell.
+func (c Cell) Resolution() int {
+	return resolution(c)
+}
+
+// String returns the string representation of the H3Index h.
+func (c Cell) String() string {
+	//nolint:gosec // an H3 index is a 64-bit value; int64->uint64 is a lossless reinterpretation.
+	return strconv.FormatUint(uint64(c), 16)
+}
+
+// Internal types for the pure Go latLngToCell pipeline.
+type (
+	vec3d    struct{ x, y, z float64 }
+	vec2d    struct{ x, y float64 }
+	coordIJK struct{ i, j, k int }
+	faceIJK  struct {
+		face  int
+		coord coordIJK
+	}
+	baseCellRotation struct{ baseCell, ccwRot60 int }
+)
+
+// Constants ported from the H3 C library.
+const (
+	epsilon          = 1e-16
+	m2PI             = 2 * math.Pi
+	mSqrt7           = 2.6457513110645905905016157536392604257102
+	mRSin60          = 1.1547005383792515290182975610039149112953
+	mOneSeventh      = 1.0 / 7.0
+	mAP7RotRads      = 0.333473172251832115336090755351601070065900389
+	invRes0UGnomonic = 2.61803398874989588842
+	maxFaceCoord     = 2
+	numIcosaFaces    = 20
+
+	// degsToRads converts degrees to radians by multiplying degrees by this constant.
+	degsToRads = math.Pi / 180.0
+
+	// h3Init has all 15 digit slots set to 7 (invalid); mode/res/base cell are 0.
+	h3Init = 35184372088831
+
+	centerDigit  = 0
+	kAxesDigit   = 1
+	jAxesDigit   = 2
+	jkAxesDigit  = 3
+	iAxesDigit   = 4
+	ikAxesDigit  = 5
+	ijAxesDigit  = 6
+	invalidDigit = 7
+
+	// H3 index bit-layout offsets and masks, shared with the cgo h3 package.
+	cellMode         = h3core.CellMode
+	modeOffset       = h3core.ModeOffset
+	resolutionOffset = h3core.ResolutionOffset
+	baseCellOffset   = h3core.BaseCellOffset
+	perDigitOffset   = h3core.PerDigitOffset
+	digitMask        = h3core.DigitMask
+	resolutionMask   = h3core.ResolutionMask
+	maxResolution    = h3core.MaxResolution
+)
+
+// LatLngToCell returns the Cell at resolution for a geographic coordinate.
+func LatLngToCell(latLng LatLng, res int) (Cell, error) {
+	if res < 0 || res > maxResolution {
+		return 0, ErrResolutionDomain
+	}
+
+	if math.IsNaN(latLng.Lat) || math.IsInf(latLng.Lat, 0) ||
+		math.IsNaN(latLng.Lng) || math.IsInf(latLng.Lng, 0) {
+		return 0, ErrLatLngDomain
+	}
+
+	lat := latLng.Lat * degsToRads
+	lng := latLng.Lng * degsToRads
+	v := latLngToVec3(lat, lng)
+	fijk := vec3ToFaceIjk(v, res)
+
+	return faceIjkToH3(fijk, res)
+}
+
+// --- Vec3d math ---
+
+func latLngToVec3(lat, lng float64) vec3d {
+	r := math.Cos(lat)
+
+	return vec3d{
+		x: math.Cos(lng) * r,
+		y: math.Sin(lng) * r,
+		z: math.Sin(lat),
+	}
+}
+
+func vec3Dot(a, b vec3d) float64 {
+	return a.x*b.x + a.y*b.y + a.z*b.z
+}
+
+func vec3Cross(a, b vec3d) vec3d {
+	return vec3d{
+		x: a.y*b.z - a.z*b.y,
+		y: a.z*b.x - a.x*b.z,
+		z: a.x*b.y - a.y*b.x,
+	}
+}
+
+func vec3LinComb(a float64, v1 vec3d, b float64, v2 vec3d) vec3d {
+	return vec3d{
+		x: a*v1.x + b*v2.x,
+		y: a*v1.y + b*v2.y,
+		z: a*v1.z + b*v2.z,
+	}
+}
+
+func vec3Normalize(v *vec3d) {
+	sq := vec3Dot(*v, *v)
+
+	s := 0.0
+	if sq > 0 {
+		s = 1.0 / math.Sqrt(sq)
+	}
+
+	v.x *= s
+	v.y *= s
+	v.z *= s
+}
+
+func vec3DistSq(a, b vec3d) float64 {
+	d := vec3LinComb(1.0, a, -1.0, b)
+
+	return vec3Dot(d, d)
+}
+
+// --- Face projection ---
+
+func vec3ToClosestFace(v vec3d) (face int, sqd float64) {
+	sqd = 5.0
+
+	for f := 0; f < numIcosaFaces; f++ {
+		s := vec3DistSq(faceCenterPoint[f], v)
+		if s < sqd {
+			face = f
+			sqd = s
+		}
+	}
+
+	return face, sqd
+}
+
+func vec3TangentBasis(p vec3d) (north, east vec3d) {
+	northPole := vec3d{0, 0, 1}
+	north = vec3LinComb(1.0, northPole, -vec3Dot(northPole, p), p)
+	vec3Normalize(&north)
+	east = vec3Cross(north, p)
+
+	return north, east
+}
+
+func vec3AzimuthRads(p1, p2 vec3d) float64 {
+	north, east := vec3TangentBasis(p1)
+	p2Proj := vec3LinComb(1.0, p2, -vec3Dot(p2, p1), p1)
+	vec3Normalize(&p2Proj)
+
+	return math.Atan2(vec3Dot(p2Proj, east), vec3Dot(p2Proj, north))
+}
+
+func posAngleRads(rads float64) float64 {
+	tmp := rads
+	if rads < 0 {
+		tmp += m2PI
+	}
+
+	if tmp >= m2PI {
+		tmp -= m2PI
+	}
+
+	return tmp
+}
+
+func vec3ToHex2d(p vec3d, res int) (face int, v vec2d) {
+	var sqd float64
+
+	face, sqd = vec3ToClosestFace(p)
+
+	r := math.Acos(1 - sqd*0.5)
+	if r < epsilon {
+		return face, v
+	}
+
+	theta := posAngleRads(
+		faceAxesAzRadsCII[face][0] -
+			posAngleRads(vec3AzimuthRads(faceCenterPoint[face], p)))
+
+	if res%2 == 1 {
+		theta = posAngleRads(theta - mAP7RotRads)
+	}
+
+	r = math.Tan(r)
+	r *= invRes0UGnomonic
+
+	for i := 0; i < res; i++ {
+		r *= mSqrt7
+	}
+
+	v.x = r * math.Cos(theta)
+	v.y = r * math.Sin(theta)
+
+	return face, v
+}
+
+func vec3ToFaceIjk(p vec3d, res int) faceIJK {
+	face, v := vec3ToHex2d(p, res)
+
+	return faceIJK{face: face, coord: hex2dToCoordIJK(v)}
+}
+
+// --- CoordIJK helpers ---
+
+func ijkNormalize(c *coordIJK) {
+	m := c.i
+	if c.j < m {
+		m = c.j
+	}
+
+	if c.k < m {
+		m = c.k
+	}
+
+	c.i -= m
+	c.j -= m
+	c.k -= m
+}
+
+func hex2dToCoordIJK(v vec2d) coordIJK {
+	var h coordIJK
+
+	h.k = 0
+
+	a1 := math.Abs(v.x)
+	a2 := math.Abs(v.y)
+
+	x2 := a2 * mRSin60
+	x1 := a1 + x2/2.0 //nolint:mnd // hex grid rounding
+
+	m1 := int(x1)
+	m2 := int(x2)
+
+	r1 := x1 - float64(m1)
+	r2 := x2 - float64(m2)
+
+	if r1 < 0.5 { //nolint:mnd // hex grid rounding
+		if r1 < 1.0/3.0 {
+			if r2 < (1.0+r1)/2.0 {
+				h.i = m1
+				h.j = m2
+			} else {
+				h.i = m1
+				h.j = m2 + 1
+			}
+		} else {
+			if r2 < (1.0 - r1) {
+				h.j = m2
+			} else {
+				h.j = m2 + 1
+			}
+
+			if (1.0-r1) <= r2 && r2 < (2.0*r1) { //nolint:mnd // hex grid rounding
+				h.i = m1 + 1
+			} else {
+				h.i = m1
+			}
+		}
+	} else {
+		if r1 < 2.0/3.0 {
+			if r2 < (1.0 - r1) {
+				h.j = m2
+			} else {
+				h.j = m2 + 1
+			}
+
+			if (2.0*r1-1.0) < r2 && r2 < (1.0-r1) {
+				h.i = m1
+			} else {
+				h.i = m1 + 1
+			}
+		} else {
+			if r2 < (r1 / 2.0) { //nolint:mnd // hex grid rounding
+				h.i = m1 + 1
+				h.j = m2
+			} else {
+				h.i = m1 + 1
+				h.j = m2 + 1
+			}
+		}
+	}
+
+	if v.x < 0.0 {
+		if h.j%2 == 0 {
+			axisi := h.j / 2 //nolint:mnd // hex grid axis folding
+			diff := h.i - axisi
+			h.i -= 2 * diff //nolint:mnd // hex grid axis folding
+		} else {
+			axisi := (h.j + 1) / 2 //nolint:mnd // hex grid axis folding
+			diff := h.i - axisi
+			h.i -= 2*diff + 1 //nolint:mnd // hex grid axis folding
+		}
+	}
+
+	if v.y < 0.0 {
+		h.i -= (2*h.j + 1) / 2 //nolint:mnd // hex grid axis folding
+		h.j = -h.j
+	}
+
+	ijkNormalize(&h)
+
+	return h
+}
+
+func upAp7(ijk *coordIJK) {
+	i := ijk.i - ijk.k
+	j := ijk.j - ijk.k
+	ijk.i = int(math.Round(float64(3*i-j) * mOneSeventh))
+	ijk.j = int(math.Round(float64(i+2*j) * mOneSeventh))
+	ijk.k = 0
+	ijkNormalize(ijk)
+}
+
+func upAp7r(ijk *coordIJK) {
+	i := ijk.i - ijk.k
+	j := ijk.j - ijk.k
+	ijk.i = int(math.Round(float64(2*i+j) * mOneSeventh))
+	ijk.j = int(math.Round(float64(3*j-i) * mOneSeventh))
+	ijk.k = 0
+	ijkNormalize(ijk)
+}
+
+func downAp7(ijk *coordIJK) {
+	i, j, k := ijk.i, ijk.j, ijk.k
+	ijk.i = 3*i + j //nolint:mnd // aperture-7 matrix coefficients
+	ijk.j = 3*j + k //nolint:mnd // aperture-7 matrix coefficients
+	ijk.k = i + 3*k //nolint:mnd // aperture-7 matrix coefficients
+	ijkNormalize(ijk)
+}
+
+func downAp7r(ijk *coordIJK) {
+	i, j, k := ijk.i, ijk.j, ijk.k
+	ijk.i = 3*i + k //nolint:mnd // aperture-7 matrix coefficients
+	ijk.j = i + 3*j //nolint:mnd // aperture-7 matrix coefficients
+	ijk.k = j + 3*k //nolint:mnd // aperture-7 matrix coefficients
+	ijkNormalize(ijk)
+}
+
+func unitIjkToDigit(ijk coordIJK) int {
+	ijkNormalize(&ijk)
+	i, j, k := ijk.i, ijk.j, ijk.k
+
+	return unitIjkToDigitLUT[i][j][k]
+}
+
+// unitIjkToDigitLUT precomputes the digit for each normalized unit IJK.
+// Valid unit IJK coordinates have at most one of i/j/k as 1 and the rest 0.
+// Indexed by [i][j][k] for i,j,k in {0,1}. Invalid entries map to invalidDigit.
+var unitIjkToDigitLUT = [2][2][2]int{
+	{
+		{centerDigit, kAxesDigit},
+		{jAxesDigit, jkAxesDigit},
+	},
+	{
+		{iAxesDigit, ikAxesDigit},
+		{ijAxesDigit, invalidDigit},
+	},
+}
+
+// --- H3 index bit manipulation ---
+
+func resolution(h Cell) int {
+	return int(h>>resolutionOffset) & resolutionMask
+}
+
+func getIndexDigit(h Cell, res int) int {
+	return int((h >> ((maxResolution - res) * perDigitOffset)) & digitMask)
+}
+
+func setIndexDigit(h Cell, res, digit int) Cell {
+	shift := (maxResolution - res) * perDigitOffset
+	h &= ^(Cell(digitMask) << shift)
+	h |= Cell(digit) << shift
+
+	return h
+}
+
+// --- Digit rotation ---
+
+func rotate60ccw(digit int) int {
+	switch digit {
+	case kAxesDigit:
+		return ikAxesDigit
+	case ikAxesDigit:
+		return iAxesDigit
+	case iAxesDigit:
+		return ijAxesDigit
+	case ijAxesDigit:
+		return jAxesDigit
+	case jAxesDigit:
+		return jkAxesDigit
+	case jkAxesDigit:
+		return kAxesDigit
+	default:
+		return digit
+	}
+}
+
+func rotate60cw(digit int) int {
+	switch digit {
+	case kAxesDigit:
+		return jkAxesDigit
+	case jkAxesDigit:
+		return jAxesDigit
+	case jAxesDigit:
+		return ijAxesDigit
+	case ijAxesDigit:
+		return iAxesDigit
+	case iAxesDigit:
+		return ikAxesDigit
+	case ikAxesDigit:
+		return kAxesDigit
+	default:
+		return digit
+	}
+}
+
+// --- H3 index rotation ---
+
+func h3Rotate60ccw(h Cell) Cell {
+	res := resolution(h)
+	for r := 1; r <= res; r++ {
+		h = setIndexDigit(h, r, rotate60ccw(getIndexDigit(h, r)))
+	}
+
+	return h
+}
+
+func h3Rotate60cw(h Cell) Cell {
+	res := resolution(h)
+	for r := 1; r <= res; r++ {
+		h = setIndexDigit(h, r, rotate60cw(getIndexDigit(h, r)))
+	}
+
+	return h
+}
+
+func h3LeadingNonZeroDigit(h Cell) int {
+	for r := 1; r <= resolution(h); r++ {
+		d := getIndexDigit(h, r)
+		if d != centerDigit {
+			return d
+		}
+	}
+
+	return centerDigit
+}
+
+func h3RotatePent60ccw(h Cell) Cell {
+	foundFirstNonZero := false
+
+	for r := 1; r <= resolution(h); r++ {
+		h = setIndexDigit(h, r, rotate60ccw(getIndexDigit(h, r)))
+
+		if !foundFirstNonZero && getIndexDigit(h, r) != centerDigit {
+			foundFirstNonZero = true
+
+			if h3LeadingNonZeroDigit(h) == kAxesDigit {
+				h = h3Rotate60ccw(h)
+			}
+		}
+	}
+
+	return h
+}
+
+// --- FaceIJK to H3 index ---
+
+func faceIjkToH3(fijk faceIJK, res int) (Cell, error) {
+	h := Cell(h3Init)
+	h |= Cell(cellMode) << modeOffset
+	h |= Cell(res) << resolutionOffset
+
+	if res == 0 {
+		if fijk.coord.i > maxFaceCoord || fijk.coord.j > maxFaceCoord ||
+			fijk.coord.k > maxFaceCoord {
+			return 0, ErrFailed
+		}
+
+		bc := faceIjkBaseCells[fijk.face][fijk.coord.i][fijk.coord.j][fijk.coord.k].baseCell
+		h |= Cell(bc) << baseCellOffset
+
+		return h, nil
+	}
+
+	fijkBC := fijk
+	ijk := &fijkBC.coord
+
+	for r := res - 1; r >= 0; r-- {
+		lastIJK := *ijk
+
+		var lastCenter coordIJK
+
+		if (r+1)%2 == 1 { // class III
+			upAp7(ijk)
+			lastCenter = *ijk
+			downAp7(&lastCenter)
+		} else {
+			upAp7r(ijk)
+			lastCenter = *ijk
+			downAp7r(&lastCenter)
+		}
+
+		diff := coordIJK{
+			i: lastIJK.i - lastCenter.i,
+			j: lastIJK.j - lastCenter.j,
+			k: lastIJK.k - lastCenter.k,
+		}
+		ijkNormalize(&diff)
+		h = setIndexDigit(h, r+1, unitIjkToDigit(diff))
+	}
+
+	if fijkBC.coord.i > maxFaceCoord || fijkBC.coord.j > maxFaceCoord ||
+		fijkBC.coord.k > maxFaceCoord {
+		return 0, ErrFailed
+	}
+
+	bcRot := faceIjkBaseCells[fijkBC.face][fijkBC.coord.i][fijkBC.coord.j][fijkBC.coord.k]
+	baseCell := bcRot.baseCell
+	numRots := bcRot.ccwRot60
+
+	h |= Cell(baseCell) << baseCellOffset
+
+	if h3core.IsBaseCellPentagon[baseCell] {
+		if h3LeadingNonZeroDigit(h) == kAxesDigit {
+			offsets := baseCellCWOffsetPent[baseCell]
+			if offsets[0] == fijkBC.face || offsets[1] == fijkBC.face {
+				h = h3Rotate60cw(h)
+			} else {
+				h = h3Rotate60ccw(h)
+			}
+		}
+
+		for i := 0; i < numRots; i++ {
+			h = h3RotatePent60ccw(h)
+		}
+	} else {
+		for i := 0; i < numRots; i++ {
+			h = h3Rotate60ccw(h)
+		}
+	}
+
+	return h, nil
+}
+
+// --- Lookup tables ---
+
+var faceCenterPoint = [numIcosaFaces]vec3d{
+	{0.2199307791404606, 0.6583691780274996, 0.7198475378926182},
+	{-0.2139234834501421, 0.1478171829550703, 0.9656017935214205},
+	{0.1092625278784797, -0.4811951572873210, 0.8697775121287253},
+	{0.7428567301586791, -0.3593941678278028, 0.5648005936517033},
+	{0.8112534709140969, 0.3448953237639384, 0.4721387736413930},
+	{-0.1055498149613921, 0.9794457296411413, 0.1718874610009365},
+	{-0.8075407579970092, 0.1533552485898818, 0.5695261994882688},
+	{-0.2846148069787907, -0.8644080972654206, 0.4144792552473539},
+	{0.7405621473854482, -0.6673299564565524, -0.0789837646326737},
+	{0.8512303986474293, 0.4722343788582681, -0.2289137388687808},
+	{-0.7405621473854481, 0.6673299564565524, 0.0789837646326737},
+	{-0.8512303986474292, -0.4722343788582682, 0.2289137388687808},
+	{0.1055498149613919, -0.9794457296411413, -0.1718874610009365},
+	{0.8075407579970092, -0.1533552485898819, -0.5695261994882688},
+	{0.2846148069787908, 0.8644080972654204, -0.4144792552473539},
+	{-0.7428567301586791, 0.3593941678278027, -0.5648005936517033},
+	{-0.8112534709140971, -0.3448953237639382, -0.4721387736413930},
+	{-0.2199307791404607, -0.6583691780274996, -0.7198475378926182},
+	{0.2139234834501420, -0.1478171829550704, -0.9656017935214205},
+	{-0.1092625278784796, 0.4811951572873210, -0.8697775121287253},
+}
+
+var faceAxesAzRadsCII = [numIcosaFaces][3]float64{
+	{5.619958268523939882, 3.525563166130744542, 1.431168063737548730},
+	{5.760339081714187279, 3.665943979320991689, 1.571548876927796127},
+	{0.780213654393430055, 4.969003859179821079, 2.874608756786625655},
+	{0.430469363979999913, 4.619259568766391033, 2.524864466373195467},
+	{6.130269123335111400, 4.035874020941915804, 1.941478918548720291},
+	{2.692877706530642877, 0.598482604137447119, 4.787272808923838195},
+	{2.982963003477243874, 0.888567901084048369, 5.077358105870439581},
+	{3.532912002790141181, 1.438516900396945656, 5.627307105183336758},
+	{3.494305004259568154, 1.399909901866372864, 5.588700106652763840},
+	{3.003214169499538391, 0.908819067106342928, 5.097609271892733906},
+	{5.930472956509811562, 3.836077854116615875, 1.741682751723420374},
+	{0.138378484090254847, 4.327168688876645809, 2.232773586483450311},
+	{0.448714947059150361, 4.637505151845541521, 2.543110049452346120},
+	{0.158629650112549365, 4.347419854898940135, 2.253024752505744869},
+	{5.891865957979238535, 3.797470855586042958, 1.703075753192847583},
+	{2.711123289609793325, 0.616728187216597771, 4.805518392002988683},
+	{3.294508837434268316, 1.200113735041072948, 5.388903939827463911},
+	{3.804819692245439833, 1.710424589852244509, 5.899214794638635174},
+	{3.664438879055192436, 1.570043776661997111, 5.758833981448388027},
+	{2.361378999196363184, 0.266983896803167583, 4.455774101589558636},
+}
+
+var baseCellCWOffsetPent = map[int][2]int{
+	4:   {-1, -1},
+	14:  {2, 6},
+	24:  {1, 5},
+	38:  {3, 7},
+	49:  {0, 9},
+	58:  {4, 8},
+	63:  {11, 15},
+	72:  {12, 16},
+	83:  {10, 19},
+	97:  {13, 17},
+	107: {14, 18},
+	117: {-1, -1},
+}
+
+var faceIjkBaseCells = [20][3][3][3]baseCellRotation{
+	{ // face 0
+		{{{16, 0}, {18, 0}, {24, 0}}, {{33, 0}, {30, 0}, {32, 3}}, {{49, 1}, {48, 3}, {50, 3}}},
+		{{{8, 0}, {5, 5}, {10, 5}}, {{22, 0}, {16, 0}, {18, 0}}, {{41, 1}, {33, 0}, {30, 0}}},
+		{{{4, 0}, {0, 5}, {2, 5}}, {{15, 1}, {8, 0}, {5, 5}}, {{31, 1}, {22, 0}, {16, 0}}},
+	},
+	{ // face 1
+		{{{2, 0}, {6, 0}, {14, 0}}, {{10, 0}, {11, 0}, {17, 3}}, {{24, 1}, {23, 3}, {25, 3}}},
+		{{{0, 0}, {1, 5}, {9, 5}}, {{5, 0}, {2, 0}, {6, 0}}, {{18, 1}, {10, 0}, {11, 0}}},
+		{{{4, 1}, {3, 5}, {7, 5}}, {{8, 1}, {0, 0}, {1, 5}}, {{16, 1}, {5, 0}, {2, 0}}},
+	},
+	{ // face 2
+		{{{7, 0}, {21, 0}, {38, 0}}, {{9, 0}, {19, 0}, {34, 3}}, {{14, 1}, {20, 3}, {36, 3}}},
+		{{{3, 0}, {13, 5}, {29, 5}}, {{1, 0}, {7, 0}, {21, 0}}, {{6, 1}, {9, 0}, {19, 0}}},
+		{{{4, 2}, {12, 5}, {26, 5}}, {{0, 1}, {3, 0}, {13, 5}}, {{2, 1}, {1, 0}, {7, 0}}},
+	},
+	{ // face 3
+		{{{26, 0}, {42, 0}, {58, 0}}, {{29, 0}, {43, 0}, {62, 3}}, {{38, 1}, {47, 3}, {64, 3}}},
+		{{{12, 0}, {28, 5}, {44, 5}}, {{13, 0}, {26, 0}, {42, 0}}, {{21, 1}, {29, 0}, {43, 0}}},
+		{{{4, 3}, {15, 5}, {31, 5}}, {{3, 1}, {12, 0}, {28, 5}}, {{7, 1}, {13, 0}, {26, 0}}},
+	},
+	{ // face 4
+		{{{31, 0}, {41, 0}, {49, 0}}, {{44, 0}, {53, 0}, {61, 3}}, {{58, 1}, {65, 3}, {75, 3}}},
+		{{{15, 0}, {22, 5}, {33, 5}}, {{28, 0}, {31, 0}, {41, 0}}, {{42, 1}, {44, 0}, {53, 0}}},
+		{{{4, 4}, {8, 5}, {16, 5}}, {{12, 1}, {15, 0}, {22, 5}}, {{26, 1}, {28, 0}, {31, 0}}},
+	},
+	{ // face 5
+		{{{50, 0}, {48, 0}, {49, 3}}, {{32, 0}, {30, 3}, {33, 3}}, {{24, 3}, {18, 3}, {16, 3}}},
+		{{{70, 0}, {67, 0}, {66, 3}}, {{52, 3}, {50, 0}, {48, 0}}, {{37, 3}, {32, 0}, {30, 3}}},
+		{{{83, 0}, {87, 3}, {85, 3}}, {{74, 3}, {70, 0}, {67, 0}}, {{57, 1}, {52, 3}, {50, 0}}},
+	},
+	{ // face 6
+		{{{25, 0}, {23, 0}, {24, 3}}, {{17, 0}, {11, 3}, {10, 3}}, {{14, 3}, {6, 3}, {2, 3}}},
+		{{{45, 0}, {39, 0}, {37, 3}}, {{35, 3}, {25, 0}, {23, 0}}, {{27, 3}, {17, 0}, {11, 3}}},
+		{{{63, 0}, {59, 3}, {57, 3}}, {{56, 3}, {45, 0}, {39, 0}}, {{46, 3}, {35, 3}, {25, 0}}},
+	},
+	{ // face 7
+		{{{36, 0}, {20, 0}, {14, 3}}, {{34, 0}, {19, 3}, {9, 3}}, {{38, 3}, {21, 3}, {7, 3}}},
+		{{{55, 0}, {40, 0}, {27, 3}}, {{54, 3}, {36, 0}, {20, 0}}, {{51, 3}, {34, 0}, {19, 3}}},
+		{{{72, 0}, {60, 3}, {46, 3}}, {{73, 3}, {55, 0}, {40, 0}}, {{71, 3}, {54, 3}, {36, 0}}},
+	},
+	{ // face 8
+		{{{64, 0}, {47, 0}, {38, 3}}, {{62, 0}, {43, 3}, {29, 3}}, {{58, 3}, {42, 3}, {26, 3}}},
+		{{{84, 0}, {69, 0}, {51, 3}}, {{82, 3}, {64, 0}, {47, 0}}, {{76, 3}, {62, 0}, {43, 3}}},
+		{{{97, 0}, {89, 3}, {71, 3}}, {{98, 3}, {84, 0}, {69, 0}}, {{96, 3}, {82, 3}, {64, 0}}},
+	},
+	{ // face 9
+		{{{75, 0}, {65, 0}, {58, 3}}, {{61, 0}, {53, 3}, {44, 3}}, {{49, 3}, {41, 3}, {31, 3}}},
+		{{{94, 0}, {86, 0}, {76, 3}}, {{81, 3}, {75, 0}, {65, 0}}, {{66, 3}, {61, 0}, {53, 3}}},
+		{{{107, 0}, {104, 3}, {96, 3}}, {{101, 3}, {94, 0}, {86, 0}}, {{85, 3}, {81, 3}, {75, 0}}},
+	},
+	{ // face 10
+		{{{57, 0}, {59, 0}, {63, 3}}, {{74, 0}, {78, 3}, {79, 3}}, {{83, 3}, {92, 3}, {95, 3}}},
+		{{{37, 0}, {39, 3}, {45, 3}}, {{52, 0}, {57, 0}, {59, 0}}, {{70, 3}, {74, 0}, {78, 3}}},
+		{{{24, 0}, {23, 3}, {25, 3}}, {{32, 3}, {37, 0}, {39, 3}}, {{50, 3}, {52, 0}, {57, 0}}},
+	},
+	{ // face 11
+		{{{46, 0}, {60, 0}, {72, 3}}, {{56, 0}, {68, 3}, {80, 3}}, {{63, 3}, {77, 3}, {90, 3}}},
+		{{{27, 0}, {40, 3}, {55, 3}}, {{35, 0}, {46, 0}, {60, 0}}, {{45, 3}, {56, 0}, {68, 3}}},
+		{{{14, 0}, {20, 3}, {36, 3}}, {{17, 3}, {27, 0}, {40, 3}}, {{25, 3}, {35, 0}, {46, 0}}},
+	},
+	{ // face 12
+		{{{71, 0}, {89, 0}, {97, 3}}, {{73, 0}, {91, 3}, {103, 3}}, {{72, 3}, {88, 3}, {105, 3}}},
+		{{{51, 0}, {69, 3}, {84, 3}}, {{54, 0}, {71, 0}, {89, 0}}, {{55, 3}, {73, 0}, {91, 3}}},
+		{{{38, 0}, {47, 3}, {64, 3}}, {{34, 3}, {51, 0}, {69, 3}}, {{36, 3}, {54, 0}, {71, 0}}},
+	},
+	{ // face 13
+		{{{96, 0}, {104, 0}, {107, 3}}, {{98, 0}, {110, 3}, {115, 3}}, {{97, 3}, {111, 3}, {119, 3}}},
+		{{{76, 0}, {86, 3}, {94, 3}}, {{82, 0}, {96, 0}, {104, 0}}, {{84, 3}, {98, 0}, {110, 3}}},
+		{{{58, 0}, {65, 3}, {75, 3}}, {{62, 3}, {76, 0}, {86, 3}}, {{64, 3}, {82, 0}, {96, 0}}},
+	},
+	{ // face 14
+		{{{85, 0}, {87, 0}, {83, 3}}, {{101, 0}, {102, 3}, {100, 3}}, {{107, 3}, {112, 3}, {114, 3}}},
+		{{{66, 0}, {67, 3}, {70, 3}}, {{81, 0}, {85, 0}, {87, 0}}, {{94, 3}, {101, 0}, {102, 3}}},
+		{{{49, 0}, {48, 3}, {50, 3}}, {{61, 3}, {66, 0}, {67, 3}}, {{75, 3}, {81, 0}, {85, 0}}},
+	},
+	{ // face 15
+		{{{95, 0}, {92, 0}, {83, 0}}, {{79, 0}, {78, 0}, {74, 3}}, {{63, 1}, {59, 3}, {57, 3}}},
+		{{{109, 0}, {108, 0}, {100, 5}}, {{93, 1}, {95, 0}, {92, 0}}, {{77, 1}, {79, 0}, {78, 0}}},
+		{{{117, 4}, {118, 5}, {114, 5}}, {{106, 1}, {109, 0}, {108, 0}}, {{90, 1}, {93, 1}, {95, 0}}},
+	},
+	{ // face 16
+		{{{90, 0}, {77, 0}, {63, 0}}, {{80, 0}, {68, 0}, {56, 3}}, {{72, 1}, {60, 3}, {46, 3}}},
+		{{{106, 0}, {93, 0}, {79, 5}}, {{99, 1}, {90, 0}, {77, 0}}, {{88, 1}, {80, 0}, {68, 0}}},
+		{{{117, 3}, {109, 5}, {95, 5}}, {{113, 1}, {106, 0}, {93, 0}}, {{105, 1}, {99, 1}, {90, 0}}},
+	},
+	{ // face 17
+		{{{105, 0}, {88, 0}, {72, 0}}, {{103, 0}, {91, 0}, {73, 3}}, {{97, 1}, {89, 3}, {71, 3}}},
+		{{{113, 0}, {99, 0}, {80, 5}}, {{116, 1}, {105, 0}, {88, 0}}, {{111, 1}, {103, 0}, {91, 0}}},
+		{{{117, 2}, {106, 5}, {90, 5}}, {{121, 1}, {113, 0}, {99, 0}}, {{119, 1}, {116, 1}, {105, 0}}},
+	},
+	{ // face 18
+		{{{119, 0}, {111, 0}, {97, 0}}, {{115, 0}, {110, 0}, {98, 3}}, {{107, 1}, {104, 3}, {96, 3}}},
+		{{{121, 0}, {116, 0}, {103, 5}}, {{120, 1}, {119, 0}, {111, 0}}, {{112, 1}, {115, 0}, {110, 0}}},
+		{{{117, 1}, {113, 5}, {105, 5}}, {{118, 1}, {121, 0}, {116, 0}}, {{114, 1}, {120, 1}, {119, 0}}},
+	},
+	{ // face 19
+		{{{114, 0}, {112, 0}, {107, 0}}, {{100, 0}, {102, 0}, {101, 3}}, {{83, 1}, {87, 3}, {85, 3}}},
+		{{{118, 0}, {120, 0}, {115, 5}}, {{108, 1}, {114, 0}, {112, 0}}, {{92, 1}, {100, 0}, {102, 0}}},
+		{{{117, 0}, {121, 5}, {119, 5}}, {{109, 1}, {118, 0}, {120, 0}}, {{95, 1}, {108, 1}, {114, 0}}},
+	},
+}
