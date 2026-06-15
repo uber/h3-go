@@ -266,6 +266,17 @@ func (g LatLng) Cell(resolution int) (Cell, error) {
 	return LatLngToCell(g, resolution)
 }
 
+// LatLngToCellString returns the string representation of the Cell at
+// resolution for a geographic coordinate. It is a convenience wrapper for
+// LatLngToCell followed by Cell.String.
+func LatLngToCellString(latitude, longitude float64, resolution int) (string, error) {
+	cell, err := NewLatLng(latitude, longitude).Cell(resolution)
+	if err != nil {
+		return "", err
+	}
+	return cell.String(), nil
+}
+
 // CellToLatLng returns the geographic centerpoint of a Cell.
 func CellToLatLng(c Cell) (LatLng, error) {
 	var g C.LatLng
