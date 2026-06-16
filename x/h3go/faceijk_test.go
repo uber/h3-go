@@ -48,33 +48,31 @@ func TestVec3ToHex2dFaceCenter(t *testing.T) {
 // TestFaceIjkToH3OutOfRange covers the defensive overflow guards. Face IJK
 // coordinates beyond maxFaceCoord cannot encode a valid cell, so faceIjkToH3
 // reports ErrFailed for both the resolution-0 path and the finer-resolution
-// path (after the aperture-7 reductions). These guards mirror the H3 C library,
-// which marks the equivalent check "should not be possible"; they are
-// unreachable from LatLngToCell with valid finite input.
+// path (after the aperture-7 reductions). These guards are unreachable from
+// LatLngToCell with valid finite input.
 func TestFaceIjkToH3OutOfRange(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name string
-		res  int
+	tests := map[string]struct {
+		giveRes int
 	}{
-		{"resolution 0", 0},
-		{"finer resolution", 1},
+		"resolution_0":     {giveRes: 0},
+		"finer_resolution": {giveRes: 1},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			fijk := faceIJK{face: 0, coord: coordIJK{i: farCoord}}
 
-			got, err := faceIjkToH3(fijk, tt.res)
+			got, err := faceIjkToH3(fijk, tt.giveRes)
 			if !errors.Is(err, ErrFailed) {
-				t.Fatalf("faceIjkToH3 res %d: err = %v, want ErrFailed", tt.res, err)
+				t.Fatalf("faceIjkToH3 res %d: err = %v, want ErrFailed", tt.giveRes, err)
 			}
 
 			if got != 0 {
-				t.Fatalf("faceIjkToH3 res %d: cell = %#x, want 0", tt.res, uint64(got))
+				t.Fatalf("faceIjkToH3 res %d: cell = %#x, want 0", tt.giveRes, uint64(got))
 			}
 		})
 	}
