@@ -43,6 +43,13 @@ const (
 
 	// MaxResolution is the maximum H3 resolution (MAX_H3_RES).
 	MaxResolution = 15
+
+	// NumBaseCells is the number of H3 base cells (NUM_BASE_CELLS).
+	NumBaseCells = 122
+
+	// NumPentagons is the number of H3 pentagons, the same at every resolution
+	// (NUM_PENTAGONS): one per icosahedron vertex.
+	NumPentagons = 12
 )
 
 // IsBaseCellPentagon maps base cell number to whether it is a pentagon. There
