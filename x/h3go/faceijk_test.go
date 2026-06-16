@@ -34,7 +34,7 @@ func TestVec3ToHex2dFaceCenter(t *testing.T) {
 	t.Parallel()
 
 	for f := range faceCenterPoint {
-		face, v := vec3ToHex2d(faceCenterPoint[f], 0)
+		face, v := faceCenterPoint[f].toHex2d(0)
 		if face != f {
 			t.Fatalf("face center %d: closest face = %d, want %d", f, face, f)
 		}
@@ -66,7 +66,7 @@ func TestFaceIjkToH3OutOfRange(t *testing.T) {
 
 			fijk := faceIJK{face: 0, coord: coordIJK{i: farCoord}}
 
-			got, err := faceIjkToH3(fijk, tt.giveRes)
+			got, err := fijk.toH3(tt.giveRes)
 			if !errors.Is(err, ErrFailed) {
 				t.Fatalf("faceIjkToH3 res %d: err = %v, want ErrFailed", tt.giveRes, err)
 			}

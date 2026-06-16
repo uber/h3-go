@@ -29,7 +29,7 @@ func TestIsValidCellBitPatterns(t *testing.T) {
 
 		for m := 0; m <= 0xf; m++ {
 			h := Cell(h3Init) | Cell(m)<<modeOffset
-			if got, want := isValidCell(h), m == cellMode; got != want {
+			if got, want := h.IsValid(), m == cellMode; got != want {
 				t.Fatalf("mode %d: isValidCell = %v, want %v", m, got, want)
 			}
 		}
@@ -40,7 +40,7 @@ func TestIsValidCellBitPatterns(t *testing.T) {
 
 		for i := 0; i < 8; i++ {
 			h := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(i)<<reservedOffset
-			if got, want := isValidCell(h), i == 0; got != want {
+			if got, want := h.IsValid(), i == 0; got != want {
 				t.Fatalf("reserved bits %d: isValidCell = %v, want %v", i, got, want)
 			}
 		}
@@ -53,7 +53,7 @@ func TestIsValidCellBitPatterns(t *testing.T) {
 		highBit <<= bitSize - 1
 
 		h := Cell(h3Init) | Cell(cellMode)<<modeOffset | highBit
-		if isValidCell(h) {
+		if h.IsValid() {
 			t.Fatal("isValidCell should fail when the high bit is set")
 		}
 	})
@@ -62,7 +62,7 @@ func TestIsValidCellBitPatterns(t *testing.T) {
 		t.Parallel()
 
 		h := setH3Index(0, numBaseCells, centerDigit)
-		if isValidCell(h) {
+		if h.IsValid() {
 			t.Fatal("isValidCell should fail for an out-of-range base cell")
 		}
 	})
@@ -71,8 +71,8 @@ func TestIsValidCellBitPatterns(t *testing.T) {
 		t.Parallel()
 
 		// res 1 with the default all-7 digits: digit 1 is invalid.
-		h := setResolution(Cell(h3Init)|Cell(cellMode)<<modeOffset, 1)
-		if isValidCell(h) {
+		h := (Cell(h3Init) | Cell(cellMode)<<modeOffset).setResolution(1)
+		if h.IsValid() {
 			t.Fatal("isValidCell should fail when a used digit is 7")
 		}
 	})
@@ -82,7 +82,7 @@ func TestIsValidCellBitPatterns(t *testing.T) {
 
 		// A cell in a deleted subsequence of pentagon base cell 4.
 		h := setH3Index(1, 4, kAxesDigit)
-		if isValidCell(h) {
+		if h.IsValid() {
 			t.Fatal("isValidCell should fail on a pentagon deleted subsequence")
 		}
 	})
@@ -92,13 +92,13 @@ func TestIsValidCellBitPatterns(t *testing.T) {
 
 		for res := 1; res <= maxResolution; res++ {
 			pent := setH3Index(res, 4, centerDigit) // pentagon center child
-			if !isValidCell(pent) {
+			if !pent.IsValid() {
 				t.Fatalf("res %d: pentagon center child should be valid", res)
 			}
 
 			for d := 0; d <= 6; d++ {
-				h := setIndexDigit(pent, res, d)
-				if got, want := isValidCell(h), d != kAxesDigit; got != want {
+				h := pent.setIndexDigit(res, d)
+				if got, want := h.IsValid(), d != kAxesDigit; got != want {
 					t.Fatalf("res %d digit %d: isValidCell = %v, want %v", res, d, got, want)
 				}
 			}
@@ -110,8 +110,8 @@ func TestIsValidCellBitPatterns(t *testing.T) {
 
 		// A res-0 cell with an unused digit slot set to something other than 7
 		// is invalid: every digit beyond the resolution must be 7.
-		h := setIndexDigit(setH3Index(0, 0, centerDigit), 5, centerDigit)
-		if isValidCell(h) {
+		h := setH3Index(0, 0, centerDigit).setIndexDigit(5, centerDigit)
+		if h.IsValid() {
 			t.Fatal("isValidCell should fail when an unused digit is not 7")
 		}
 	})

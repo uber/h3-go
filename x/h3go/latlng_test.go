@@ -120,6 +120,35 @@ func TestLatLngToCellProjectionSweep(t *testing.T) {
 	}
 }
 
+// TestCellReverseMethods covers the Cell.LatLng and Cell.Boundary method
+// wrappers, which delegate to CellToLatLng and CellToBoundary.
+func TestCellReverseMethods(t *testing.T) {
+	t.Parallel()
+
+	cell, err := LatLngToCell(LatLng{Lat: 37.7749, Lng: -122.4194}, 9)
+	if err != nil {
+		t.Fatalf("LatLngToCell: %v", err)
+	}
+
+	ll, err := cell.LatLng()
+	if err != nil {
+		t.Fatalf("Cell.LatLng(%015x): %v", uint64(cell), err)
+	}
+
+	if got, err := LatLngToCell(ll, cell.Resolution()); err != nil || got != cell {
+		t.Fatalf("Cell.LatLng round trip: got %015x err %v, want %015x", uint64(got), err, uint64(cell))
+	}
+
+	boundary, err := cell.Boundary()
+	if err != nil {
+		t.Fatalf("Cell.Boundary(%015x): %v", uint64(cell), err)
+	}
+
+	if len(boundary) != numHexVerts {
+		t.Fatalf("Cell.Boundary(%015x): %d vertices, want %d", uint64(cell), len(boundary), numHexVerts)
+	}
+}
+
 // assertValidAtRes fails unless LatLngToCell returns a valid cell at res.
 func assertValidAtRes(t *testing.T, lat, lng float64, res int) {
 	t.Helper()
@@ -135,5 +164,58 @@ func assertValidAtRes(t *testing.T, lat, lng float64, res int) {
 
 	if c.Resolution() != res {
 		t.Fatalf("LatLngToCell(%v, %v, %d) = %015x: resolution %d", lat, lng, res, uint64(c), c.Resolution())
+	}
+}
+
+// TestCellToLatLngRoundTrip asserts the strong invariant that re-encoding a
+// cell's own center point at the same resolution yields the original cell. This
+// exercises the whole reverse projection (h3ToFaceIjk, faceIjkToVec3,
+// hex2dToVec3) against the forward pipeline over a rich corpus of base cells,
+// hexagons, and pentagons, including pentagon descendants that reach the
+// pentagon rotation and overage paths.
+func TestCellToLatLngRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range reverseCorpus(t) {
+		ll, err := CellToLatLng(c)
+		if err != nil {
+			t.Fatalf("CellToLatLng(%015x): %v", uint64(c), err)
+		}
+
+		if math.IsNaN(ll.Lat) || math.IsNaN(ll.Lng) ||
+			ll.Lat < -90 || ll.Lat > 90 || ll.Lng < -180 || ll.Lng > 180 {
+			t.Fatalf("CellToLatLng(%015x) = %+v: out of range", uint64(c), ll)
+		}
+
+		got, err := LatLngToCell(ll, c.Resolution())
+		if err != nil {
+			t.Fatalf("LatLngToCell(%+v, %d): %v", ll, c.Resolution(), err)
+		}
+
+		if got != c {
+			t.Fatalf("round trip for %015x: center %+v re-encoded to %015x", uint64(c), ll, uint64(got))
+		}
+	}
+}
+
+// TestCellToLatLngInvalidBaseCell covers the invalid-base-cell error branch of
+// the reverse projection, which is unreachable from a validly constructed cell.
+func TestCellToLatLngInvalidBaseCell(t *testing.T) {
+	t.Parallel()
+
+	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(numBaseCells)<<baseCellOffset
+
+	if _, err := CellToLatLng(bad); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("CellToLatLng(%015x): got %v, want %v", uint64(bad), err, ErrCellInvalid)
+	}
+}
+
+// TestCellToLatLngInvalidIndex is the regression matching the cgo reference: an
+// all-ones index (whose base cell field is out of range) is rejected.
+func TestCellToLatLngInvalidIndex(t *testing.T) {
+	t.Parallel()
+
+	if _, err := CellToLatLng(Cell(0x7fffffffffffffff)); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("CellToLatLng(0x7fffffffffffffff): got %v, want %v", err, ErrCellInvalid)
 	}
 }

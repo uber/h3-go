@@ -68,6 +68,17 @@ func TestIndexFromString(t *testing.T) {
 	}
 }
 
+// TestCellToString covers the CellToString free function; the implementation
+// lives on the method form (Cell.String), which this delegates to.
+func TestCellToString(t *testing.T) {
+	t.Parallel()
+
+	const hex = "8928308280fffff"
+	if got := CellToString(CellFromString(hex)); got != hex {
+		t.Fatalf("CellToString = %q, want %q", got, hex)
+	}
+}
+
 // TestCellTextMarshaling exercises MarshalText / UnmarshalText, including the
 // invalid-input error path.
 func TestCellTextMarshaling(t *testing.T) {

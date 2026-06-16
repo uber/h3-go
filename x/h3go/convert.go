@@ -48,13 +48,13 @@ func CellFromString(s string) Cell {
 
 // CellToString returns the hexadecimal string representation of a Cell.
 func CellToString(c Cell) string {
-	//nolint:gosec // an H3 index is a 64-bit value; int64->uint64 is a lossless reinterpretation.
-	return IndexToString(uint64(c))
+	return c.String()
 }
 
 // String returns the hexadecimal string representation of the cell.
 func (c Cell) String() string {
-	return CellToString(c)
+	//nolint:gosec // an H3 index is a 64-bit value; int64->uint64 is a lossless reinterpretation.
+	return IndexToString(uint64(c))
 }
 
 // MarshalText implements the encoding.TextMarshaler interface.

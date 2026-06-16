@@ -19,7 +19,7 @@ package h3go
 import "iter"
 
 // setResolution returns the cell with its resolution field set to res.
-func setResolution(c Cell, res int) Cell {
+func (c Cell) setResolution(res int) Cell {
 	c &= ^(Cell(resolutionMask) << resolutionOffset)
 	c |= Cell(res) << resolutionOffset
 
@@ -27,38 +27,38 @@ func setResolution(c Cell, res int) Cell {
 }
 
 // reservedBits returns the 3-bit reserved field of the index.
-func reservedBits(c Cell) int {
-	return int(c>>reservedOffset) & 0x7 //nolint:mnd // 3-bit reserved field
+func (c Cell) reservedBits() int {
+	return int(c>>reservedOffset) & 0x7
 }
 
 // zeroIndexDigits zeroes out index digits from start to end inclusive. It is a
 // no-op if start > end.
-func zeroIndexDigits(h Cell, start, end int) Cell {
+func (c Cell) zeroIndexDigits(start, end int) Cell {
 	if start > end {
-		return h
+		return c
 	}
 	// Mask with 0s in the [start, end] digit slots and 1s everywhere else.
 	digits := Cell(1)<<(perDigitOffset*(end-start+1)) - 1
 	mask := ^(digits << (perDigitOffset * (maxResolution - end)))
 
-	return h & mask
+	return c & mask
 }
 
 // hasChildAtRes reports whether childRes is a valid child resolution for c.
-func hasChildAtRes(c Cell, childRes int) bool {
-	parentRes := resolution(c)
+func (c Cell) hasChildAtRes(childRes int) bool {
+	parentRes := c.Resolution()
 	return childRes >= parentRes && childRes <= maxResolution
 }
 
-// cellToChildrenSize returns the exact number of children of c at childRes,
-// handling hexagons and pentagons.
-func cellToChildrenSize(c Cell, childRes int) (int64, error) {
-	if !hasChildAtRes(c, childRes) {
+// childrenSize returns the exact number of children of c at childRes, handling
+// hexagons and pentagons.
+func (c Cell) childrenSize(childRes int) (int64, error) {
+	if !c.hasChildAtRes(childRes) {
 		return 0, ErrResolutionDomain
 	}
 
-	n := childRes - resolution(c)
-	if isPentagonCell(c) {
+	n := childRes - c.Resolution()
+	if c.IsPentagon() {
 		return 1 + 5*(pow7[n]-1)/6, nil
 	}
 
@@ -67,7 +67,7 @@ func cellToChildrenSize(c Cell, childRes int) (int64, error) {
 
 // Parent returns the parent (or grandparent, etc.) of the cell at parentRes.
 func (c Cell) Parent(parentRes int) (Cell, error) {
-	childRes := resolution(c)
+	childRes := c.Resolution()
 	switch {
 	case parentRes < 0 || parentRes > maxResolution:
 		return 0, ErrResolutionDomain
@@ -77,9 +77,9 @@ func (c Cell) Parent(parentRes int) (Cell, error) {
 		return c, nil
 	}
 
-	parentH := setResolution(c, parentRes)
+	parentH := c.setResolution(parentRes)
 	for i := parentRes + 1; i <= childRes; i++ {
-		parentH = setIndexDigit(parentH, i, digitMask)
+		parentH = parentH.setIndexDigit(i, digitMask)
 	}
 
 	return parentH, nil
@@ -87,29 +87,29 @@ func (c Cell) Parent(parentRes int) (Cell, error) {
 
 // ImmediateParent returns the immediate parent of the cell.
 func (c Cell) ImmediateParent() (Cell, error) {
-	return c.Parent(resolution(c) - 1)
+	return c.Parent(c.Resolution() - 1)
 }
 
 // CenterChild returns the center child of the cell at childRes.
 func (c Cell) CenterChild(childRes int) (Cell, error) {
-	if !hasChildAtRes(c, childRes) {
+	if !c.hasChildAtRes(childRes) {
 		return 0, ErrResolutionDomain
 	}
-	h := zeroIndexDigits(c, resolution(c)+1, childRes)
+	h := c.zeroIndexDigits(c.Resolution()+1, childRes)
 
-	return setResolution(h, childRes), nil
+	return h.setResolution(childRes), nil
 }
 
 // Children returns the children (or grandchildren, etc.) of the cell at
 // childRes.
 func (c Cell) Children(childRes int) ([]Cell, error) {
-	size, err := cellToChildrenSize(c, childRes)
+	size, err := c.childrenSize(childRes)
 	if err != nil {
 		return nil, err
 	}
 
 	out := make([]Cell, 0, size)
-	for child := range childCells(c, childRes) {
+	for child := range c.childCells(childRes) {
 		out = append(out, child)
 	}
 
@@ -118,25 +118,25 @@ func (c Cell) Children(childRes int) ([]Cell, error) {
 
 // ImmediateChildren returns the immediate children of the cell.
 func (c Cell) ImmediateChildren() ([]Cell, error) {
-	return c.Children(resolution(c) + 1)
+	return c.Children(c.Resolution() + 1)
 }
 
-// childCells returns an iterator over the children of h at childRes. It yields
-// nothing for invalid input (h == 0, or childRes outside [resolution(h),
+// childCells returns an iterator over the children of c at childRes. It yields
+// nothing for invalid input (c == 0, or childRes outside [resolution(c),
 // maxResolution]).
-func childCells(h Cell, childRes int) iter.Seq[Cell] {
+func (c Cell) childCells(childRes int) iter.Seq[Cell] {
 	return func(yield func(Cell) bool) {
-		parentRes := resolution(h)
-		if h == 0 || childRes < parentRes || childRes > maxResolution {
+		parentRes := c.Resolution()
+		if c == 0 || childRes < parentRes || childRes > maxResolution {
 			return
 		}
 
-		cur := setResolution(zeroIndexDigits(h, parentRes+1, childRes), childRes)
+		cur := c.zeroIndexDigits(parentRes+1, childRes).setResolution(childRes)
 
 		// For pentagons the deleted K-axis (1) digit is skipped; the skip
 		// position moves left as the carry propagates from child toward parent.
 		skipDigit := -1
-		if isPentagonCell(cur) {
+		if cur.IsPentagon() {
 			skipDigit = childRes
 		}
 
@@ -145,7 +145,7 @@ func childCells(h Cell, childRes int) iter.Seq[Cell] {
 				return
 			}
 
-			cur = incrementResDigit(cur, childRes)
+			cur = cur.incrementResDigit(childRes)
 			done := false
 
 			for i := childRes; i >= parentRes; i-- {
@@ -156,15 +156,15 @@ func childCells(h Cell, childRes int) iter.Seq[Cell] {
 				}
 				// Skip the deleted 1 (K axis) digit for a pentagon's children:
 				// the first non-zero digit can never be 1.
-				if i == skipDigit && getIndexDigit(cur, i) == kAxesDigit {
-					cur = incrementResDigit(cur, i)
+				if i == skipDigit && cur.indexDigit(i) == kAxesDigit {
+					cur = cur.incrementResDigit(i)
 					skipDigit--
 
 					break
 				}
 
-				if getIndexDigit(cur, i) == invalidDigit {
-					cur = incrementResDigit(cur, i) // zeroes digit i and carries into i-1
+				if cur.indexDigit(i) == invalidDigit {
+					cur = cur.incrementResDigit(i) // zeroes digit i and carries into i-1
 				} else {
 					break
 				}
@@ -180,17 +180,17 @@ func childCells(h Cell, childRes int) iter.Seq[Cell] {
 // incrementResDigit returns h with the digit at res incremented by one. A digit
 // that overflows past 6 becomes invalidDigit (7); incrementing again zeroes it
 // and carries into the next coarser digit.
-func incrementResDigit(h Cell, res int) Cell {
+func (c Cell) incrementResDigit(res int) Cell {
 	var val Cell = 1
 	val <<= perDigitOffset * (maxResolution - res)
 
-	return h + val
+	return c + val
 }
 
 // validateChildPos returns an error if childPos is out of range for the children
 // of parent at childRes.
-func validateChildPos(childPos int64, parent Cell, childRes int) error {
-	maxChildCount, err := cellToChildrenSize(parent, childRes)
+func (c Cell) validateChildPos(childPos int64, childRes int) error {
+	maxChildCount, err := c.childrenSize(childRes)
 	if err != nil {
 		return err
 	}
@@ -205,23 +205,29 @@ func validateChildPos(childPos int64, parent Cell, childRes int) error {
 // CellToChildPos returns the position of cell within an ordered list of all
 // children of the cell's parent at parentRes.
 func CellToChildPos(cell Cell, parentRes int) (int, error) {
-	childRes := resolution(cell)
+	return cell.ChildPos(parentRes)
+}
+
+// ChildPos returns the position of the cell within an ordered list of all
+// children of the cell's parent at parentRes.
+func (c Cell) ChildPos(parentRes int) (int, error) {
+	childRes := c.Resolution()
 	// Getting the parent catches any resolution errors.
-	parent, err := cell.Parent(parentRes)
+	parent, err := c.Parent(parentRes)
 	if err != nil {
 		return 0, err
 	}
-	parentIsPentagon := isPentagonCell(parent)
+	parentIsPentagon := parent.IsPentagon()
 	var out int64
 
 	if parentIsPentagon {
 		// Pentagon parents skip the 1 digit, so the offsets differ from hexagons.
 		for res := childRes; res > parentRes; res-- {
 			// res-1 is always a valid parent resolution here, so it cannot error.
-			parent, _ = cell.Parent(res - 1)
-			parentIsPentagon = isPentagonCell(parent)
+			parent, _ = c.Parent(res - 1)
+			parentIsPentagon = parent.IsPentagon()
 
-			rawDigit := getIndexDigit(cell, res)
+			rawDigit := c.indexDigit(res)
 			if rawDigit == invalidDigit || (parentIsPentagon && rawDigit == kAxesDigit) {
 				return 0, ErrCellInvalid
 			}
@@ -234,7 +240,7 @@ func CellToChildPos(cell Cell, parentRes int) (int, error) {
 			if digit != centerDigit {
 				hexChildCount := pow7[childRes-res]
 				if parentIsPentagon {
-					out += 1 + 5*(hexChildCount-1)/6 //nolint:mnd // pentagon child-count formula
+					out += 1 + 5*(hexChildCount-1)/6
 				} else {
 					out += hexChildCount
 				}
@@ -244,7 +250,7 @@ func CellToChildPos(cell Cell, parentRes int) (int, error) {
 	} else {
 		// Hexagon offsets are simple powers of 7.
 		for res := childRes; res > parentRes; res-- {
-			digit := getIndexDigit(cell, res)
+			digit := c.indexDigit(res)
 			if digit == invalidDigit {
 				return 0, ErrCellInvalid
 			}
@@ -255,49 +261,49 @@ func CellToChildPos(cell Cell, parentRes int) (int, error) {
 	return int(out), nil
 }
 
-// ChildPos returns the position of the cell within an ordered list of all
-// children of the cell's parent at parentRes.
-func (c Cell) ChildPos(parentRes int) (int, error) {
-	return CellToChildPos(c, parentRes)
-}
-
 // ChildPosToCell returns the child of parent at the given position within an
 // ordered list of all children at childRes.
 func ChildPosToCell(position int, parent Cell, childRes int) (Cell, error) {
+	return parent.ChildPosToCell(position, childRes)
+}
+
+// ChildPosToCell returns the child cell at the given position within an ordered
+// list of all children at childRes.
+func (c Cell) ChildPosToCell(position int, childRes int) (Cell, error) {
 	if childRes < 0 || childRes > maxResolution {
 		return 0, ErrResolutionDomain
 	}
 
-	parentRes := resolution(parent)
+	parentRes := c.Resolution()
 	if childRes < parentRes {
 		return 0, ErrResolutionMismatch
 	}
 
-	if err := validateChildPos(int64(position), parent, childRes); err != nil {
+	if err := c.validateChildPos(int64(position), childRes); err != nil {
 		return 0, err
 	}
 	resOffset := childRes - parentRes
-	child := setResolution(parent, childRes)
+	child := c.setResolution(childRes)
 	idx := int64(position)
 
-	if isPentagonCell(parent) {
+	if c.IsPentagon() {
 		// Pentagon tiles skip the 1 digit, so the offsets differ.
 		inPent := true
 
 		for res := 1; res <= resOffset; res++ {
 			resWidth := pow7[resOffset-res]
 			if inPent {
-				pentWidth := 1 + 5*(resWidth-1)/6 //nolint:mnd // pentagon child-count formula
+				pentWidth := 1 + 5*(resWidth-1)/6
 				if idx < pentWidth {
-					child = setIndexDigit(child, parentRes+res, centerDigit)
+					child = child.setIndexDigit(parentRes+res, centerDigit)
 				} else {
 					idx -= pentWidth
 					inPent = false
-					child = setIndexDigit(child, parentRes+res, int(idx/resWidth)+2) //nolint:mnd // skip K axis
+					child = child.setIndexDigit(parentRes+res, int(idx/resWidth)+2)
 					idx %= resWidth
 				}
 			} else {
-				child = setIndexDigit(child, parentRes+res, int(idx/resWidth))
+				child = child.setIndexDigit(parentRes+res, int(idx/resWidth))
 				idx %= resWidth
 			}
 		}
@@ -305,18 +311,12 @@ func ChildPosToCell(position int, parent Cell, childRes int) (Cell, error) {
 		// Hexagon offsets are simple powers of 7.
 		for res := 1; res <= resOffset; res++ {
 			resWidth := pow7[resOffset-res]
-			child = setIndexDigit(child, parentRes+res, int(idx/resWidth))
+			child = child.setIndexDigit(parentRes+res, int(idx/resWidth))
 			idx %= resWidth
 		}
 	}
 
 	return child, nil
-}
-
-// ChildPosToCell returns the child cell at the given position within an ordered
-// list of all children at childRes.
-func (c Cell) ChildPosToCell(position int, childRes int) (Cell, error) {
-	return ChildPosToCell(position, c, childRes)
 }
 
 // UncompactCells expands a compacted set back to the full set of cells at res.
@@ -328,7 +328,7 @@ func UncompactCells(in []Cell, res int) ([]Cell, error) {
 			continue
 		}
 
-		size, err := cellToChildrenSize(c, res)
+		size, err := c.childrenSize(res)
 		if err != nil {
 			return nil, ErrResolutionMismatch
 		}
@@ -337,7 +337,7 @@ func UncompactCells(in []Cell, res int) ([]Cell, error) {
 	out := make([]Cell, 0, total)
 
 	for _, c := range in {
-		for child := range childCells(c, res) {
+		for child := range c.childCells(res) {
 			out = append(out, child)
 		}
 	}
@@ -352,7 +352,7 @@ func CompactCells(in []Cell) ([]Cell, error) {
 		return []Cell{}, nil
 	}
 
-	if resolution(in[0]) == 0 {
+	if in[0].Resolution() == 0 {
 		// No compaction possible at resolution 0.
 		out := make([]Cell, len(in))
 		copy(out, in)
@@ -364,7 +364,7 @@ func CompactCells(in []Cell) ([]Cell, error) {
 	var output []Cell
 
 	for len(remaining) > 0 {
-		parentRes := resolution(remaining[0]) - 1
+		parentRes := remaining[0].Resolution() - 1
 		if parentRes < 0 {
 			// Compacted all the way up to base cells.
 			output = append(output, remaining...)
@@ -378,7 +378,7 @@ func CompactCells(in []Cell) ([]Cell, error) {
 				continue
 			}
 
-			if reservedBits(c) != 0 {
+			if c.reservedBits() != 0 {
 				return nil, ErrCellInvalid
 			}
 
@@ -392,7 +392,7 @@ func CompactCells(in []Cell) ([]Cell, error) {
 			}
 
 			counts[parent]++
-			if counts[parent] > fullChildCount(parent) {
+			if counts[parent] > parent.fullChildCount() {
 				return nil, ErrDuplicateInput
 			}
 		}
@@ -400,7 +400,7 @@ func CompactCells(in []Cell) ([]Cell, error) {
 		var next []Cell
 
 		for _, parent := range order {
-			if counts[parent] == fullChildCount(parent) {
+			if counts[parent] == parent.fullChildCount() {
 				compactable[parent] = true
 				next = append(next, parent)
 			}
@@ -432,8 +432,8 @@ const (
 // fullChildCount returns the number of immediate children that make a cell's
 // child set complete: 6 for pentagons (the K-axis child is deleted), 7 for
 // hexagons.
-func fullChildCount(c Cell) int {
-	if isPentagonCell(c) {
+func (c Cell) fullChildCount() int {
+	if c.IsPentagon() {
 		return numPentChildren
 	}
 

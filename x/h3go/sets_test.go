@@ -23,27 +23,27 @@ func TestSetH3IndexValue(t *testing.T) {
 	t.Parallel()
 
 	h := setH3Index(5, 12, 1)
-	if resolution(h) != 5 {
-		t.Fatalf("resolution = %d, want 5", resolution(h))
+	if h.Resolution() != 5 {
+		t.Fatalf("resolution = %d, want 5", h.Resolution())
 	}
 
-	if baseCellNumber(h) != 12 {
-		t.Fatalf("base cell = %d, want 12", baseCellNumber(h))
+	if h.BaseCellNumber() != 12 {
+		t.Fatalf("base cell = %d, want 12", h.BaseCellNumber())
 	}
 
-	if mode(h) != cellMode {
-		t.Fatalf("mode = %d, want %d", mode(h), cellMode)
+	if h.mode() != cellMode {
+		t.Fatalf("mode = %d, want %d", h.mode(), cellMode)
 	}
 
 	for r := 1; r <= 5; r++ {
-		if getIndexDigit(h, r) != 1 {
-			t.Fatalf("digit %d = %d, want 1", r, getIndexDigit(h, r))
+		if h.indexDigit(r) != 1 {
+			t.Fatalf("digit %d = %d, want 1", r, h.indexDigit(r))
 		}
 	}
 
 	for r := 6; r <= maxResolution; r++ {
-		if getIndexDigit(h, r) != invalidDigit {
-			t.Fatalf("digit %d = %d, want %d", r, getIndexDigit(h, r), invalidDigit)
+		if h.indexDigit(r) != invalidDigit {
+			t.Fatalf("digit %d = %d, want %d", r, h.indexDigit(r), invalidDigit)
 		}
 	}
 

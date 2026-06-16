@@ -23,11 +23,11 @@ import "github.com/uber/h3-go/v4/internal/h3core"
 func setH3Index(res, baseCell, initDigit int) Cell {
 	h := Cell(h3Init)
 	h |= Cell(cellMode) << modeOffset
-	h = setResolution(h, res)
+	h = h.setResolution(res)
 
 	h |= Cell(baseCell) << baseCellOffset
 	for r := 1; r <= res; r++ {
-		h = setIndexDigit(h, r, initDigit)
+		h = h.setIndexDigit(r, initDigit)
 	}
 
 	return h
