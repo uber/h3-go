@@ -227,6 +227,49 @@ func (c coordIJK) rotate60cw() coordIJK {
 	return out
 }
 
+// sub returns the component-wise difference c - b.
+func (c coordIJK) sub(b coordIJK) coordIJK {
+	return coordIJK{i: c.i - b.i, j: c.j - b.j, k: c.k - b.k}
+}
+
+// distance returns the grid distance between two IJK coordinates: the largest
+// component of their normalized difference (normalization leaves all components
+// non-negative).
+func (c coordIJK) distance(b coordIJK) int {
+	diff := c.sub(b)
+	diff.normalize()
+
+	return max(diff.i, diff.j, diff.k)
+}
+
+// unitToDigit maps an IJK coordinate to its digit if, once normalized, it is the
+// center or one of the six unit neighbors, returning invalidDigit otherwise.
+func (c coordIJK) unitToDigit() int {
+	c.normalize()
+
+	if c.i < 0 || c.i > 1 || c.j < 0 || c.j > 1 || c.k < 0 || c.k > 1 {
+		return invalidDigit
+	}
+
+	return unitIjkToDigitLUT[c.i][c.j][c.k]
+}
+
+// toCube converts an IJK coordinate in place to cube coordinates, suitable for
+// linear interpolation along a grid line.
+func (c *coordIJK) toCube() {
+	c.i = -c.i + c.k
+	c.j = c.j - c.k
+	c.k = -c.i - c.j
+}
+
+// fromCube converts cube coordinates in place back to a normalized IJK
+// coordinate, the inverse of toCube.
+func (c *coordIJK) fromCube() {
+	c.i = -c.i
+	c.k = 0
+	c.normalize()
+}
+
 // downAp3 transforms an IJK coordinate to the next finer resolution on the
 // Class II aperture-3 substrate grid (counterclockwise), then re-normalizes.
 func (c *coordIJK) downAp3() {
@@ -521,6 +564,27 @@ func (c Cell) rotatePent60ccw() Cell {
 
 			if c.leadingNonZeroDigit() == kAxesDigit {
 				c = c.rotate60ccw()
+			}
+		}
+	}
+
+	return c
+}
+
+// rotatePent60cw rotates c 60° clockwise about a pentagon base cell center,
+// skipping the deleted k-axis subsequence as the leading digit is first
+// encountered so the index stays canonical.
+func (c Cell) rotatePent60cw() Cell {
+	foundFirstNonZero := false
+
+	for r := 1; r <= c.Resolution(); r++ {
+		c = c.setIndexDigit(r, rotate60cw(c.indexDigit(r)))
+
+		if !foundFirstNonZero && c.indexDigit(r) != centerDigit {
+			foundFirstNonZero = true
+
+			if c.leadingNonZeroDigit() == kAxesDigit {
+				c = c.rotate60cw()
 			}
 		}
 	}
