@@ -20,7 +20,7 @@ import "testing"
 
 // corpus builds a deterministic set of cells spanning base cells, hexagons, and
 // pentagons across every resolution, for the white-box property and round-trip
-// tests that exercise the public API without the cgo reference.
+// tests that exercise the public API directly.
 func corpus(t *testing.T) []Cell {
 	t.Helper()
 
@@ -36,7 +36,7 @@ func corpus(t *testing.T) []Cell {
 	lats := []float64{-89.9, -45, -23.43, 0, 11.7, 37.7749, 45, 67.1509, 89.9}
 	lngs := []float64{-179.9, -122.4194, -45, 0, 13.4, 100.5, 151.2093, 179.9}
 
-	for res := 0; res <= maxResolution; res++ {
+	for res := 0; res <= MaxResolution; res++ {
 		pents, err := Pentagons(res)
 		if err != nil {
 			t.Fatalf("Pentagons(%d): %v", res, err)

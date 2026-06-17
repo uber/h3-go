@@ -61,7 +61,7 @@ func TestIsValidCellBitPatterns(t *testing.T) {
 	t.Run("base_cell_out_of_range", func(t *testing.T) {
 		t.Parallel()
 
-		h := setH3Index(0, numBaseCells, centerDigit)
+		h := setH3Index(0, NumBaseCells, centerDigit)
 		if h.IsValid() {
 			t.Fatal("isValidCell should fail for an out-of-range base cell")
 		}
@@ -90,7 +90,7 @@ func TestIsValidCellBitPatterns(t *testing.T) {
 	t.Run("more_deleted_subsequence", func(t *testing.T) {
 		t.Parallel()
 
-		for res := 1; res <= maxResolution; res++ {
+		for res := 1; res <= MaxResolution; res++ {
 			pent := setH3Index(res, 4, centerDigit) // pentagon center child
 			if !pent.IsValid() {
 				t.Fatalf("res %d: pentagon center child should be valid", res)
@@ -206,7 +206,7 @@ func TestIntrospectionCorpus(t *testing.T) {
 		}
 
 		res := c.Resolution()
-		if res < 0 || res > maxResolution {
+		if res < 0 || res > MaxResolution {
 			t.Fatalf("cell %015x: resolution %d out of range", uint64(c), res)
 		}
 
@@ -218,7 +218,7 @@ func TestIntrospectionCorpus(t *testing.T) {
 			t.Fatalf("cell %015x: BaseCellNumber method and func disagree", uint64(c))
 		}
 
-		if bc := c.BaseCellNumber(); bc < 0 || bc >= numBaseCells {
+		if bc := c.BaseCellNumber(); bc < 0 || bc >= NumBaseCells {
 			t.Fatalf("cell %015x: base cell %d out of range", uint64(c), bc)
 		}
 

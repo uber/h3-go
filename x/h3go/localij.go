@@ -78,7 +78,7 @@ func (c Cell) cellToLocalIjk(target Cell) (coordIJK, error) {
 	originBaseCell := c.BaseCellNumber()
 	baseCell := target.BaseCellNumber()
 
-	if originBaseCell >= numBaseCells || baseCell >= numBaseCells {
+	if originBaseCell >= NumBaseCells || baseCell >= NumBaseCells {
 		return coordIJK{}, ErrCellInvalid
 	}
 
@@ -208,7 +208,7 @@ func (c Cell) localIjkToCell(ijk coordIJK) (Cell, error) {
 	res := c.Resolution()
 
 	originBaseCell := c.BaseCellNumber()
-	if originBaseCell >= numBaseCells {
+	if originBaseCell >= NumBaseCells {
 		return 0, ErrCellInvalid
 	}
 
