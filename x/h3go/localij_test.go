@@ -1,0 +1,531 @@
+/*
+ * Copyright 2026 Uber Technologies, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package h3go
+
+import (
+	"errors"
+	"testing"
+)
+
+// localIJPairs returns origin/target pairs from the shared grid corpus: each
+// cell paired with the cells in its grid disk, where local IJ is defined.
+func localIJPairs(t *testing.T) [][2]Cell {
+	t.Helper()
+
+	var pairs [][2]Cell
+
+	for _, origin := range gridCorpus(t) {
+		disk, err := origin.GridDisk(2)
+		if err != nil {
+			continue
+		}
+
+		for _, target := range disk {
+			pairs = append(pairs, [2]Cell{origin, target})
+		}
+	}
+
+	return pairs
+}
+
+// TestLocalIJRoundTrip checks that CellToLocalIJ followed by LocalIJToCell
+// recovers the original cell across the corpus, exercising the hexagon and
+// pentagon unfolding paths in both directions.
+func TestLocalIJRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	for _, pair := range localIJPairs(t) {
+		origin, target := pair[0], pair[1]
+
+		ij, err := CellToLocalIJ(origin, target)
+		if err != nil {
+			continue
+		}
+
+		back, err := LocalIJToCell(origin, ij)
+		if err != nil {
+			t.Fatalf("LocalIJToCell(%015x, %v): %v", uint64(origin), ij, err)
+		}
+
+		if back != target {
+			t.Fatalf("round trip (%015x, %015x): got %015x via %v", uint64(origin), uint64(target), uint64(back), ij)
+		}
+	}
+}
+
+// TestCellToLocalIJErrors covers the input-validation and unfolding failure
+// paths of CellToLocalIJ.
+func TestCellToLocalIJErrors(t *testing.T) {
+	t.Parallel()
+
+	origin := CellFromString("8928308280fffff")
+
+	parent, err := origin.ImmediateParent()
+	if err != nil {
+		t.Fatalf("ImmediateParent: %v", err)
+	}
+
+	if _, err := CellToLocalIJ(origin, parent); !errors.Is(err, ErrResolutionMismatch) {
+		t.Fatalf("CellToLocalIJ(res mismatch): got %v, want ErrResolutionMismatch", err)
+	}
+
+	// Base cells far apart cannot be unfolded into a common coordinate space.
+	far := CellFromString("85283473fffffff")
+	farSibling := CellFromString("85f29263fffffff")
+
+	if _, err := CellToLocalIJ(far, farSibling); !errors.Is(err, ErrFailed) {
+		t.Fatalf("CellToLocalIJ(non-neighbor base cells): got %v, want ErrFailed", err)
+	}
+
+	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(numBaseCells)<<baseCellOffset
+	if _, err := CellToLocalIJ(bad, bad); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("CellToLocalIJ(bad base cell): got %v, want ErrCellInvalid", err)
+	}
+
+	if _, err := CellToLocalIJ(origin, origin.setBaseCell(numBaseCells)); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("CellToLocalIJ(bad target base cell): got %v, want ErrCellInvalid", err)
+	}
+}
+
+// TestLocalIJToCellErrors covers the failure paths of LocalIJToCell: an
+// out-of-range coordinate and an invalid origin base cell.
+func TestLocalIJToCellErrors(t *testing.T) {
+	t.Parallel()
+
+	origin := CellFromString("8928308280fffff")
+
+	if _, err := LocalIJToCell(origin, CoordIJ{I: 1 << 20, J: -(1 << 20)}); err == nil {
+		t.Fatal("LocalIJToCell(out of range): got nil error, want failure")
+	}
+
+	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(numBaseCells)<<baseCellOffset
+	if _, err := LocalIJToCell(bad, CoordIJ{I: 0, J: 0}); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("LocalIJToCell(bad origin): got %v, want ErrCellInvalid", err)
+	}
+}
+
+// TestLocalIJRes0 covers the resolution-0 base-cell path of LocalIJToCell,
+// including moving off a base cell to a neighbor and an invalid move.
+func TestLocalIJRes0(t *testing.T) {
+	t.Parallel()
+
+	res0, err := Res0Cells()
+	if err != nil {
+		t.Fatalf("Res0Cells: %v", err)
+	}
+
+	for _, origin := range res0 {
+		ij, err := CellToLocalIJ(origin, origin)
+		if err != nil {
+			t.Fatalf("CellToLocalIJ(%015x, self): %v", uint64(origin), err)
+		}
+
+		back, err := LocalIJToCell(origin, ij)
+		if err != nil {
+			t.Fatalf("LocalIJToCell(%015x, %v): %v", uint64(origin), ij, err)
+		}
+
+		if back != origin {
+			t.Fatalf("res0 self round trip (%015x): got %015x", uint64(origin), uint64(back))
+		}
+	}
+}
+
+// TestGridDistance checks grid distance: zero to self, symmetry, and agreement
+// with the ring a cell lies on, across the corpus.
+func TestGridDistance(t *testing.T) {
+	t.Parallel()
+
+	for _, origin := range gridCorpus(t) {
+		if got, err := origin.GridDistance(origin); err != nil || got != 0 {
+			t.Fatalf("GridDistance(self) for %015x: got %d, %v, want 0, nil", uint64(origin), got, err)
+		}
+
+		rings, err := origin.GridDiskDistances(2)
+		if err != nil {
+			t.Fatalf("GridDiskDistances(%015x): %v", uint64(origin), err)
+		}
+
+		for distance, ring := range rings {
+			for _, target := range ring {
+				got, err := GridDistance(origin, target)
+				if err != nil {
+					continue
+				}
+
+				if got != distance {
+					t.Fatalf("GridDistance(%015x, %015x): got %d, want %d", uint64(origin), uint64(target), got, distance)
+				}
+
+				if rev, err := target.GridDistance(origin); err == nil && rev != got {
+					t.Fatalf("GridDistance not symmetric: %d vs %d", got, rev)
+				}
+			}
+		}
+	}
+}
+
+// TestGridPath checks the line of cells: correct length, endpoints, and that
+// consecutive cells are neighbors, across the corpus.
+func TestGridPath(t *testing.T) {
+	t.Parallel()
+
+	for _, pair := range localIJPairs(t) {
+		origin, target := pair[0], pair[1]
+
+		distance, err := origin.GridDistance(target)
+		if err != nil {
+			continue
+		}
+
+		path, err := GridPath(origin, target)
+		if err != nil {
+			continue
+		}
+
+		if len(path) != distance+1 {
+			t.Fatalf("GridPath(%015x, %015x): len %d, want %d", uint64(origin), uint64(target), len(path), distance+1)
+		}
+
+		if path[0] != origin || path[len(path)-1] != target {
+			t.Fatalf("GridPath(%015x, %015x): endpoints %015x..%015x", uint64(origin), uint64(target), uint64(path[0]), uint64(path[len(path)-1]))
+		}
+
+		for i := 1; i < len(path); i++ {
+			neighbor, err := path[i-1].IsNeighbor(path[i])
+			if err != nil {
+				t.Fatalf("IsNeighbor(%015x, %015x): %v", uint64(path[i-1]), uint64(path[i]), err)
+			}
+
+			if !neighbor {
+				t.Fatalf("GridPath(%015x, %015x): step %d not adjacent", uint64(origin), uint64(target), i)
+			}
+		}
+	}
+}
+
+// TestGridPathSelf covers the zero-distance short circuit of GridPath.
+func TestGridPathSelf(t *testing.T) {
+	t.Parallel()
+
+	origin := CellFromString("8928308280fffff")
+
+	path, err := origin.GridPath(origin)
+	if err != nil {
+		t.Fatalf("GridPath(self): %v", err)
+	}
+
+	if len(path) != 1 || path[0] != origin {
+		t.Fatalf("GridPath(self): got %v, want [origin]", path)
+	}
+}
+
+// TestGridMetricsErrorsPropagate checks that GridDistance and GridPath surface
+// the failure when the two cells cannot share a local coordinate space.
+func TestGridMetricsErrorsPropagate(t *testing.T) {
+	t.Parallel()
+
+	far := CellFromString("85283473fffffff")
+	farSibling := CellFromString("85f29263fffffff")
+
+	if _, err := GridDistance(far, farSibling); err == nil {
+		t.Fatal("GridDistance(far): got nil error, want failure")
+	}
+
+	if _, err := GridPath(far, farSibling); err == nil {
+		t.Fatal("GridPath(far): got nil error, want failure")
+	}
+
+	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(numBaseCells)<<baseCellOffset
+	if _, err := GridDistance(bad, bad); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("GridDistance(bad): got %v, want ErrCellInvalid", err)
+	}
+}
+
+// TestLocalIJPentagonUnfold exercises the pentagon unfolding paths in both
+// directions: each pentagon paired with the cells around it as both origin and
+// target. Reachable pairs round trip; unreachable ones (across pentagon
+// distortion) return an error, exercising the unfold failure branches.
+func TestLocalIJPentagonUnfold(t *testing.T) {
+	t.Parallel()
+
+	for _, res := range []int{1, 2, 3} {
+		pents, err := Pentagons(res)
+		if err != nil {
+			t.Fatalf("Pentagons(%d): %v", res, err)
+		}
+
+		for _, pentagon := range pents {
+			neighborhood, err := pentagon.GridDisk(4)
+			if err != nil {
+				t.Fatalf("GridDisk(%015x): %v", uint64(pentagon), err)
+			}
+
+			for _, cell := range neighborhood {
+				assertLocalIJRoundTrip(t, pentagon, cell)
+				assertLocalIJRoundTrip(t, cell, pentagon)
+			}
+		}
+	}
+}
+
+// assertLocalIJRoundTrip checks that, when CellToLocalIJ succeeds, LocalIJToCell
+// recovers the target. Failures are allowed (pentagon distortion) and skipped.
+func assertLocalIJRoundTrip(t *testing.T, origin, target Cell) {
+	t.Helper()
+
+	ij, err := CellToLocalIJ(origin, target)
+	if err != nil {
+		return
+	}
+
+	back, err := LocalIJToCell(origin, ij)
+	if err != nil {
+		return
+	}
+
+	if back != target {
+		t.Fatalf("round trip (%015x, %015x): got %015x via %v", uint64(origin), uint64(target), uint64(back), ij)
+	}
+}
+
+// TestLocalIJRes0Errors covers the resolution-0 failure paths of LocalIJToCell:
+// an out-of-range coordinate and a move off a pentagon in the deleted direction.
+func TestLocalIJRes0Errors(t *testing.T) {
+	t.Parallel()
+
+	res0, err := Res0Cells()
+	if err != nil {
+		t.Fatalf("Res0Cells: %v", err)
+	}
+
+	if _, err := LocalIJToCell(res0[0], CoordIJ{I: 5, J: 5}); !errors.Is(err, ErrFailed) {
+		t.Fatalf("LocalIJToCell(res0, out of range): got %v, want ErrFailed", err)
+	}
+
+	pents, err := Pentagons(0)
+	if err != nil {
+		t.Fatalf("Pentagons(0): %v", err)
+	}
+
+	// The k-axis direction is deleted at a pentagon; {I:-1,J:-1} maps to it.
+	if _, err := LocalIJToCell(pents[0], CoordIJ{I: -1, J: -1}); !errors.Is(err, ErrFailed) {
+		t.Fatalf("LocalIJToCell(res0 pentagon, deleted dir): got %v, want ErrFailed", err)
+	}
+}
+
+// TestGridPathLongLine exercises a longer interpolated line, reaching the
+// rounding cases of the cube-coordinate path construction.
+func TestGridPathLongLine(t *testing.T) {
+	t.Parallel()
+
+	origin := CellFromString("8928308280fffff")
+
+	rings, err := origin.GridDiskDistances(6)
+	if err != nil {
+		t.Fatalf("GridDiskDistances: %v", err)
+	}
+
+	for _, target := range rings[6] {
+		path, err := GridPath(origin, target)
+		if err != nil {
+			continue
+		}
+
+		if len(path) != 7 {
+			t.Fatalf("GridPath(%015x, %015x): len %d, want 7", uint64(origin), uint64(target), len(path))
+		}
+	}
+}
+
+// res2Cell builds a resolution-2 cell with the given base cell and center digits.
+func res2Cell(baseCell int) Cell {
+	cell := Cell(h3Init) | Cell(cellMode)<<modeOffset
+	cell = cell.setResolution(2).setBaseCell(baseCell)
+	cell = cell.setIndexDigit(1, centerDigit).setIndexDigit(2, centerDigit)
+
+	return cell
+}
+
+// TestLocalIJDefensive covers the invalid-input branches of the local IJ
+// conversions that a validly constructed cell cannot reach, using malformed
+// pentagon indexes whose corrupt leading digit drives the failure paths.
+func TestLocalIJDefensive(t *testing.T) {
+	t.Parallel()
+
+	pent, err := Pentagons(2)
+	if err != nil {
+		t.Fatalf("Pentagons(2): %v", err)
+	}
+
+	pentagon := pent[0]
+	baseCell := pentagon.BaseCellNumber()
+
+	neighborBC := invalidBaseCell
+
+	for dir := 1; dir < numDigits; dir++ {
+		candidate := baseCellNeighbors[baseCell][dir]
+		if candidate != invalidBaseCell && candidate != baseCell {
+			neighborBC = candidate
+			break
+		}
+	}
+
+	neighbor := res2Cell(neighborBC)
+
+	// A pentagon index whose leading digit is the unused sentinel.
+	corruptLead := pentagon.setIndexDigit(1, invalidDigit)
+	// A pentagon index whose leading digit is the deleted k axis.
+	corruptK := pentagon.setIndexDigit(1, kAxesDigit)
+
+	// cellToLocalIjk: invalid leading digit on the pentagon origin / index.
+	if _, err := corruptLead.cellToLocalIjk(neighbor); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("cellToLocalIjk(corrupt origin): got %v, want ErrCellInvalid", err)
+	}
+
+	if _, err := neighbor.cellToLocalIjk(corruptLead); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("cellToLocalIjk(corrupt index): got %v, want ErrCellInvalid", err)
+	}
+
+	if _, err := corruptLead.cellToLocalIjk(pentagon); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("cellToLocalIjk(corrupt same pentagon): got %v, want ErrCellInvalid", err)
+	}
+
+	// cellToLocalIjk: a k-axis leading digit selects a -1 rotation entry.
+	if _, err := corruptK.cellToLocalIjk(neighbor); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("cellToLocalIjk(k-axis origin): got %v, want ErrCellInvalid", err)
+	}
+
+	// localIjkToCell via LocalIJToCell, using coordinates that map to a neighbor
+	// (dir != center) and to the origin itself (dir == center).
+	disk, err := pentagon.GridDisk(1)
+	if err != nil {
+		t.Fatalf("GridDisk: %v", err)
+	}
+
+	var neighborCell Cell
+
+	for _, cell := range disk {
+		if cell != pentagon {
+			neighborCell = cell
+			break
+		}
+	}
+
+	neighborIJ, err := CellToLocalIJ(pentagon, neighborCell)
+	if err != nil {
+		t.Fatalf("CellToLocalIJ(neighbor): %v", err)
+	}
+
+	selfIJ, err := CellToLocalIJ(pentagon, pentagon)
+	if err != nil {
+		t.Fatalf("CellToLocalIJ(self): %v", err)
+	}
+
+	if _, err := LocalIJToCell(corruptLead, neighborIJ); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("LocalIJToCell(corrupt origin, neighbor): got %v, want ErrCellInvalid", err)
+	}
+
+	if _, err := LocalIJToCell(corruptLead, selfIJ); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("LocalIJToCell(corrupt origin, self): got %v, want ErrCellInvalid", err)
+	}
+
+	if _, err := LocalIJToCell(corruptK, neighborIJ); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("LocalIJToCell(k-axis origin, neighbor): got %v, want ErrCellInvalid", err)
+	}
+
+	if _, err := LocalIJToCell(corruptK, selfIJ); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("LocalIJToCell(k-axis origin, self): got %v, want ErrCellInvalid", err)
+	}
+
+	// A coordinate that resolves to a different base cell (dir != center at the
+	// base-cell level) drives the localIjkToCell pentagon-origin branches that a
+	// same-base-cell neighbor cannot reach. Such a cell is several rings out.
+	disk4, err := pentagon.GridDisk(4)
+	if err != nil {
+		t.Fatalf("GridDisk(4): %v", err)
+	}
+
+	var crossCell Cell
+
+	for _, cell := range disk4 {
+		if cell.BaseCellNumber() != baseCell {
+			crossCell = cell
+			break
+		}
+	}
+
+	crossIJ, err := CellToLocalIJ(pentagon, crossCell)
+	if err != nil {
+		t.Fatalf("CellToLocalIJ(cross): %v", err)
+	}
+
+	if _, err := LocalIJToCell(corruptLead, crossIJ); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("LocalIJToCell(corrupt origin, cross): got %v, want ErrCellInvalid", err)
+	}
+
+	if _, err := LocalIJToCell(corruptK, crossIJ); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("LocalIJToCell(k-axis origin, cross): got %v, want ErrCellInvalid", err)
+	}
+
+	// A coordinate pointing in the deleted k direction is undefined at a pentagon.
+	kOffset := coordIJK{}.neighbor(kAxesDigit)
+
+	for r := pentagon.Resolution() - 1; r >= 0; r-- {
+		if isResClassIII(r + 1) {
+			kOffset.downAp7()
+		} else {
+			kOffset.downAp7r()
+		}
+	}
+
+	if _, err := pentagon.localIjkToCell(kOffset); !errors.Is(err, ErrPentagon) {
+		t.Fatalf("localIjkToCell(k direction): got %v, want ErrPentagon", err)
+	}
+}
+
+// TestCellToLocalIJPentagonUnfoldFails covers the index-on-pentagon failed
+// unfold branch: a hexagon origin and an index in a neighboring pentagon base
+// cell whose relative direction cannot be unfolded across an icosahedron face.
+func TestCellToLocalIJPentagonUnfoldFails(t *testing.T) {
+	t.Parallel()
+
+	origin := CellFromString("81003ffffffffff")
+	index := CellFromString("8108bffffffffff")
+
+	if _, err := CellToLocalIJ(origin, index); !errors.Is(err, ErrFailed) {
+		t.Fatalf("CellToLocalIJ(hex, pentagon-base-cell across faces): got %v, want ErrFailed", err)
+	}
+}
+
+// TestGridPathInterpolateError covers the self-conversion error path of the
+// interpolation helper, reached when its anchor origin is itself invalid.
+func TestGridPathInterpolateError(t *testing.T) {
+	t.Parallel()
+
+	pent, err := Pentagons(2)
+	if err != nil {
+		t.Fatalf("Pentagons(2): %v", err)
+	}
+
+	corrupt := pent[0].setIndexDigit(1, invalidDigit)
+	out := make([]Cell, 2)
+
+	if err := gridPathInterpolate(corrupt, pent[0], 1, out, 0, 1); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("gridPathInterpolate(corrupt anchor): got %v, want ErrCellInvalid", err)
+	}
+}
