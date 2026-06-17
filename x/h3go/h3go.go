@@ -118,6 +118,10 @@ const (
 	// radsToDegs converts radians to degrees by multiplying radians by this constant.
 	radsToDegs = 180.0 / math.Pi
 
+	// earthRadiusKm is the authalic (equal-area) radius of the Earth in
+	// kilometers, used to convert spherical measures to physical units.
+	earthRadiusKm = 6371.007180918475
+
 	// h3Init has all 15 digit slots set to 7 (invalid); mode/res/base cell are 0.
 	h3Init = 35184372088831
 
