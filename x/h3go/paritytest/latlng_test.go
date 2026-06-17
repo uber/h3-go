@@ -147,3 +147,31 @@ func TestLatLngToCellErrorParity(t *testing.T) {
 		})
 	}
 }
+
+// TestLatLngHelpersMatchCgo checks NewLatLng, LatLng.Cell, LatLng.String, and
+// LatLngToCellString against the cgo reference.
+func TestLatLngHelpersMatchCgo(t *testing.T) {
+	t.Parallel()
+
+	for _, p := range corpusPoints {
+		for res := 0; res <= h3.MaxResolution; res++ {
+			wantCell, wantErr := h3.NewLatLng(p.Lat, p.Lng).Cell(res)
+			gotCell, gotErr := h3go.NewLatLng(p.Lat, p.Lng).Cell(res)
+
+			if !bothErr(wantErr, gotErr) || h3go.Cell(wantCell) != gotCell {
+				t.Fatalf("LatLng.Cell(%v,%d): cgo=%015x(%v) h3go=%015x(%v)", p, res, uint64(wantCell), wantErr, uint64(gotCell), gotErr)
+			}
+
+			wantStr, wantErr := h3.LatLngToCellString(p.Lat, p.Lng, res)
+			gotStr, gotErr := h3go.LatLngToCellString(p.Lat, p.Lng, res)
+
+			if !bothErr(wantErr, gotErr) || wantStr != gotStr {
+				t.Fatalf("LatLngToCellString(%v,%d): cgo=%q h3go=%q", p, res, wantStr, gotStr)
+			}
+		}
+
+		if want, got := h3.NewLatLng(p.Lat, p.Lng).String(), h3go.NewLatLng(p.Lat, p.Lng).String(); want != got {
+			t.Fatalf("LatLng.String(%v): cgo=%q h3go=%q", p, want, got)
+		}
+	}
+}

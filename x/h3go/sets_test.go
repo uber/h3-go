@@ -41,7 +41,7 @@ func TestSetH3IndexValue(t *testing.T) {
 		}
 	}
 
-	for r := 6; r <= maxResolution; r++ {
+	for r := 6; r <= MaxResolution; r++ {
 		if h.indexDigit(r) != invalidDigit {
 			t.Fatalf("digit %d = %d, want %d", r, h.indexDigit(r), invalidDigit)
 		}
@@ -62,14 +62,23 @@ func TestRes0Cells(t *testing.T) {
 		t.Fatalf("Res0Cells: %v", err)
 	}
 
-	if len(cells) != numBaseCells {
-		t.Fatalf("Res0Cells: got %d cells, want %d", len(cells), numBaseCells)
+	if len(cells) != NumBaseCells {
+		t.Fatalf("Res0Cells: got %d cells, want %d", len(cells), NumBaseCells)
 	}
 
 	for _, c := range cells {
 		if !c.IsValid() || c.Resolution() != 0 {
 			t.Fatalf("Res0Cells: %015x is not a valid res-0 cell", uint64(c))
 		}
+	}
+
+	// testBaseCells.c getRes0Cells regression: the first and last base cells.
+	if cells[0] != 0x8001fffffffffff {
+		t.Fatalf("first base cell: got %015x, want 8001fffffffffff", uint64(cells[0]))
+	}
+
+	if cells[121] != 0x80f3fffffffffff {
+		t.Fatalf("last base cell: got %015x, want 80f3fffffffffff", uint64(cells[121]))
 	}
 }
 
@@ -78,14 +87,14 @@ func TestRes0Cells(t *testing.T) {
 func TestPentagons(t *testing.T) {
 	t.Parallel()
 
-	for res := 0; res <= maxResolution; res++ {
+	for res := 0; res <= MaxResolution; res++ {
 		pents, err := Pentagons(res)
 		if err != nil {
 			t.Fatalf("Pentagons(%d): %v", res, err)
 		}
 
-		if len(pents) != numPentagons {
-			t.Fatalf("Pentagons(%d): got %d, want %d", res, len(pents), numPentagons)
+		if len(pents) != NumPentagons {
+			t.Fatalf("Pentagons(%d): got %d, want %d", res, len(pents), NumPentagons)
 		}
 
 		for _, p := range pents {

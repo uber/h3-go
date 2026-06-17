@@ -30,7 +30,7 @@ import (
 func (v vec3d) closestFace() (face int, sqd float64) {
 	sqd = 5.0
 
-	for f := range numIcosaFaces {
+	for f := range NumIcosaFaces {
 		s := faceCenterPoint[f].distSq(v)
 		if s < sqd {
 			face = f
@@ -721,7 +721,7 @@ func (c Cell) toFaceIjkWithInitializedFijk(fijk faceIJK) (faceIJK, bool) {
 // of range.
 func (c Cell) toFaceIjk() (faceIJK, error) {
 	baseCell := c.BaseCellNumber()
-	if baseCell >= numBaseCells {
+	if baseCell >= NumBaseCells {
 		return faceIJK{}, ErrCellInvalid
 	}
 
@@ -929,4 +929,91 @@ func (fijk faceIJK) pentToVerts(res int) (int, [numPentVerts]faceIJK) {
 	}
 
 	return res, out
+}
+
+// invalidFace marks an unused slot while collecting a cell's icosahedron faces.
+const invalidFace = -1
+
+// IcosahedronFaces returns the icosahedron faces (0-19) that the cell intersects,
+// in no particular order. A hexagon touches one or two faces; a pentagon touches
+// five.
+func (c Cell) IcosahedronFaces() ([]int, error) {
+	res := c.Resolution()
+	isPent := c.IsPentagon()
+
+	// Class II pentagons have every vertex on an icosahedron edge, so the
+	// vertex-based check is ambiguous. Their direct child pentagons cross the
+	// same faces, so use those instead. A Class II pentagon is at an even
+	// resolution below the maximum, so the center child always exists.
+	if isPent && !isResClassIII(res) {
+		childPentagon, _ := c.CenterChild(res + 1)
+
+		return childPentagon.IcosahedronFaces()
+	}
+
+	fijk, err := c.toFaceIjk()
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		vertexCount int
+		fijkVerts   [numHexVerts]faceIJK
+		adjRes      int
+	)
+
+	if isPent {
+		vertexCount = numPentVerts
+
+		var pentVerts [numPentVerts]faceIJK
+
+		adjRes, pentVerts = fijk.pentToVerts(res)
+		copy(fijkVerts[:], pentVerts[:])
+	} else {
+		vertexCount = numHexVerts
+		adjRes, fijkVerts = fijk.toVerts(res)
+	}
+
+	// A pentagon touches five faces, a hexagon at most two.
+	faceCount := numEdgeCells
+	if isPent {
+		faceCount = numPentVerts
+	}
+
+	faces := make([]int, faceCount)
+	for i := range faces {
+		faces[i] = invalidFace
+	}
+
+	for i := range vertexCount {
+		vert := fijkVerts[i]
+		if isPent {
+			vert, _ = vert.adjustPentVertOverage(adjRes)
+		} else {
+			vert, _ = vert.adjustOverageClassII(adjRes, false, true)
+		}
+
+		// Use the output array as a small hash set: find the first empty slot or
+		// the slot already holding this face.
+		pos := 0
+		for faces[pos] != invalidFace && faces[pos] != vert.face {
+			pos++
+
+			if pos >= faceCount {
+				return nil, ErrFailed
+			}
+		}
+
+		faces[pos] = vert.face
+	}
+
+	out := make([]int, 0, faceCount)
+
+	for _, face := range faces {
+		if face != invalidFace {
+			out = append(out, face)
+		}
+	}
+
+	return out, nil
 }

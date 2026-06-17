@@ -65,7 +65,7 @@ func TestLatLngToCellErrors(t *testing.T) {
 		wantErr error
 	}{
 		"resolution_below_zero": {giveLat: 0, giveLng: 0, giveRes: -1, wantErr: ErrResolutionDomain},
-		"resolution_above_max":  {giveLat: 0, giveLng: 0, giveRes: maxResolution + 1, wantErr: ErrResolutionDomain},
+		"resolution_above_max":  {giveLat: 0, giveLng: 0, giveRes: MaxResolution + 1, wantErr: ErrResolutionDomain},
 		"lat_is_nan":            {giveLat: math.NaN(), giveLng: 0, giveRes: 5, wantErr: ErrLatLngDomain},
 		"lng_is_nan":            {giveLat: 0, giveLng: math.NaN(), giveRes: 5, wantErr: ErrLatLngDomain},
 		"lat_is_pos_inf":        {giveLat: math.Inf(1), giveLng: 0, giveRes: 5, wantErr: ErrLatLngDomain},
@@ -94,7 +94,7 @@ func TestLatLngToCellProjectionSweep(t *testing.T) {
 	lats := []float64{-90, -89.9, -67.5, -45, -23.43, 0, 11.7, 37.7749, 45, 67.1509, 89.9, 90}
 	lngs := []float64{-180, -179.9, -122.4194, -73.9857, -45, 0, 13.4, 100.5, 151.2093, 179.9, 180}
 
-	for res := 0; res <= maxResolution; res++ {
+	for res := 0; res <= MaxResolution; res++ {
 		for _, lat := range lats {
 			for _, lng := range lngs {
 				assertValidAtRes(t, lat, lng, res)
@@ -109,7 +109,7 @@ func TestLatLngToCellProjectionSweep(t *testing.T) {
 		latOffset  = 90.0
 		lngSpan    = 360.0
 		lngOffset  = 180.0
-		resCount   = maxResolution + 1
+		resCount   = MaxResolution + 1
 	)
 
 	rng := rand.New(rand.NewSource(seed))
@@ -203,15 +203,15 @@ func TestCellToLatLngRoundTrip(t *testing.T) {
 func TestCellToLatLngInvalidBaseCell(t *testing.T) {
 	t.Parallel()
 
-	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(numBaseCells)<<baseCellOffset
+	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(NumBaseCells)<<baseCellOffset
 
 	if _, err := CellToLatLng(bad); !errors.Is(err, ErrCellInvalid) {
 		t.Fatalf("CellToLatLng(%015x): got %v, want %v", uint64(bad), err, ErrCellInvalid)
 	}
 }
 
-// TestCellToLatLngInvalidIndex is the regression matching the cgo reference: an
-// all-ones index (whose base cell field is out of range) is rejected.
+// TestCellToLatLngInvalidIndex is the regression for an all-ones index (whose
+// base cell field is out of range), which must be rejected.
 func TestCellToLatLngInvalidIndex(t *testing.T) {
 	t.Parallel()
 
@@ -271,7 +271,7 @@ func TestHexagonAreaAvg(t *testing.T) {
 
 		prevKm, prevM := math.Inf(1), math.Inf(1)
 
-		for res := 0; res <= maxResolution; res++ {
+		for res := 0; res <= MaxResolution; res++ {
 			km, err := HexagonAreaAvgKm2(res)
 			if err != nil {
 				t.Fatalf("HexagonAreaAvgKm2(%d): %v", res, err)
@@ -294,7 +294,7 @@ func TestHexagonAreaAvg(t *testing.T) {
 	t.Run("out_of_range", func(t *testing.T) {
 		t.Parallel()
 
-		for _, res := range []int{-1, maxResolution + 1} {
+		for _, res := range []int{-1, MaxResolution + 1} {
 			if _, err := HexagonAreaAvgKm2(res); !errors.Is(err, ErrResolutionDomain) {
 				t.Fatalf("HexagonAreaAvgKm2(%d): got %v, want %v", res, err, ErrResolutionDomain)
 			}
@@ -324,7 +324,7 @@ func TestHexagonEdgeLengthAvg(t *testing.T) {
 
 		prevKm, prevM := math.Inf(1), math.Inf(1)
 
-		for res := 0; res <= maxResolution; res++ {
+		for res := 0; res <= MaxResolution; res++ {
 			km, err := HexagonEdgeLengthAvgKm(res)
 			if err != nil {
 				t.Fatalf("HexagonEdgeLengthAvgKm(%d): %v", res, err)
@@ -346,7 +346,7 @@ func TestHexagonEdgeLengthAvg(t *testing.T) {
 	t.Run("out_of_range", func(t *testing.T) {
 		t.Parallel()
 
-		for _, res := range []int{-1, maxResolution + 1} {
+		for _, res := range []int{-1, MaxResolution + 1} {
 			if _, err := HexagonEdgeLengthAvgKm(res); !errors.Is(err, ErrResolutionDomain) {
 				t.Fatalf("HexagonEdgeLengthAvgKm(%d): got %v, want %v", res, err, ErrResolutionDomain)
 			}
@@ -356,4 +356,115 @@ func TestHexagonEdgeLengthAvg(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestNewLatLngAndCell covers the NewLatLng constructor and the LatLng.Cell
+// method form of LatLngToCell.
+func TestNewLatLngAndCell(t *testing.T) {
+	t.Parallel()
+
+	ll := NewLatLng(37.775, -122.418)
+	if ll.Lat != 37.775 || ll.Lng != -122.418 {
+		t.Fatalf("NewLatLng: got %+v", ll)
+	}
+
+	viaMethod, err := ll.Cell(9)
+	if err != nil {
+		t.Fatalf("LatLng.Cell: %v", err)
+	}
+
+	viaFunc, err := LatLngToCell(ll, 9)
+	if err != nil {
+		t.Fatalf("LatLngToCell: %v", err)
+	}
+
+	if viaMethod != viaFunc {
+		t.Fatalf("LatLng.Cell %015x != LatLngToCell %015x", uint64(viaMethod), uint64(viaFunc))
+	}
+
+	if _, err := ll.Cell(-1); !errors.Is(err, ErrResolutionDomain) {
+		t.Fatalf("LatLng.Cell(-1): got %v, want ErrResolutionDomain", err)
+	}
+}
+
+// TestLatLngString covers the LatLng stringer formatting.
+func TestLatLngString(t *testing.T) {
+	t.Parallel()
+
+	if got := NewLatLng(37.775, -122.418).String(); got != "(37.77500, -122.41800)" {
+		t.Fatalf("LatLng.String: got %q", got)
+	}
+}
+
+// TestLatLngToCellString covers the coordinate-to-cell-string helper and its
+// error path.
+func TestLatLngToCellString(t *testing.T) {
+	t.Parallel()
+
+	got, err := LatLngToCellString(37.775, -122.418, 9)
+	if err != nil {
+		t.Fatalf("LatLngToCellString: %v", err)
+	}
+
+	want, err := LatLngToCell(NewLatLng(37.775, -122.418), 9)
+	if err != nil {
+		t.Fatalf("LatLngToCell: %v", err)
+	}
+
+	if got != want.String() {
+		t.Fatalf("LatLngToCellString: got %q, want %q", got, want.String())
+	}
+
+	if _, err := LatLngToCellString(0, 0, 16); !errors.Is(err, ErrResolutionDomain) {
+		t.Fatalf("LatLngToCellString(res 16): got %v, want ErrResolutionDomain", err)
+	}
+}
+
+// TestLatLngToCellExtremeCoordinates ports the testH3Index.c
+// latLngToCellExtremeCoordinates regression: absurd but finite coordinates must
+// not crash and must yield a cell without error.
+func TestLatLngToCellExtremeCoordinates(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		giveLatLng LatLng
+		giveRes    int
+	}{
+		"huge_lng":      {giveLatLng: LatLng{Lat: 0, Lng: 1e45}, giveRes: 14},
+		"huge_lat_lng":  {giveLatLng: LatLng{Lat: 1e46, Lng: 1e45}, giveRes: 15},
+		"huge_negative": {giveLatLng: LatLng{Lat: 2, Lng: -3e39}, giveRes: 0},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if _, err := LatLngToCell(tt.giveLatLng, tt.giveRes); err != nil {
+				t.Fatalf("LatLngToCell: got %v, want success", err)
+			}
+		})
+	}
+}
+
+// TestGreatCircleDistanceWrappedLongitude ports the testLatLng.c
+// distanceRads_wrappedLongitude regression: a longitude difference greater than
+// 180° (here -270°) measures the short way around, π/2.
+func TestGreatCircleDistanceWrappedLongitude(t *testing.T) {
+	t.Parallel()
+
+	negativeLongitude := LatLng{Lat: 0, Lng: -270}
+	zero := LatLng{Lat: 0, Lng: 0}
+
+	const wantRads = math.Pi / 2
+
+	// Matches the C reference's EPSILON_RAD (EPSILON_DEG 1e-9, in radians).
+	const epsilonRad = 1e-9 * DegsToRads
+
+	if got := GreatCircleDistanceRads(negativeLongitude, zero); math.Abs(got-wantRads) >= epsilonRad {
+		t.Fatalf("GreatCircleDistanceRads: got %v, want %v", got, wantRads)
+	}
+
+	if got := GreatCircleDistanceRads(zero, negativeLongitude); math.Abs(got-wantRads) >= epsilonRad {
+		t.Fatalf("GreatCircleDistanceRads (swapped): got %v, want %v", got, wantRads)
+	}
 }

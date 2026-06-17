@@ -72,13 +72,13 @@ func (b CellBoundary) areaRads2() float64 {
 // arc from ll to other (lat/lng in degrees), following the d3-geo spherical-area
 // formulation.
 func (ll LatLng) cagnoli(other LatLng) float64 {
-	lat := ll.Lat*degsToRads/2 + math.Pi/4
-	otherLat := other.Lat*degsToRads/2 + math.Pi/4
+	lat := ll.Lat*DegsToRads/2 + math.Pi/4
+	otherLat := other.Lat*DegsToRads/2 + math.Pi/4
 
 	sa := math.Sin(lat) * math.Sin(otherLat)
 	ca := math.Cos(lat) * math.Cos(otherLat)
 
-	delta := (other.Lng - ll.Lng) * degsToRads
+	delta := (other.Lng - ll.Lng) * DegsToRads
 	sinDelta := math.Sin(delta)
 	cosDelta := math.Cos(delta)
 

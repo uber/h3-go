@@ -37,19 +37,47 @@ type LatLng struct {
 // distortion vertices.
 type CellBoundary []LatLng
 
-// Error codes. Messages mirror the cgo-backed h3 package so the two
-// implementations report equivalent failures.
+// Error codes. Messages mirror the H3 C library's error strings.
 var (
-	ErrFailed              = errors.New("the operation failed")
-	ErrDomain              = errors.New("argument was outside of acceptable range")
-	ErrLatLngDomain        = errors.New("latitude or longitude arguments were outside of acceptable range")
-	ErrResolutionDomain    = errors.New("resolution argument was outside of acceptable range")
-	ErrResolutionMismatch  = errors.New("H3Index cell arguments had incompatible resolutions")
-	ErrCellInvalid         = errors.New("H3Index cell argument was not valid")
-	ErrDirectedEdgeInvalid = errors.New("H3Index directed edge argument was not valid")
-	ErrNotNeighbors        = errors.New("H3Index cell arguments were not neighbors")
-	ErrDuplicateInput      = errors.New("duplicate input was encountered in the arguments")
-	ErrPentagon            = errors.New("pentagon distortion was encountered")
+	ErrFailed                = errors.New("the operation failed")
+	ErrDomain                = errors.New("argument was outside of acceptable range")
+	ErrLatLngDomain          = errors.New("latitude or longitude arguments were outside of acceptable range")
+	ErrResolutionDomain      = errors.New("resolution argument was outside of acceptable range")
+	ErrResolutionMismatch    = errors.New("H3Index cell arguments had incompatible resolutions")
+	ErrCellInvalid           = errors.New("H3Index cell argument was not valid")
+	ErrDirectedEdgeInvalid   = errors.New("H3Index directed edge argument was not valid")
+	ErrNotNeighbors          = errors.New("H3Index cell arguments were not neighbors")
+	ErrDuplicateInput        = errors.New("duplicate input was encountered in the arguments")
+	ErrPentagon              = errors.New("pentagon distortion was encountered")
+	ErrMemoryAlloc           = errors.New("necessary memory allocation failed")
+	ErrMemoryBounds          = errors.New("bounds of provided memory were not large enough")
+	ErrOptionInvalid         = errors.New("mode or flags argument was not valid")
+	ErrUndirectedEdgeInvalid = errors.New("H3Index undirected edge argument was not valid")
+	ErrVertexInvalid         = errors.New("H3Index vertex argument was not valid")
+	ErrIndexInvalid          = errors.New("index argument was not valid")
+	ErrBaseCellDomain        = errors.New("base cell number was outside of acceptable range")
+	ErrDigitDomain           = errors.New("child digits invalid")
+	ErrDeletedDigit          = errors.New("deleted subsequence indicates invalid index")
+)
+
+// Exported limits and conversion constants, matching the H3 C library.
+const (
+	// MaxResolution is the finest H3 resolution.
+	MaxResolution = h3core.MaxResolution
+	// MaxCellBndryVerts is the maximum number of vertices in a CellBoundary.
+	MaxCellBndryVerts = 10
+	// NumBaseCells is the number of resolution-0 base cells.
+	NumBaseCells = h3core.NumBaseCells
+	// NumIcosaFaces is the number of faces on the icosahedron.
+	NumIcosaFaces = 20
+	// NumPentagons is the number of pentagons at each resolution.
+	NumPentagons = h3core.NumPentagons
+	// InvalidH3Index is the zero value returned for an invalid index.
+	InvalidH3Index = 0
+	// DegsToRads converts degrees to radians when multiplied.
+	DegsToRads = math.Pi / 180.0
+	// RadsToDegs converts radians to degrees when multiplied.
+	RadsToDegs = 180.0 / math.Pi
 )
 
 // Internal types for the pure Go projection pipeline.
@@ -98,7 +126,6 @@ const (
 	invRes0UGnomonic = 2.61803398874989588842
 	res0UGnomonic    = 0.38196601125010500003
 	maxFaceCoord     = 2
-	numIcosaFaces    = 20
 
 	// numHexVerts and numPentVerts are the topological vertex counts of a
 	// hexagon and a pentagon cell, respectively.
@@ -106,8 +133,8 @@ const (
 	numPentVerts = 5
 
 	// fltEpsilon is the 32-bit float epsilon used to detect when a cell-boundary
-	// edge intersection coincides with an existing vertex (matching the cgo
-	// reference, which compares with FLT_EPSILON).
+	// edge intersection coincides with an existing vertex, matching the H3 C
+	// library's use of FLT_EPSILON.
 	fltEpsilon = 1.1920928955078125e-07
 
 	// faceNeighbors quadrant indices: the direction from a face to the adjacent
@@ -115,11 +142,6 @@ const (
 	dirIJ = 1
 	dirKI = 2
 	dirJK = 3
-
-	// degsToRads converts degrees to radians by multiplying degrees by this constant.
-	degsToRads = math.Pi / 180.0
-	// radsToDegs converts radians to degrees by multiplying radians by this constant.
-	radsToDegs = 180.0 / math.Pi
 
 	// earthRadiusKm is the authalic (equal-area) radius of the Earth in
 	// kilometers, used to convert spherical measures to physical units.
@@ -138,7 +160,7 @@ const (
 	invalidDigit = 7
 	numDigits    = 7
 
-	// H3 index bit-layout offsets and masks, shared with the cgo h3 package.
+	// H3 index bit-layout offsets and masks.
 	cellMode         = h3core.CellMode
 	directedEdgeMode = h3core.DirectedEdgeMode
 	vertexMode       = h3core.VertexMode
@@ -148,7 +170,6 @@ const (
 	perDigitOffset   = h3core.PerDigitOffset
 	digitMask        = h3core.DigitMask
 	resolutionMask   = h3core.ResolutionMask
-	maxResolution    = h3core.MaxResolution
 
 	// numCellEdges is the number of directed edges originating at a cell.
 	numCellEdges = 6
@@ -176,7 +197,7 @@ var unitIjkToDigitLUT = [2][2][2]int{
 	},
 }
 
-var faceCenterPoint = [numIcosaFaces]vec3d{
+var faceCenterPoint = [NumIcosaFaces]vec3d{
 	{0.2199307791404606, 0.6583691780274996, 0.7198475378926182},
 	{-0.2139234834501421, 0.1478171829550703, 0.9656017935214205},
 	{0.1092625278784797, -0.4811951572873210, 0.8697775121287253},
@@ -199,7 +220,7 @@ var faceCenterPoint = [numIcosaFaces]vec3d{
 	{-0.1092625278784796, 0.4811951572873210, -0.8697775121287253},
 }
 
-var faceAxesAzRadsCII = [numIcosaFaces][3]float64{
+var faceAxesAzRadsCII = [NumIcosaFaces][3]float64{
 	{5.619958268523939882, 3.525563166130744542, 1.431168063737548730},
 	{5.760339081714187279, 3.665943979320991689, 1.571548876927796127},
 	{0.780213654393430055, 4.969003859179821079, 2.874608756786625655},
@@ -356,7 +377,7 @@ var unitVecs = [7]coordIJK{
 // coordinate into the adjacent face across each of the three axis-pair edges
 // (plus the identity transform for the face itself at index 0). It is indexed by
 // [face][dir] where dir is one of dirIJ, dirKI, dirJK.
-var faceNeighbors = [numIcosaFaces][4]faceOrientIJK{
+var faceNeighbors = [NumIcosaFaces][4]faceOrientIJK{
 	{ // face 0
 		{0, coordIJK{0, 0, 0}, 0}, // central face
 		{4, coordIJK{2, 0, 2}, 1}, // ij quadrant
@@ -482,7 +503,7 @@ var faceNeighbors = [numIcosaFaces][4]faceOrientIJK{
 // adjacentFaceDir gives the direction (dirIJ/dirKI/dirJK) from the origin face
 // to the destination face, in the origin face's coordinate system, 0 if they
 // are the same face, or -1 if the faces are not adjacent.
-var adjacentFaceDir = [numIcosaFaces][numIcosaFaces]int{
+var adjacentFaceDir = [NumIcosaFaces][NumIcosaFaces]int{
 	{0, dirKI, -1, -1, dirIJ, dirJK, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // face 0
 	{dirIJ, 0, dirKI, -1, -1, -1, dirJK, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // face 1
 	{-1, dirIJ, 0, dirKI, -1, -1, -1, dirJK, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // face 2
@@ -508,21 +529,21 @@ var adjacentFaceDir = [numIcosaFaces][numIcosaFaces]int{
 // maxDimByCIIres is the maximum IJK dimension value, by Class II resolution,
 // used to detect overage past a face edge. Odd (Class III) entries are -1
 // because the overage check operates on Class II grids only.
-var maxDimByCIIres = [maxResolution + 2]int{
+var maxDimByCIIres = [MaxResolution + 2]int{
 	2, -1, 14, -1, 98, -1, 686, -1, 4802, -1, 33614, -1, 235298, -1, 1647086, -1, 11529602,
 }
 
 // unitScaleByCIIres is the unit-scale distance, by Class II resolution, used to
 // translate IJK coordinates onto an adjacent face. Odd entries are -1 for the
 // same reason as maxDimByCIIres.
-var unitScaleByCIIres = [maxResolution + 2]int{
+var unitScaleByCIIres = [MaxResolution + 2]int{
 	1, -1, 7, -1, 49, -1, 343, -1, 2401, -1, 16807, -1, 117649, -1, 823543, -1, 5764801,
 }
 
 // baseCellHomeFijk maps each base cell to its "home" face and the normalized IJK
 // coordinates of its center on that face — the starting point for decoding a
 // cell back into a face-centered coordinate.
-var baseCellHomeFijk = [numBaseCells]faceIJK{
+var baseCellHomeFijk = [NumBaseCells]faceIJK{
 	{1, coordIJK{1, 0, 0}},  // base cell 0
 	{2, coordIJK{1, 1, 0}},  // base cell 1
 	{1, coordIJK{0, 0, 0}},  // base cell 2
@@ -653,7 +674,7 @@ const invalidBaseCell = 127
 
 // baseCellNeighbors[baseCell][dir] is the base cell reached by stepping from
 // baseCell in direction dir, or invalidBaseCell across a pentagon's deleted edge.
-var baseCellNeighbors = [numBaseCells][7]int{
+var baseCellNeighbors = [NumBaseCells][7]int{
 	{0, 1, 5, 2, 4, 3, 8},                       // base cell 0
 	{1, 7, 6, 9, 0, 3, 2},                       // base cell 1
 	{2, 6, 10, 11, 0, 1, 5},                     // base cell 2
@@ -782,7 +803,7 @@ var baseCellNeighbors = [numBaseCells][7]int{
 
 // baseCellNeighbor60CCWRots[baseCell][dir] is the number of 60° ccw rotations
 // to apply when stepping from baseCell in direction dir.
-var baseCellNeighbor60CCWRots = [numBaseCells][7]int{
+var baseCellNeighbor60CCWRots = [NumBaseCells][7]int{
 	{0, 5, 0, 0, 1, 5, 1},  // base cell 0
 	{0, 0, 1, 0, 1, 0, 1},  // base cell 1
 	{0, 0, 0, 0, 0, 5, 0},  // base cell 2

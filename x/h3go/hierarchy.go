@@ -39,7 +39,7 @@ func (c Cell) zeroIndexDigits(start, end int) Cell {
 	}
 	// Mask with 0s in the [start, end] digit slots and 1s everywhere else.
 	digits := Cell(1)<<(perDigitOffset*(end-start+1)) - 1
-	mask := ^(digits << (perDigitOffset * (maxResolution - end)))
+	mask := ^(digits << (perDigitOffset * (MaxResolution - end)))
 
 	return c & mask
 }
@@ -47,7 +47,7 @@ func (c Cell) zeroIndexDigits(start, end int) Cell {
 // hasChildAtRes reports whether childRes is a valid child resolution for c.
 func (c Cell) hasChildAtRes(childRes int) bool {
 	parentRes := c.Resolution()
-	return childRes >= parentRes && childRes <= maxResolution
+	return childRes >= parentRes && childRes <= MaxResolution
 }
 
 // childrenSize returns the exact number of children of c at childRes, handling
@@ -69,7 +69,7 @@ func (c Cell) childrenSize(childRes int) (int64, error) {
 func (c Cell) Parent(parentRes int) (Cell, error) {
 	childRes := c.Resolution()
 	switch {
-	case parentRes < 0 || parentRes > maxResolution:
+	case parentRes < 0 || parentRes > MaxResolution:
 		return 0, ErrResolutionDomain
 	case parentRes > childRes:
 		return 0, ErrResolutionMismatch
@@ -123,11 +123,11 @@ func (c Cell) ImmediateChildren() ([]Cell, error) {
 
 // childCells returns an iterator over the children of c at childRes. It yields
 // nothing for invalid input (c == 0, or childRes outside [resolution(c),
-// maxResolution]).
+// MaxResolution]).
 func (c Cell) childCells(childRes int) iter.Seq[Cell] {
 	return func(yield func(Cell) bool) {
 		parentRes := c.Resolution()
-		if c == 0 || childRes < parentRes || childRes > maxResolution {
+		if c == 0 || childRes < parentRes || childRes > MaxResolution {
 			return
 		}
 
@@ -182,7 +182,7 @@ func (c Cell) childCells(childRes int) iter.Seq[Cell] {
 // and carries into the next coarser digit.
 func (c Cell) incrementResDigit(res int) Cell {
 	var val Cell = 1
-	val <<= perDigitOffset * (maxResolution - res)
+	val <<= perDigitOffset * (MaxResolution - res)
 
 	return c + val
 }
@@ -270,7 +270,7 @@ func ChildPosToCell(position int, parent Cell, childRes int) (Cell, error) {
 // ChildPosToCell returns the child cell at the given position within an ordered
 // list of all children at childRes.
 func (c Cell) ChildPosToCell(position int, childRes int) (Cell, error) {
-	if childRes < 0 || childRes > maxResolution {
+	if childRes < 0 || childRes > MaxResolution {
 		return 0, ErrResolutionDomain
 	}
 
