@@ -82,6 +82,38 @@ func GreatCircleDistanceM(a, b LatLng) float64 {
 	return GreatCircleDistanceKm(a, b) * 1000
 }
 
+// --- Edge lengths ---
+
+// EdgeLengthRads returns the exact length of the directed edge in radians, the
+// sum of the great-circle distances between consecutive boundary vertexes.
+func EdgeLengthRads(e DirectedEdge) (float64, error) {
+	boundary, err := e.Boundary()
+	if err != nil {
+		return 0, err
+	}
+
+	length := 0.0
+	for i := 0; i < len(boundary)-1; i++ {
+		length += GreatCircleDistanceRads(boundary[i], boundary[i+1])
+	}
+
+	return length, nil
+}
+
+// EdgeLengthKm returns the exact length of the directed edge in kilometers.
+func EdgeLengthKm(e DirectedEdge) (float64, error) {
+	rads, err := EdgeLengthRads(e)
+
+	return rads * earthRadiusKm, err
+}
+
+// EdgeLengthM returns the exact length of the directed edge in meters.
+func EdgeLengthM(e DirectedEdge) (float64, error) {
+	km, err := EdgeLengthKm(e)
+
+	return km * 1000, err
+}
+
 // --- Average cell sizes ---
 
 // hexAreaAvgKm2 holds the average hexagon area at each resolution in square
