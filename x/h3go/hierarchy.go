@@ -16,7 +16,10 @@
 
 package h3go
 
-import "iter"
+import (
+	"iter"
+	"slices"
+)
 
 // Child-set sizes: a hexagon has 7 immediate children, a pentagon 6 (its
 // K-axis child is deleted).
@@ -347,8 +350,11 @@ func UncompactCells(in []Cell, res int) ([]Cell, error) {
 	return out, nil
 }
 
-// CompactCells merges full sets of children into their parent recursively,
-// until no more merges are possible. The output order is unspecified.
+// CompactCells merges full sets of children into their parent, repeating up the
+// hierarchy until no more merges are possible. It assumes the input cells share
+// one resolution (the documented contract): sorting then groups every parent's
+// children into one contiguous run, so a single linear scan per level decides
+// which runs are complete. The output order is unspecified.
 func CompactCells(in []Cell) ([]Cell, error) {
 	if len(in) == 0 {
 		return []Cell{}, nil
@@ -361,64 +367,86 @@ func CompactCells(in []Cell) ([]Cell, error) {
 
 		return out, nil
 	}
-	remaining := make([]Cell, len(in))
-	copy(remaining, in)
+
+	remaining := slices.Clone(in)
+
 	var output []Cell
+
+	// next collects the parents promoted to the coarser level; it is rebuilt
+	// each pass and handed back as remaining.
+	var next []Cell
 
 	for len(remaining) > 0 {
 		parentRes := remaining[0].Resolution() - 1
 		if parentRes < 0 {
-			// Compacted all the way up to base cells.
+			// Compacted all the way up to the base cells.
 			output = append(output, remaining...)
 			break
 		}
-		counts := make(map[Cell]int)
 
-		order := make([]Cell, 0, len(remaining))
-		for _, c := range remaining {
-			if c == 0 {
+		// Sorting brings each parent's children together (siblings differ only
+		// in the lowest occupied digit) and pushes any zero padding to the front.
+		slices.Sort(remaining)
+
+		next = next[:0]
+
+		runStart := 0
+		for runStart < len(remaining) {
+			cell := remaining[runStart]
+			if cell == 0 {
+				// Skip zero padding; it never compacts.
+				runStart++
 				continue
 			}
 
-			if reservedBits(c) != 0 {
+			if reservedBits(cell) != 0 {
 				return nil, ErrCellInvalid
 			}
 
-			parent, err := c.Parent(parentRes)
+			parent, err := cell.Parent(parentRes)
 			if err != nil {
 				return nil, err
 			}
 
-			if _, ok := counts[parent]; !ok {
-				order = append(order, parent)
+			// Extend the run over every following cell with the same parent.
+			runEnd := runStart + 1
+			for runEnd < len(remaining) {
+				sibling := remaining[runEnd]
+				if reservedBits(sibling) != 0 {
+					return nil, ErrCellInvalid
+				}
+
+				siblingParent, err := sibling.Parent(parentRes)
+				if err != nil {
+					return nil, err
+				}
+
+				if siblingParent != parent {
+					break
+				}
+
+				runEnd++
 			}
 
-			counts[parent]++
-			if counts[parent] > parent.fullChildCount() {
+			fullCount := parent.fullChildCount()
+			runLen := runEnd - runStart
+
+			switch {
+			case runLen > fullCount:
+				// More children than a parent can hold: duplicate input.
 				return nil, ErrDuplicateInput
-			}
-		}
-		compactable := make(map[Cell]bool)
-		var next []Cell
-
-		for _, parent := range order {
-			if counts[parent] == parent.fullChildCount() {
-				compactable[parent] = true
+			case runLen == fullCount:
+				// A complete set: replace the children with the parent.
 				next = append(next, parent)
-			}
-		}
-
-		for _, c := range remaining {
-			if c == 0 {
-				continue
+			default:
+				// Incomplete: the children stay in the output unchanged.
+				output = append(output, remaining[runStart:runEnd]...)
 			}
 
-			parent, _ := c.Parent(parentRes)
-			if !compactable[parent] {
-				output = append(output, c)
-			}
+			runStart = runEnd
 		}
-		remaining = next
+
+		remaining = append(remaining[:0], next...)
 	}
 
 	return output, nil

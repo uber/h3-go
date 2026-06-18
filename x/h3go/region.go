@@ -144,10 +144,14 @@ func PolygonToCells(polygon GeoPolygon, res int) ([]Cell, error) {
 func polygonFloodStep(polygon GeoPolygon, bboxes []bbox, searchList []Cell, found map[Cell]bool) []Cell {
 	var nextSearch []Cell
 
-	for _, searchHex := range searchList {
-		ring, _ := searchHex.GridDisk(1)
+	// disk is reused across cells so the grid-disk lookup below allocates once
+	// rather than once per search cell.
+	var disk []Cell
 
-		for _, hex := range ring {
+	for _, searchHex := range searchList {
+		disk, _ = searchHex.gridDiskInto(1, disk[:0])
+
+		for _, hex := range disk {
 			if found[hex] {
 				continue
 			}
