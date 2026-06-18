@@ -376,6 +376,10 @@ func CompactCells(in []Cell) ([]Cell, error) {
 	// each pass and handed back as remaining.
 	var next []Cell
 
+	// parents[i] holds the parent of remaining[i], filled fresh each pass by the
+	// validation scan so the run loop can group by it without recomputing.
+	parents := make([]Cell, len(in))
+
 	for len(remaining) > 0 {
 		parentRes := remaining[0].Resolution() - 1
 		if parentRes < 0 {
@@ -388,17 +392,16 @@ func CompactCells(in []Cell) ([]Cell, error) {
 		// in the lowest occupied digit) and pushes any zero padding to the front.
 		slices.Sort(remaining)
 
-		next = next[:0]
+		// Skip zero padding; it never compacts.
+		start := 0
+		for start < len(remaining) && remaining[start] == 0 {
+			start++
+		}
 
-		runStart := 0
-		for runStart < len(remaining) {
-			cell := remaining[runStart]
-			if cell == 0 {
-				// Skip zero padding; it never compacts.
-				runStart++
-				continue
-			}
-
+		// One validation scan: reject reserved bits and resolution errors, and
+		// record every cell's parent for the grouping pass below.
+		for i := start; i < len(remaining); i++ {
+			cell := remaining[i]
 			if reservedBits(cell) != 0 {
 				return nil, ErrCellInvalid
 			}
@@ -408,26 +411,19 @@ func CompactCells(in []Cell) ([]Cell, error) {
 				return nil, err
 			}
 
-			// Extend the run over every following cell with the same parent.
+			parents[i] = parent
+		}
+
+		next = next[:0]
+
+		// Each parent's children are now a contiguous run.
+		for runStart := start; runStart < len(remaining); {
 			runEnd := runStart + 1
-			for runEnd < len(remaining) {
-				sibling := remaining[runEnd]
-				if reservedBits(sibling) != 0 {
-					return nil, ErrCellInvalid
-				}
-
-				siblingParent, err := sibling.Parent(parentRes)
-				if err != nil {
-					return nil, err
-				}
-
-				if siblingParent != parent {
-					break
-				}
-
+			for runEnd < len(remaining) && parents[runEnd] == parents[runStart] {
 				runEnd++
 			}
 
+			parent := parents[runStart]
 			fullCount := parent.fullChildCount()
 			runLen := runEnd - runStart
 
