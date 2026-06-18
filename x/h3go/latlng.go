@@ -21,6 +21,63 @@ import (
 	"strconv"
 )
 
+type (
+	// LatLng is a struct for geographic coordinates in degrees.
+	LatLng struct {
+		Lat, Lng float64
+	}
+)
+
+// LatLng string formatting parameters, matching the H3 C library.
+const (
+	latLngFloatPrecision = 5
+	latLngStringSize     = 32
+)
+
+// --- Average cell sizes ---
+
+var (
+	// hexAreaAvgKm2 holds the average hexagon area at each resolution in square
+	// kilometers, indexed by resolution.
+	hexAreaAvgKm2 = [MaxResolution + 1]float64{
+		4.357449416078383e+06, 6.097884417941332e+05, 8.680178039899720e+04,
+		1.239343465508816e+04, 1.770347654491307e+03, 2.529038581819449e+02,
+		3.612906216441245e+01, 5.161293359717191e+00, 7.373275975944177e-01,
+		1.053325134272067e-01, 1.504750190766435e-02, 2.149643129451879e-03,
+		3.070918756316060e-04, 4.387026794728296e-05, 6.267181135324313e-06,
+		8.953115907605790e-07,
+	}
+
+	// hexAreaAvgM2 holds the average hexagon area at each resolution in square
+	// meters, indexed by resolution.
+	hexAreaAvgM2 = [MaxResolution + 1]float64{
+		4.357449416078390e+12, 6.097884417941339e+11, 8.680178039899731e+10,
+		1.239343465508818e+10, 1.770347654491309e+09, 2.529038581819452e+08,
+		3.612906216441250e+07, 5.161293359717198e+06, 7.373275975944188e+05,
+		1.053325134272069e+05, 1.504750190766437e+04, 2.149643129451882e+03,
+		3.070918756316063e+02, 4.387026794728301e+01, 6.267181135324322e+00,
+		8.953115907605802e-01,
+	}
+
+	// hexEdgeLenAvgKm holds the average hexagon edge length at each resolution in
+	// kilometers, indexed by resolution.
+	hexEdgeLenAvgKm = [MaxResolution + 1]float64{
+		1281.256011, 483.0568391, 182.5129565, 68.97922179,
+		26.07175968, 9.854090990, 3.724532667, 1.406475763,
+		0.531414010, 0.200786148, 0.075863783, 0.028663897,
+		0.010830188, 0.004092010, 0.001546100, 0.000584169,
+	}
+
+	// hexEdgeLenAvgM holds the average hexagon edge length at each resolution in
+	// meters, indexed by resolution.
+	hexEdgeLenAvgM = [MaxResolution + 1]float64{
+		1281256.011, 483056.8391, 182512.9565, 68979.22179,
+		26071.75968, 9854.090990, 3724.532667, 1406.475763,
+		531.4140101, 200.7861476, 75.86378287, 28.66389748,
+		10.83018784, 4.092010473, 1.546099657, 0.584168630,
+	}
+)
+
 // NewLatLng creates a LatLng from a latitude and longitude in degrees.
 func NewLatLng(lat, lng float64) LatLng {
 	return LatLng{Lat: lat, Lng: lng}
@@ -42,12 +99,6 @@ func (g LatLng) String() string {
 
 	return string(buf)
 }
-
-// LatLng string formatting parameters, matching the H3 C library.
-const (
-	latLngFloatPrecision = 5
-	latLngStringSize     = 32
-)
 
 // LatLngToCellString returns the string form of the cell at resolution that
 // contains the coordinate. It is a convenience wrapper for LatLngToCell followed
@@ -155,48 +206,6 @@ func EdgeLengthM(e DirectedEdge) (float64, error) {
 	km, err := EdgeLengthKm(e)
 
 	return km * 1000, err
-}
-
-// --- Average cell sizes ---
-
-// hexAreaAvgKm2 holds the average hexagon area at each resolution in square
-// kilometers, indexed by resolution.
-var hexAreaAvgKm2 = [MaxResolution + 1]float64{
-	4.357449416078383e+06, 6.097884417941332e+05, 8.680178039899720e+04,
-	1.239343465508816e+04, 1.770347654491307e+03, 2.529038581819449e+02,
-	3.612906216441245e+01, 5.161293359717191e+00, 7.373275975944177e-01,
-	1.053325134272067e-01, 1.504750190766435e-02, 2.149643129451879e-03,
-	3.070918756316060e-04, 4.387026794728296e-05, 6.267181135324313e-06,
-	8.953115907605790e-07,
-}
-
-// hexAreaAvgM2 holds the average hexagon area at each resolution in square
-// meters, indexed by resolution.
-var hexAreaAvgM2 = [MaxResolution + 1]float64{
-	4.357449416078390e+12, 6.097884417941339e+11, 8.680178039899731e+10,
-	1.239343465508818e+10, 1.770347654491309e+09, 2.529038581819452e+08,
-	3.612906216441250e+07, 5.161293359717198e+06, 7.373275975944188e+05,
-	1.053325134272069e+05, 1.504750190766437e+04, 2.149643129451882e+03,
-	3.070918756316063e+02, 4.387026794728301e+01, 6.267181135324322e+00,
-	8.953115907605802e-01,
-}
-
-// hexEdgeLenAvgKm holds the average hexagon edge length at each resolution in
-// kilometers, indexed by resolution.
-var hexEdgeLenAvgKm = [MaxResolution + 1]float64{
-	1281.256011, 483.0568391, 182.5129565, 68.97922179,
-	26.07175968, 9.854090990, 3.724532667, 1.406475763,
-	0.531414010, 0.200786148, 0.075863783, 0.028663897,
-	0.010830188, 0.004092010, 0.001546100, 0.000584169,
-}
-
-// hexEdgeLenAvgM holds the average hexagon edge length at each resolution in
-// meters, indexed by resolution.
-var hexEdgeLenAvgM = [MaxResolution + 1]float64{
-	1281256.011, 483056.8391, 182512.9565, 68979.22179,
-	26071.75968, 9854.090990, 3724.532667, 1406.475763,
-	531.4140101, 200.7861476, 75.86378287, 28.66389748,
-	10.83018784, 4.092010473, 1.546099657, 0.584168630,
 }
 
 // HexagonAreaAvgKm2 returns the average area of a hexagon at the given

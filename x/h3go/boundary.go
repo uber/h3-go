@@ -16,6 +16,13 @@
 
 package h3go
 
+type (
+	// CellBoundary is the ordered set of geographic vertices that outline a cell.
+	// It never has more vertices than a cell has topological vertices plus its
+	// distortion vertices.
+	CellBoundary []LatLng
+)
+
 // CellToBoundary returns the geographic boundary of a cell as an ordered list of
 // vertices in degrees.
 func CellToBoundary(c Cell) (CellBoundary, error) {

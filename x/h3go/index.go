@@ -18,8 +18,29 @@ package h3go
 
 import (
 	"math/bits"
+)
 
-	"github.com/uber/h3-go/v4/internal/h3core"
+type (
+	// Cell is an Index that identifies a single hexagon cell at a resolution.
+	Cell int64
+
+	// Index is the constraint satisfied by the H3 index types. They share the same
+	// 64-bit encoding and are distinguished by their mode field.
+	Index interface {
+		Cell | DirectedEdge | Vertex
+	}
+
+	// mode is the H3 index mode stored in an index's mode field. It distinguishes
+	// the index types that share the 64-bit encoding.
+	mode int
+)
+
+// Index modes, matching the H3 C library's H3_*_MODE values.
+const (
+	cellMode         mode = iota + 1 // H3_CELL_MODE
+	directedEdgeMode                 // H3_DIRECTEDEDGE_MODE
+	edgeMode                         // H3_EDGE_MODE (undirected edge, unused)
+	vertexMode                       // H3_VERTEX_MODE
 )
 
 // Index-format constants shared by the introspection and hierarchy helpers.
@@ -65,14 +86,44 @@ var pow7 = [MaxResolution + 1]int64{
 	4747561509943,
 }
 
-// mode returns the H3 index mode (cell, directed edge, or vertex).
-func (c Cell) mode() int {
-	return int(c>>modeOffset) & modeMask
+// modeOf returns the H3 index mode (cell, directed edge, or vertex) of any
+// index.
+func modeOf[I Index](index I) mode {
+	return mode((int64(index) >> modeOffset) & modeMask)
 }
 
-// indexDigit returns the indexing digit of the index at res.
-func (c Cell) indexDigit(res int) int {
-	return int((c >> ((MaxResolution - res) * perDigitOffset)) & digitMask)
+// reservedBits returns the 3-bit reserved field of any index. It holds the
+// direction of a directed edge or the vertex number of a vertex.
+func reservedBits[I Index](index I) int {
+	return int(int64(index)>>reservedOffset) & reservedMask
+}
+
+// resolution returns the resolution field of any index.
+func resolution[I Index](index I) int {
+	return int(int64(index)>>resolutionOffset) & resolutionMask
+}
+
+// indexDigit returns the indexing digit at res of any index, without bounds
+// checking.
+func indexDigit[I Index](index I, res int) int {
+	return int((int64(index) >> ((MaxResolution - res) * perDigitOffset)) & digitMask)
+}
+
+// indexDigitChecked returns the indexing digit at res of any index, for res in
+// [1, MaxResolution], and ErrResolutionDomain otherwise.
+func indexDigitChecked[I Index](index I, res int) (int, error) {
+	if res < 1 || res > MaxResolution {
+		return 0, ErrResolutionDomain
+	}
+
+	return indexDigit(index, res), nil
+}
+
+// ownerCell returns the cell that owns index: the same index bits reinterpreted
+// as a cell, with the mode set to cell and the reserved field cleared. For a
+// directed edge this is its origin cell; for a vertex, its owner cell.
+func ownerCell[I Index](index I) Cell {
+	return Cell(int64(index)).setMode(cellMode).setReservedBits(0)
 }
 
 // setIndexDigit returns the index with the digit at res set to digit.
@@ -92,10 +143,10 @@ func (c Cell) setBaseCell(baseCell int) Cell {
 	return c
 }
 
-// setMode returns the index with its 4-bit mode field set to mode.
-func (c Cell) setMode(mode int) Cell {
+// setMode returns the index with its 4-bit mode field set to m.
+func (c Cell) setMode(m mode) Cell {
 	c &= ^(Cell(modeMask) << modeOffset)
-	c |= Cell(mode) << modeOffset
+	c |= Cell(m) << modeOffset
 
 	return c
 }
@@ -134,7 +185,7 @@ func NumCells(res int) int {
 
 // Resolution returns the resolution of the cell.
 func (c Cell) Resolution() int {
-	return int(c>>resolutionOffset) & resolutionMask
+	return resolution(c)
 }
 
 // isResClassIII reports whether a resolution is Class III. Odd resolutions are
@@ -152,12 +203,12 @@ func (c Cell) IsResClassIII() bool {
 // IsPentagon reports whether the cell is a pentagon: its base cell is a pentagon
 // and it has no leading non-zero digit.
 func (c Cell) IsPentagon() bool {
-	if !h3core.IsBaseCellPentagon[c.BaseCellNumber()] {
+	if !isBaseCellPentagon[c.BaseCellNumber()] {
 		return false
 	}
 
 	for r := 1; r <= c.Resolution(); r++ {
-		if c.indexDigit(r) != centerDigit {
+		if indexDigit(c, r) != centerDigit {
 			return false
 		}
 	}
@@ -168,11 +219,7 @@ func (c Cell) IsPentagon() bool {
 // IndexDigit returns the indexing digit of the cell at res, which starts at 1
 // for resolution 1 up to and including resolution 15.
 func (c Cell) IndexDigit(res int) (int, error) {
-	if res < 1 || res > MaxResolution {
-		return 0, ErrResolutionDomain
-	}
-
-	return c.indexDigit(res), nil
+	return indexDigitChecked(c, res)
 }
 
 // IsValid reports whether the cell is a valid H3 cell (hexagon or pentagon). It
@@ -239,7 +286,7 @@ func hasAll7AfterRes(h uint64, res int) bool {
 // hasDeletedSubsequence reports whether a pentagon cell has the invalid
 // "deleted subsequence" pattern: its first non-zero digit is 1 (K axis).
 func hasDeletedSubsequence(h uint64, baseCell int) bool {
-	if !h3core.IsBaseCellPentagon[baseCell] {
+	if !isBaseCellPentagon[baseCell] {
 		return false
 	}
 	h <<= digitRegionOffset
@@ -257,22 +304,16 @@ func firstOneIndex(h uint64) int {
 	return (bitSize - 1) - bits.LeadingZeros64(h)
 }
 
-// Index is the constraint satisfied by the H3 index types. They share the same
-// 64-bit encoding and are distinguished by their mode field.
-type Index interface {
-	Cell | DirectedEdge | Vertex
-}
-
 // IsValidIndex reports whether index is valid for its mode (cell, directed edge,
 // or vertex).
 func IsValidIndex[T Index](index T) bool {
-	switch int(index>>modeOffset) & modeMask {
+	switch modeOf(index) {
 	case cellMode:
-		return Cell(index).IsValid()
+		return Cell(int64(index)).IsValid()
 	case directedEdgeMode:
-		return DirectedEdge(index).IsValid()
+		return DirectedEdge(int64(index)).IsValid()
 	case vertexMode:
-		return Vertex(index).IsValid()
+		return Vertex(int64(index)).IsValid()
 	default:
 		return false
 	}

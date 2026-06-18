@@ -19,8 +19,6 @@ package h3go
 import (
 	"cmp"
 	"math"
-
-	"github.com/uber/h3-go/v4/internal/h3core"
 )
 
 // CoordIJ holds IJ hexagon coordinates anchored at an origin cell. The two axes
@@ -95,8 +93,8 @@ func (c Cell) cellToLocalIjk(target Cell) (coordIJK, error) {
 		revDir = getBaseCellDirection(baseCell, originBaseCell)
 	}
 
-	originOnPent := h3core.IsBaseCellPentagon[originBaseCell]
-	indexOnPent := h3core.IsBaseCellPentagon[baseCell]
+	originOnPent := isBaseCellPentagon[originBaseCell]
+	indexOnPent := isBaseCellPentagon[baseCell]
 
 	index := target
 
@@ -212,7 +210,7 @@ func (c Cell) localIjkToCell(ijk coordIJK) (Cell, error) {
 		return 0, ErrCellInvalid
 	}
 
-	originOnPent := h3core.IsBaseCellPentagon[originBaseCell]
+	originOnPent := isBaseCellPentagon[originBaseCell]
 
 	out := Cell(h3Init) | Cell(cellMode)<<modeOffset
 	out = out.setResolution(res)
@@ -264,7 +262,7 @@ func (c Cell) localIjkToCell(ijk coordIJK) (Cell, error) {
 
 	indexOnPent := false
 	if baseCell != invalidBaseCell {
-		indexOnPent = h3core.IsBaseCellPentagon[baseCell]
+		indexOnPent = isBaseCellPentagon[baseCell]
 	}
 
 	switch {

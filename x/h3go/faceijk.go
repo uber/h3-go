@@ -18,8 +18,40 @@ package h3go
 
 import (
 	"math"
+)
 
-	"github.com/uber/h3-go/v4/internal/h3core"
+// invalidFace marks an unused slot while collecting a cell's icosahedron faces.
+const invalidFace = -1
+
+type (
+	vec3d    struct{ x, y, z float64 }
+	vec2d    struct{ x, y float64 }
+	coordIJK struct{ i, j, k int }
+	faceIJK  struct {
+		face  int
+		coord coordIJK
+	}
+	baseCellRotation struct{ baseCell, ccwRot60 int }
+
+	// faceOrientIJK describes how to transform an IJK coordinate from one
+	// icosahedron face into an adjacent face's coordinate system: the adjacent
+	// face, the res-0 translation, and the counterclockwise 60° rotation count.
+	faceOrientIJK struct {
+		face      int
+		translate coordIJK
+		ccwRot60  int
+	}
+)
+
+// overage classifies whether an IJK coordinate has spilled past the edge of
+// its icosahedron face during the reverse projection.
+type overage int
+
+// Overage classes returned by adjustOverageClassII.
+const (
+	noOverage overage = iota // on the original face
+	faceEdge                 // on a face edge (only occurs on substrate grids)
+	newFace                  // overage onto an adjacent face's interior
 )
 
 // --- Face projection ---
@@ -519,7 +551,7 @@ func rotate60cw(digit int) int {
 func (c Cell) rotate60ccw() Cell {
 	res := c.Resolution()
 	for r := 1; r <= res; r++ {
-		c = c.setIndexDigit(r, rotate60ccw(c.indexDigit(r)))
+		c = c.setIndexDigit(r, rotate60ccw(indexDigit(c, r)))
 	}
 
 	return c
@@ -530,7 +562,7 @@ func (c Cell) rotate60ccw() Cell {
 func (c Cell) rotate60cw() Cell {
 	res := c.Resolution()
 	for r := 1; r <= res; r++ {
-		c = c.setIndexDigit(r, rotate60cw(c.indexDigit(r)))
+		c = c.setIndexDigit(r, rotate60cw(indexDigit(c, r)))
 	}
 
 	return c
@@ -540,7 +572,7 @@ func (c Cell) rotate60cw() Cell {
 // of c, or the center digit if every digit is the center.
 func (c Cell) leadingNonZeroDigit() int {
 	for r := 1; r <= c.Resolution(); r++ {
-		d := c.indexDigit(r)
+		d := indexDigit(c, r)
 		if d != centerDigit {
 			return d
 		}
@@ -557,9 +589,9 @@ func (c Cell) rotatePent60ccw() Cell {
 	foundFirstNonZero := false
 
 	for r := 1; r <= c.Resolution(); r++ {
-		c = c.setIndexDigit(r, rotate60ccw(c.indexDigit(r)))
+		c = c.setIndexDigit(r, rotate60ccw(indexDigit(c, r)))
 
-		if !foundFirstNonZero && c.indexDigit(r) != centerDigit {
+		if !foundFirstNonZero && indexDigit(c, r) != centerDigit {
 			foundFirstNonZero = true
 
 			if c.leadingNonZeroDigit() == kAxesDigit {
@@ -578,9 +610,9 @@ func (c Cell) rotatePent60cw() Cell {
 	foundFirstNonZero := false
 
 	for r := 1; r <= c.Resolution(); r++ {
-		c = c.setIndexDigit(r, rotate60cw(c.indexDigit(r)))
+		c = c.setIndexDigit(r, rotate60cw(indexDigit(c, r)))
 
-		if !foundFirstNonZero && c.indexDigit(r) != centerDigit {
+		if !foundFirstNonZero && indexDigit(c, r) != centerDigit {
 			foundFirstNonZero = true
 
 			if c.leadingNonZeroDigit() == kAxesDigit {
@@ -655,7 +687,7 @@ func (fijk faceIJK) toH3(res int) (Cell, error) {
 
 	h |= Cell(baseCell) << baseCellOffset
 
-	if h3core.IsBaseCellPentagon[baseCell] {
+	if isBaseCellPentagon[baseCell] {
 		if h.leadingNonZeroDigit() == kAxesDigit {
 			offsets := baseCellCWOffsetPent[baseCell]
 			if offsets[0] == fijkBC.face || offsets[1] == fijkBC.face {
@@ -696,7 +728,7 @@ func (c Cell) toFaceIjkWithInitializedFijk(fijk faceIJK) (faceIJK, bool) {
 
 	// A center base cell hierarchy with no off-center digits stays on this face.
 	isCenter := fijk.coord.i == 0 && fijk.coord.j == 0 && fijk.coord.k == 0
-	possibleOverage := h3core.IsBaseCellPentagon[c.BaseCellNumber()] || (res != 0 && !isCenter)
+	possibleOverage := isBaseCellPentagon[c.BaseCellNumber()] || (res != 0 && !isCenter)
 
 	ijk := fijk.coord
 
@@ -707,7 +739,7 @@ func (c Cell) toFaceIjkWithInitializedFijk(fijk faceIJK) (faceIJK, bool) {
 			ijk.downAp7r()
 		}
 
-		ijk = ijk.neighbor(c.indexDigit(r))
+		ijk = ijk.neighbor(indexDigit(c, r))
 	}
 
 	fijk.coord = ijk
@@ -727,7 +759,7 @@ func (c Cell) toFaceIjk() (faceIJK, error) {
 
 	// Adjust for the pentagonal missing sequence: all of sub-sequence 5 needs to
 	// be rotated (and some of sub-sequence 4 is handled during overage below).
-	if h3core.IsBaseCellPentagon[baseCell] && c.leadingNonZeroDigit() == ikAxesDigit {
+	if isBaseCellPentagon[baseCell] && c.leadingNonZeroDigit() == ikAxesDigit {
 		c = c.rotate60cw()
 	}
 
@@ -747,14 +779,14 @@ func (c Cell) toFaceIjk() (faceIJK, error) {
 	}
 
 	// A pentagon base cell with a leading 4 digit requires special handling.
-	pentLeading4 := h3core.IsBaseCellPentagon[baseCell] && c.leadingNonZeroDigit() == iAxesDigit
+	pentLeading4 := isBaseCellPentagon[baseCell] && c.leadingNonZeroDigit() == iAxesDigit
 
 	var ov overage
 
 	fijk, ov = fijk.adjustOverageClassII(res, pentLeading4, false)
 	if ov != noOverage {
 		// A pentagon base cell can have secondary overages.
-		if h3core.IsBaseCellPentagon[baseCell] {
+		if isBaseCellPentagon[baseCell] {
 			for {
 				var o overage
 
@@ -930,9 +962,6 @@ func (fijk faceIJK) pentToVerts(res int) (int, [numPentVerts]faceIJK) {
 
 	return res, out
 }
-
-// invalidFace marks an unused slot while collecting a cell's icosahedron faces.
-const invalidFace = -1
 
 // IcosahedronFaces returns the icosahedron faces (0-19) that the cell intersects,
 // in no particular order. A hexagon touches one or two faces; a pentagon touches

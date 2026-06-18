@@ -29,7 +29,7 @@ func TestIsValidCellBitPatterns(t *testing.T) {
 
 		for m := 0; m <= 0xf; m++ {
 			h := Cell(h3Init) | Cell(m)<<modeOffset
-			if got, want := h.IsValid(), m == cellMode; got != want {
+			if got, want := h.IsValid(), m == int(cellMode); got != want {
 				t.Fatalf("mode %d: isValidCell = %v, want %v", m, got, want)
 			}
 		}
