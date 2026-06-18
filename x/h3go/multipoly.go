@@ -30,42 +30,43 @@ var (
 
 // arc is one directed edge of a cell during multipolygon assembly. Arcs form
 // doubly-linked loops (counter-clockwise) and a union-find forest whose roots
-// identify connected components (each component becomes one polygon).
+// identify connected components (each component becomes one polygon). Links are
+// indices into the arc slice rather than pointers, so the whole graph lives in
+// one allocation and survives the slice growing.
 type arc struct {
-	parent  *arc
-	prev    *arc
-	next    *arc
+	parent  int
+	prev    int
+	next    int
 	id      DirectedEdge
 	rank    int
 	removed bool
 	visited bool
 }
 
-// root returns the representative arc of the connected component, compressing
-// the path along the way.
-func (a *arc) root() *arc {
-	if a.parent == a {
-		return a
+// arcRoot returns the index of the representative arc of idx's connected
+// component, compressing the path along the way.
+func arcRoot(arcs []arc, idx int) int {
+	for arcs[idx].parent != idx {
+		arcs[idx].parent = arcs[arcs[idx].parent].parent
+		idx = arcs[idx].parent
 	}
 
-	a.parent = a.parent.root()
-
-	return a.parent
+	return idx
 }
 
-// union merges the connected components of two arcs, attaching the lower-rank
+// arcUnion merges the connected components of two arcs, attaching the lower-rank
 // root under the higher-rank one.
-func union(first, second *arc) {
-	first = first.root()
-	second = second.root()
+func arcUnion(arcs []arc, first, second int) {
+	first = arcRoot(arcs, first)
+	second = arcRoot(arcs, second)
 
-	if first.rank < second.rank {
+	if arcs[first].rank < arcs[second].rank {
 		first, second = second, first
 	}
 
 	if first != second {
-		first.rank += second.rank
-		second.parent = first
+		arcs[first].rank += arcs[second].rank
+		arcs[second].parent = first
 	}
 }
 
@@ -99,24 +100,21 @@ func validateCellSet(cells []Cell) error {
 
 // buildArcs creates the arcs for every cell, linking each cell's edges into a
 // counter-clockwise loop and indexing them by edge id for reverse lookup. Every
-// arc in a cell starts in the cell's own connected component.
-func buildArcs(cells []Cell) ([]*arc, map[DirectedEdge]*arc) {
-	var arcs []*arc
-
-	index := make(map[DirectedEdge]*arc)
+// arc in a cell starts in the cell's own connected component. All arcs share one
+// backing slice; links are indices into it.
+func buildArcs(cells []Cell) ([]arc, map[DirectedEdge]int) {
+	arcs := make([]arc, 0, len(cells)*numCellEdges)
+	index := make(map[DirectedEdge]int, len(cells)*numCellEdges)
 
 	for _, cell := range cells {
 		// cell is valid here, so enumerating its edges cannot fail.
 		edges, _ := cell.DirectedEdges()
 		count := len(edges)
+		base := len(arcs)
 
-		block := make([]*arc, count)
-		for i := range block {
-			block[i] = &arc{id: edges[i], rank: 1}
-		}
-
-		for i := range block {
-			block[i].parent = block[0]
+		for i := 0; i < count; i++ {
+			// Every arc in the cell starts rooted at the cell's first arc.
+			arcs = append(arcs, arc{id: edges[i], rank: 1, parent: base})
 		}
 
 		order := idxHex[:]
@@ -124,17 +122,16 @@ func buildArcs(cells []Cell) ([]*arc, map[DirectedEdge]*arc) {
 			order = idxPent[:]
 		}
 
-		for i := range block {
+		for i := 0; i < count; i++ {
 			cur := order[i]
 			prev := order[(i-1+count)%count]
 			next := order[(i+1)%count]
-			block[cur].prev = block[prev]
-			block[cur].next = block[next]
+			arcs[base+cur].prev = base + prev
+			arcs[base+cur].next = base + next
 		}
 
-		for i := range block {
-			arcs = append(arcs, block[i])
-			index[block[i].id] = block[i]
+		for i := 0; i < count; i++ {
+			index[arcs[base+i].id] = base + i
 		}
 	}
 
@@ -144,29 +141,29 @@ func buildArcs(cells []Cell) ([]*arc, map[DirectedEdge]*arc) {
 // cancelArcPairs removes each pair of opposite edges shared by two adjacent
 // cells, stitching the linked loops back together and merging the two arcs'
 // connected components. What remains are the outline loops of the cell set.
-func cancelArcPairs(arcs []*arc, index map[DirectedEdge]*arc) {
-	for _, current := range arcs {
-		if current.removed {
+func cancelArcPairs(arcs []arc, index map[DirectedEdge]int) {
+	for current := range arcs {
+		if arcs[current].removed {
 			continue
 		}
 
-		// current.id is a valid edge, so reversing it cannot fail.
-		reversed, _ := current.id.Reverse()
+		// arcs[current].id is a valid edge, so reversing it cannot fail.
+		reversed, _ := arcs[current].id.Reverse()
 
 		opposite, ok := index[reversed]
 		if !ok {
 			continue
 		}
 
-		current.removed = true
-		opposite.removed = true
+		arcs[current].removed = true
+		arcs[opposite].removed = true
 
-		current.next.prev = opposite.prev
-		current.prev.next = opposite.next
-		opposite.next.prev = current.prev
-		opposite.prev.next = current.next
+		arcs[arcs[current].next].prev = arcs[opposite].prev
+		arcs[arcs[current].prev].next = arcs[opposite].next
+		arcs[arcs[opposite].next].prev = arcs[current].prev
+		arcs[arcs[opposite].prev].next = arcs[current].next
 
-		union(current, opposite)
+		arcUnion(arcs, current, opposite)
 	}
 }
 
@@ -182,15 +179,15 @@ type outlineLoop struct {
 // loop's connected component and enclosed area. Loops are sorted by component,
 // then by area so that each polygon's loops are contiguous with its outer loop
 // (smallest enclosed area) first.
-func buildOutlineLoops(arcs []*arc) []outlineLoop {
-	for _, current := range arcs {
-		current.visited = false
+func buildOutlineLoops(arcs []arc) []outlineLoop {
+	for i := range arcs {
+		arcs[i].visited = false
 	}
 
 	var loops []outlineLoop
 
-	for _, start := range arcs {
-		if start.visited || start.removed {
+	for start := range arcs {
+		if arcs[start].visited || arcs[start].removed {
 			continue
 		}
 
@@ -198,19 +195,19 @@ func buildOutlineLoops(arcs []*arc) []outlineLoop {
 
 		current := start
 		for {
-			// current.id is valid, so its boundary cannot fail.
-			boundary, _ := current.id.Boundary()
+			// arcs[current].id is valid, so its boundary cannot fail.
+			boundary, _ := arcs[current].id.Boundary()
 			verts = append(verts, boundary[:len(boundary)-1]...)
-			current.visited = true
-			current = current.next
+			arcs[current].visited = true
+			current = arcs[current].next
 
-			if current.id == start.id {
+			if arcs[current].id == arcs[start].id {
 				break
 			}
 		}
 
 		loops = append(loops, outlineLoop{
-			root: start.root().id,
+			root: arcs[arcRoot(arcs, start)].id,
 			loop: verts,
 			area: CellBoundary(verts).areaRads2(),
 		})

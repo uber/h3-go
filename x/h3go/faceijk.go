@@ -478,9 +478,14 @@ func (v vec2d) toVec3(face, res int, substrate bool) vec3d {
 	}
 
 	if substrate {
-		// Callers only project substrate grids at Class II (even) resolutions,
-		// so no Class III substrate adjustment is needed here.
 		r *= mOneThird
+		// Substrate grids at a Class III resolution carry an extra aperture-7
+		// step; H3's own vertex builders bump res to Class II before reaching
+		// here, so this only matters for a hand-built odd-res substrate grid,
+		// but it mirrors the C reference exactly.
+		if isResClassIII(res) {
+			r *= mRSqrt7
+		}
 	}
 
 	r *= res0UGnomonic
