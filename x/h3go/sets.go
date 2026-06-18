@@ -16,8 +16,6 @@
 
 package h3go
 
-import "github.com/uber/h3-go/v4/internal/h3core"
-
 // setH3Index builds a cell index from its resolution, base cell, and an initial
 // digit for every digit slot up to res.
 func setH3Index(res, baseCell, initDigit int) Cell {
@@ -53,7 +51,7 @@ func Pentagons(res int) ([]Cell, error) {
 	out := make([]Cell, 0, NumPentagons)
 
 	for bc := range NumBaseCells {
-		if h3core.IsBaseCellPentagon[bc] {
+		if isBaseCellPentagon[bc] {
 			out = append(out, setH3Index(res, bc, centerDigit))
 		}
 	}

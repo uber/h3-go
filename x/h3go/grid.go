@@ -18,19 +18,87 @@ package h3go
 
 import (
 	"errors"
-
-	"github.com/uber/h3-go/v4/internal/h3core"
 )
-
-// directions is the ordered set of the six neighbor directions used when
-// tracing a ring counterclockwise, one side of the ring per entry.
-var directions = [6]int{
-	jAxesDigit, jkAxesDigit, kAxesDigit, ikAxesDigit, iAxesDigit, ijAxesDigit,
-}
 
 // nextRingDirection is the direction stepped to move from one ring to the next
 // larger ring before tracing it.
 const nextRingDirection = iAxesDigit
+
+var (
+	// directions is the ordered set of the six neighbor directions used when
+	// tracing a ring counterclockwise, one side of the ring per entry.
+	directions = [6]int{
+		jAxesDigit, jkAxesDigit, kAxesDigit, ikAxesDigit, iAxesDigit, ijAxesDigit,
+	}
+
+	// newDigitII maps current digit and direction to the new digit on a Class II grid.
+	newDigitII = [7][7]int{
+		{centerDigit, kAxesDigit, jAxesDigit, jkAxesDigit, iAxesDigit,
+			ikAxesDigit, ijAxesDigit},
+		{kAxesDigit, iAxesDigit, jkAxesDigit, ijAxesDigit, ikAxesDigit,
+			jAxesDigit, centerDigit},
+		{jAxesDigit, jkAxesDigit, kAxesDigit, iAxesDigit, ijAxesDigit,
+			centerDigit, ikAxesDigit},
+		{jkAxesDigit, ijAxesDigit, iAxesDigit, ikAxesDigit, centerDigit,
+			kAxesDigit, jAxesDigit},
+		{iAxesDigit, ikAxesDigit, ijAxesDigit, centerDigit, jAxesDigit,
+			jkAxesDigit, kAxesDigit},
+		{ikAxesDigit, jAxesDigit, centerDigit, kAxesDigit, jkAxesDigit,
+			ijAxesDigit, iAxesDigit},
+		{ijAxesDigit, centerDigit, ikAxesDigit, jAxesDigit, kAxesDigit,
+			iAxesDigit, jkAxesDigit}}
+
+	// newAdjustmentII maps current digit and direction to the coarser ap7 move on a Class II grid.
+	newAdjustmentII = [7][7]int{
+		{centerDigit, centerDigit, centerDigit, centerDigit, centerDigit,
+			centerDigit, centerDigit},
+		{centerDigit, kAxesDigit, centerDigit, kAxesDigit, centerDigit,
+			ikAxesDigit, centerDigit},
+		{centerDigit, centerDigit, jAxesDigit, jkAxesDigit, centerDigit,
+			centerDigit, jAxesDigit},
+		{centerDigit, kAxesDigit, jkAxesDigit, jkAxesDigit, centerDigit,
+			centerDigit, centerDigit},
+		{centerDigit, centerDigit, centerDigit, centerDigit, iAxesDigit,
+			iAxesDigit, ijAxesDigit},
+		{centerDigit, ikAxesDigit, centerDigit, centerDigit, iAxesDigit,
+			ikAxesDigit, centerDigit},
+		{centerDigit, centerDigit, jAxesDigit, centerDigit, ijAxesDigit,
+			centerDigit, ijAxesDigit}}
+
+	// newDigitIII maps current digit and direction to the new digit on a Class III grid.
+	newDigitIII = [7][7]int{
+		{centerDigit, kAxesDigit, jAxesDigit, jkAxesDigit, iAxesDigit,
+			ikAxesDigit, ijAxesDigit},
+		{kAxesDigit, jAxesDigit, jkAxesDigit, iAxesDigit, ikAxesDigit,
+			ijAxesDigit, centerDigit},
+		{jAxesDigit, jkAxesDigit, iAxesDigit, ikAxesDigit, ijAxesDigit,
+			centerDigit, kAxesDigit},
+		{jkAxesDigit, iAxesDigit, ikAxesDigit, ijAxesDigit, centerDigit,
+			kAxesDigit, jAxesDigit},
+		{iAxesDigit, ikAxesDigit, ijAxesDigit, centerDigit, kAxesDigit,
+			jAxesDigit, jkAxesDigit},
+		{ikAxesDigit, ijAxesDigit, centerDigit, kAxesDigit, jAxesDigit,
+			jkAxesDigit, iAxesDigit},
+		{ijAxesDigit, centerDigit, kAxesDigit, jAxesDigit, jkAxesDigit,
+			iAxesDigit, ikAxesDigit}}
+
+	// newAdjustmentIII maps current digit and direction to the coarser ap7 move on a Class III grid.
+	newAdjustmentIII = [7][7]int{
+		{centerDigit, centerDigit, centerDigit, centerDigit, centerDigit,
+			centerDigit, centerDigit},
+		{centerDigit, kAxesDigit, centerDigit, jkAxesDigit, centerDigit,
+			kAxesDigit, centerDigit},
+		{centerDigit, centerDigit, jAxesDigit, jAxesDigit, centerDigit,
+			centerDigit, ijAxesDigit},
+		{centerDigit, jkAxesDigit, jAxesDigit, jkAxesDigit, centerDigit,
+			centerDigit, centerDigit},
+		{centerDigit, centerDigit, centerDigit, centerDigit, iAxesDigit,
+			ikAxesDigit, iAxesDigit},
+		{centerDigit, kAxesDigit, centerDigit, centerDigit, ikAxesDigit,
+			ikAxesDigit, centerDigit},
+		{centerDigit, centerDigit, ijAxesDigit, centerDigit, iAxesDigit,
+			centerDigit, ijAxesDigit}}
+)
 
 // isBaseCellPolarPentagon reports whether a base cell is one of the two polar
 // pentagons, which have all-i neighbors and therefore distort differently.
@@ -93,7 +161,7 @@ func (c Cell) neighborRotations(dir, rotations int) (Cell, int, error) {
 			break
 		}
 
-		oldDigit := current.indexDigit(res + 1)
+		oldDigit := indexDigit(current, res+1)
 		if oldDigit == invalidDigit {
 			return 0, 0, ErrCellInvalid
 		}
@@ -117,7 +185,7 @@ func (c Cell) neighborRotations(dir, rotations int) (Cell, int, error) {
 	}
 
 	newBaseCell := current.BaseCellNumber()
-	if h3core.IsBaseCellPentagon[newBaseCell] {
+	if isBaseCellPentagon[newBaseCell] {
 		alreadyAdjustedKSubsequence := false
 
 		// Force rotation out of the missing k-axes sub-sequence.
@@ -472,7 +540,7 @@ func GridRing(origin Cell, k int) ([]Cell, error) {
 // IsNeighbor reports whether c and other are adjacent cells at the same
 // resolution.
 func (c Cell) IsNeighbor(other Cell) (bool, error) {
-	if c.mode() != cellMode || other.mode() != cellMode {
+	if modeOf(c) != cellMode || modeOf(other) != cellMode {
 		return false, ErrCellInvalid
 	}
 
@@ -493,8 +561,8 @@ func (c Cell) IsNeighbor(other Cell) (bool, error) {
 		destParent, destErr := other.Parent(parentRes)
 
 		if originErr == nil && destErr == nil && originParent == destParent {
-			originResDigit := c.indexDigit(parentRes + 1)
-			destResDigit := other.indexDigit(parentRes + 1)
+			originResDigit := indexDigit(c, parentRes+1)
+			destResDigit := indexDigit(other, parentRes+1)
 
 			if originResDigit == centerDigit || destResDigit == centerDigit {
 				return true, nil
@@ -587,71 +655,3 @@ func baseCellToCCWrot60(baseCell, face int) int {
 
 	return invalidRotations
 }
-
-// newDigitII maps current digit and direction to the new digit on a Class II grid.
-var newDigitII = [7][7]int{
-	{centerDigit, kAxesDigit, jAxesDigit, jkAxesDigit, iAxesDigit,
-		ikAxesDigit, ijAxesDigit},
-	{kAxesDigit, iAxesDigit, jkAxesDigit, ijAxesDigit, ikAxesDigit,
-		jAxesDigit, centerDigit},
-	{jAxesDigit, jkAxesDigit, kAxesDigit, iAxesDigit, ijAxesDigit,
-		centerDigit, ikAxesDigit},
-	{jkAxesDigit, ijAxesDigit, iAxesDigit, ikAxesDigit, centerDigit,
-		kAxesDigit, jAxesDigit},
-	{iAxesDigit, ikAxesDigit, ijAxesDigit, centerDigit, jAxesDigit,
-		jkAxesDigit, kAxesDigit},
-	{ikAxesDigit, jAxesDigit, centerDigit, kAxesDigit, jkAxesDigit,
-		ijAxesDigit, iAxesDigit},
-	{ijAxesDigit, centerDigit, ikAxesDigit, jAxesDigit, kAxesDigit,
-		iAxesDigit, jkAxesDigit}}
-
-// newAdjustmentII maps current digit and direction to the coarser ap7 move on a Class II grid.
-var newAdjustmentII = [7][7]int{
-	{centerDigit, centerDigit, centerDigit, centerDigit, centerDigit,
-		centerDigit, centerDigit},
-	{centerDigit, kAxesDigit, centerDigit, kAxesDigit, centerDigit,
-		ikAxesDigit, centerDigit},
-	{centerDigit, centerDigit, jAxesDigit, jkAxesDigit, centerDigit,
-		centerDigit, jAxesDigit},
-	{centerDigit, kAxesDigit, jkAxesDigit, jkAxesDigit, centerDigit,
-		centerDigit, centerDigit},
-	{centerDigit, centerDigit, centerDigit, centerDigit, iAxesDigit,
-		iAxesDigit, ijAxesDigit},
-	{centerDigit, ikAxesDigit, centerDigit, centerDigit, iAxesDigit,
-		ikAxesDigit, centerDigit},
-	{centerDigit, centerDigit, jAxesDigit, centerDigit, ijAxesDigit,
-		centerDigit, ijAxesDigit}}
-
-// newDigitIII maps current digit and direction to the new digit on a Class III grid.
-var newDigitIII = [7][7]int{
-	{centerDigit, kAxesDigit, jAxesDigit, jkAxesDigit, iAxesDigit,
-		ikAxesDigit, ijAxesDigit},
-	{kAxesDigit, jAxesDigit, jkAxesDigit, iAxesDigit, ikAxesDigit,
-		ijAxesDigit, centerDigit},
-	{jAxesDigit, jkAxesDigit, iAxesDigit, ikAxesDigit, ijAxesDigit,
-		centerDigit, kAxesDigit},
-	{jkAxesDigit, iAxesDigit, ikAxesDigit, ijAxesDigit, centerDigit,
-		kAxesDigit, jAxesDigit},
-	{iAxesDigit, ikAxesDigit, ijAxesDigit, centerDigit, kAxesDigit,
-		jAxesDigit, jkAxesDigit},
-	{ikAxesDigit, ijAxesDigit, centerDigit, kAxesDigit, jAxesDigit,
-		jkAxesDigit, iAxesDigit},
-	{ijAxesDigit, centerDigit, kAxesDigit, jAxesDigit, jkAxesDigit,
-		iAxesDigit, ikAxesDigit}}
-
-// newAdjustmentIII maps current digit and direction to the coarser ap7 move on a Class III grid.
-var newAdjustmentIII = [7][7]int{
-	{centerDigit, centerDigit, centerDigit, centerDigit, centerDigit,
-		centerDigit, centerDigit},
-	{centerDigit, kAxesDigit, centerDigit, jkAxesDigit, centerDigit,
-		kAxesDigit, centerDigit},
-	{centerDigit, centerDigit, jAxesDigit, jAxesDigit, centerDigit,
-		centerDigit, ijAxesDigit},
-	{centerDigit, jkAxesDigit, jAxesDigit, jkAxesDigit, centerDigit,
-		centerDigit, centerDigit},
-	{centerDigit, centerDigit, centerDigit, centerDigit, iAxesDigit,
-		ikAxesDigit, iAxesDigit},
-	{centerDigit, kAxesDigit, centerDigit, centerDigit, ikAxesDigit,
-		ikAxesDigit, centerDigit},
-	{centerDigit, centerDigit, ijAxesDigit, centerDigit, iAxesDigit,
-		centerDigit, ijAxesDigit}}

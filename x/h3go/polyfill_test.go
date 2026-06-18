@@ -116,7 +116,7 @@ func TestPolygonToCellsExperimentalModes(t *testing.T) {
 	t.Parallel()
 
 	polygon := GeoPolygon{GeoLoop: sfSquareLoop}
-	bboxes := bboxesFromGeoPolygon(polygon)
+	bboxes := polygon.toBboxes()
 
 	modes := []ContainmentMode{
 		ContainmentCenter,
@@ -216,7 +216,7 @@ func TestPolygonCompactCellsEarlyStop(t *testing.T) {
 	t.Parallel()
 
 	polygon := GeoPolygon{GeoLoop: sfSquareLoop}
-	bboxes := bboxesFromGeoPolygon(polygon)
+	bboxes := polygon.toBboxes()
 
 	res := 9
 
@@ -275,7 +275,7 @@ func TestNextCellPentagonSkip(t *testing.T) {
 	centerChild := setH3Index(1, 4, centerDigit)
 
 	next := nextCell(centerChild)
-	if got := next.indexDigit(1); got != 2 {
+	if got := indexDigit(next, 1); got != 2 {
 		t.Fatalf("nextCell pentagon center child: digit %d, want 2 (skipped the deleted 1)", got)
 	}
 }

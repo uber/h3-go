@@ -196,7 +196,7 @@ func TestVertexCenterChildShortcut(t *testing.T) {
 		t.Fatalf("Vertex(center child): %v", err)
 	}
 
-	owner := Cell(vertex).setMode(cellMode).setReservedBits(0)
+	owner := ownerCell(vertex)
 	if owner != center {
 		t.Fatalf("center child should own its vertex: got owner %015x, want %015x", uint64(owner), uint64(center))
 	}
@@ -244,7 +244,7 @@ func TestVertexIsValidPaths(t *testing.T) {
 				continue
 			}
 
-			owner := Cell(vertex).setMode(cellMode).setReservedBits(0)
+			owner := ownerCell(vertex)
 			if owner == cell {
 				continue
 			}

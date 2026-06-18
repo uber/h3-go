@@ -18,17 +18,19 @@ package h3go
 
 import "iter"
 
+// Child-set sizes: a hexagon has 7 immediate children, a pentagon 6 (its
+// K-axis child is deleted).
+const (
+	numHexChildren  = 7
+	numPentChildren = 6
+)
+
 // setResolution returns the cell with its resolution field set to res.
 func (c Cell) setResolution(res int) Cell {
 	c &= ^(Cell(resolutionMask) << resolutionOffset)
 	c |= Cell(res) << resolutionOffset
 
 	return c
-}
-
-// reservedBits returns the 3-bit reserved field of the index.
-func (c Cell) reservedBits() int {
-	return int(c>>reservedOffset) & 0x7
 }
 
 // zeroIndexDigits zeroes out index digits from start to end inclusive. It is a
@@ -156,14 +158,14 @@ func (c Cell) childCells(childRes int) iter.Seq[Cell] {
 				}
 				// Skip the deleted 1 (K axis) digit for a pentagon's children:
 				// the first non-zero digit can never be 1.
-				if i == skipDigit && cur.indexDigit(i) == kAxesDigit {
+				if i == skipDigit && indexDigit(cur, i) == kAxesDigit {
 					cur = cur.incrementResDigit(i)
 					skipDigit--
 
 					break
 				}
 
-				if cur.indexDigit(i) == invalidDigit {
+				if indexDigit(cur, i) == invalidDigit {
 					cur = cur.incrementResDigit(i) // zeroes digit i and carries into i-1
 				} else {
 					break
@@ -227,7 +229,7 @@ func (c Cell) ChildPos(parentRes int) (int, error) {
 			parent, _ = c.Parent(res - 1)
 			parentIsPentagon = parent.IsPentagon()
 
-			rawDigit := c.indexDigit(res)
+			rawDigit := indexDigit(c, res)
 			if rawDigit == invalidDigit || (parentIsPentagon && rawDigit == kAxesDigit) {
 				return 0, ErrCellInvalid
 			}
@@ -250,7 +252,7 @@ func (c Cell) ChildPos(parentRes int) (int, error) {
 	} else {
 		// Hexagon offsets are simple powers of 7.
 		for res := childRes; res > parentRes; res-- {
-			digit := c.indexDigit(res)
+			digit := indexDigit(c, res)
 			if digit == invalidDigit {
 				return 0, ErrCellInvalid
 			}
@@ -378,7 +380,7 @@ func CompactCells(in []Cell) ([]Cell, error) {
 				continue
 			}
 
-			if c.reservedBits() != 0 {
+			if reservedBits(c) != 0 {
 				return nil, ErrCellInvalid
 			}
 
@@ -421,13 +423,6 @@ func CompactCells(in []Cell) ([]Cell, error) {
 
 	return output, nil
 }
-
-// Child-set sizes: a hexagon has 7 immediate children, a pentagon 6 (its
-// K-axis child is deleted).
-const (
-	numHexChildren  = 7
-	numPentChildren = 6
-)
 
 // fullChildCount returns the number of immediate children that make a cell's
 // child set complete: 6 for pentagons (the K-axis child is deleted), 7 for
