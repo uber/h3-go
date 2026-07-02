@@ -49,7 +49,7 @@ func TestCellToChildrenSizeKnown(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := cellToChildrenSize(tt.giveCell, tt.giveChildRes)
+			got, err := tt.giveCell.childrenSize(tt.giveChildRes)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -321,7 +321,7 @@ func TestChildCellsInvalidInput(t *testing.T) {
 			t.Parallel()
 
 			count := 0
-			for range childCells(tt.giveCell, tt.giveRes) {
+			for range tt.giveCell.childCells(tt.giveRes) {
 				count++
 			}
 
@@ -338,7 +338,7 @@ func TestChildCellsEarlyBreak(t *testing.T) {
 	t.Parallel()
 
 	count := 0
-	for range childCells(setIndexCell(5, 0, 0), 7) {
+	for range setIndexCell(5, 0, 0).childCells(7) {
 		count++
 		if count == 1 {
 			break
@@ -355,7 +355,7 @@ func TestChildCellsEarlyBreak(t *testing.T) {
 func TestValidateChildPosResError(t *testing.T) {
 	t.Parallel()
 
-	if err := validateChildPos(0, setIndexCell(5, 0, 0), -1); err == nil {
+	if err := setIndexCell(5, 0, 0).validateChildPos(0, -1); err == nil {
 		t.Fatal("validateChildPos with invalid resolution should error")
 	}
 }
@@ -369,7 +369,7 @@ func TestCellToChildPosInvalidDigit(t *testing.T) {
 		t.Parallel()
 
 		// Pentagon base cell 4, res-2, with a deleted K-axis (1) digit.
-		cell := setIndexDigit(setH3Index(2, 4, centerDigit), 2, kAxesDigit)
+		cell := setH3Index(2, 4, centerDigit).setIndexDigit(2, kAxesDigit)
 		if _, err := CellToChildPos(cell, 1); !errors.Is(err, ErrCellInvalid) {
 			t.Fatalf("CellToChildPos(pentagon k-axis): got %v, want ErrCellInvalid", err)
 		}
@@ -379,7 +379,7 @@ func TestCellToChildPosInvalidDigit(t *testing.T) {
 		t.Parallel()
 
 		// Hexagon base cell 0, res-2, with an unused (7) digit in a used slot.
-		cell := setIndexDigit(setH3Index(2, 0, centerDigit), 2, invalidDigit)
+		cell := setH3Index(2, 0, centerDigit).setIndexDigit(2, invalidDigit)
 		if _, err := CellToChildPos(cell, 1); !errors.Is(err, ErrCellInvalid) {
 			t.Fatalf("CellToChildPos(hexagon invalid digit): got %v, want ErrCellInvalid", err)
 		}

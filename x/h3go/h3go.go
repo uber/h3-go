@@ -32,6 +32,11 @@ type LatLng struct {
 	Lat, Lng float64
 }
 
+// CellBoundary is the ordered set of geographic vertices that outline a cell.
+// It never has more vertices than a cell has topological vertices plus its
+// distortion vertices.
+type CellBoundary []LatLng
+
 // Error codes. Messages mirror the cgo-backed h3 package so the two
 // implementations report equivalent failures.
 var (
@@ -54,6 +59,26 @@ type (
 		coord coordIJK
 	}
 	baseCellRotation struct{ baseCell, ccwRot60 int }
+
+	// faceOrientIJK describes how to transform an IJK coordinate from one
+	// icosahedron face into an adjacent face's coordinate system: the adjacent
+	// face, the res-0 translation, and the counterclockwise 60° rotation count.
+	faceOrientIJK struct {
+		face      int
+		translate coordIJK
+		ccwRot60  int
+	}
+
+	// overage classifies whether an IJK coordinate has spilled past the edge of
+	// its icosahedron face during the reverse projection.
+	overage int
+)
+
+// Overage classes returned by adjustOverageClassII.
+const (
+	noOverage overage = iota // on the original face
+	faceEdge                 // on a face edge (only occurs on substrate grids)
+	newFace                  // overage onto an adjacent face's interior
 )
 
 // Constants for the H3 index encoding and projection math.
@@ -61,15 +86,37 @@ const (
 	epsilon          = 1e-16
 	m2PI             = 2 * math.Pi
 	mSqrt7           = 2.6457513110645905905016157536392604257102
+	mRSqrt7          = 0.37796447300922722721451653623418006081576
 	mRSin60          = 1.1547005383792515290182975610039149112953
+	mSqrt3Half       = 0.8660254037844386467637231707529361834714
 	mOneSeventh      = 1.0 / 7.0
+	mOneThird        = 1.0 / 3.0
 	mAP7RotRads      = 0.333473172251832115336090755351601070065900389
 	invRes0UGnomonic = 2.61803398874989588842
+	res0UGnomonic    = 0.38196601125010500003
 	maxFaceCoord     = 2
 	numIcosaFaces    = 20
 
+	// numHexVerts and numPentVerts are the topological vertex counts of a
+	// hexagon and a pentagon cell, respectively.
+	numHexVerts  = 6
+	numPentVerts = 5
+
+	// fltEpsilon is the 32-bit float epsilon used to detect when a cell-boundary
+	// edge intersection coincides with an existing vertex (matching the cgo
+	// reference, which compares with FLT_EPSILON).
+	fltEpsilon = 1.1920928955078125e-07
+
+	// faceNeighbors quadrant indices: the direction from a face to the adjacent
+	// face that shares the corresponding pair of axes.
+	dirIJ = 1
+	dirKI = 2
+	dirJK = 3
+
 	// degsToRads converts degrees to radians by multiplying degrees by this constant.
 	degsToRads = math.Pi / 180.0
+	// radsToDegs converts radians to degrees by multiplying radians by this constant.
+	radsToDegs = 180.0 / math.Pi
 
 	// h3Init has all 15 digit slots set to 7 (invalid); mode/res/base cell are 0.
 	h3Init = 35184372088831
@@ -272,4 +319,311 @@ var faceIjkBaseCells = [20][3][3][3]baseCellRotation{
 		{{{118, 0}, {120, 0}, {115, 5}}, {{108, 1}, {114, 0}, {112, 0}}, {{92, 1}, {100, 0}, {102, 0}}},
 		{{{117, 0}, {121, 5}, {119, 5}}, {{109, 1}, {118, 0}, {120, 0}}, {{95, 1}, {108, 1}, {114, 0}}},
 	},
+}
+
+// unitVecs holds the IJK unit vector for each H3 digit direction, used to step
+// from a cell to its neighbor in that direction.
+var unitVecs = [7]coordIJK{
+	{0, 0, 0}, // center
+	{0, 0, 1}, // k axis
+	{0, 1, 0}, // j axis
+	{0, 1, 1}, // jk axis
+	{1, 0, 0}, // i axis
+	{1, 0, 1}, // ik axis
+	{1, 1, 0}, // ij axis
+}
+
+// faceNeighbors describes, for each icosahedron face, how to transform an IJK
+// coordinate into the adjacent face across each of the three axis-pair edges
+// (plus the identity transform for the face itself at index 0). It is indexed by
+// [face][dir] where dir is one of dirIJ, dirKI, dirJK.
+var faceNeighbors = [numIcosaFaces][4]faceOrientIJK{
+	{ // face 0
+		{0, coordIJK{0, 0, 0}, 0}, // central face
+		{4, coordIJK{2, 0, 2}, 1}, // ij quadrant
+		{1, coordIJK{2, 2, 0}, 5}, // ki quadrant
+		{5, coordIJK{0, 2, 2}, 3}, // jk quadrant
+	},
+	{ // face 1
+		{1, coordIJK{0, 0, 0}, 0},
+		{0, coordIJK{2, 0, 2}, 1},
+		{2, coordIJK{2, 2, 0}, 5},
+		{6, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 2
+		{2, coordIJK{0, 0, 0}, 0},
+		{1, coordIJK{2, 0, 2}, 1},
+		{3, coordIJK{2, 2, 0}, 5},
+		{7, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 3
+		{3, coordIJK{0, 0, 0}, 0},
+		{2, coordIJK{2, 0, 2}, 1},
+		{4, coordIJK{2, 2, 0}, 5},
+		{8, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 4
+		{4, coordIJK{0, 0, 0}, 0},
+		{3, coordIJK{2, 0, 2}, 1},
+		{0, coordIJK{2, 2, 0}, 5},
+		{9, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 5
+		{5, coordIJK{0, 0, 0}, 0},
+		{10, coordIJK{2, 2, 0}, 3},
+		{14, coordIJK{2, 0, 2}, 3},
+		{0, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 6
+		{6, coordIJK{0, 0, 0}, 0},
+		{11, coordIJK{2, 2, 0}, 3},
+		{10, coordIJK{2, 0, 2}, 3},
+		{1, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 7
+		{7, coordIJK{0, 0, 0}, 0},
+		{12, coordIJK{2, 2, 0}, 3},
+		{11, coordIJK{2, 0, 2}, 3},
+		{2, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 8
+		{8, coordIJK{0, 0, 0}, 0},
+		{13, coordIJK{2, 2, 0}, 3},
+		{12, coordIJK{2, 0, 2}, 3},
+		{3, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 9
+		{9, coordIJK{0, 0, 0}, 0},
+		{14, coordIJK{2, 2, 0}, 3},
+		{13, coordIJK{2, 0, 2}, 3},
+		{4, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 10
+		{10, coordIJK{0, 0, 0}, 0},
+		{5, coordIJK{2, 2, 0}, 3},
+		{6, coordIJK{2, 0, 2}, 3},
+		{15, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 11
+		{11, coordIJK{0, 0, 0}, 0},
+		{6, coordIJK{2, 2, 0}, 3},
+		{7, coordIJK{2, 0, 2}, 3},
+		{16, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 12
+		{12, coordIJK{0, 0, 0}, 0},
+		{7, coordIJK{2, 2, 0}, 3},
+		{8, coordIJK{2, 0, 2}, 3},
+		{17, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 13
+		{13, coordIJK{0, 0, 0}, 0},
+		{8, coordIJK{2, 2, 0}, 3},
+		{9, coordIJK{2, 0, 2}, 3},
+		{18, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 14
+		{14, coordIJK{0, 0, 0}, 0},
+		{9, coordIJK{2, 2, 0}, 3},
+		{5, coordIJK{2, 0, 2}, 3},
+		{19, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 15
+		{15, coordIJK{0, 0, 0}, 0},
+		{16, coordIJK{2, 0, 2}, 1},
+		{19, coordIJK{2, 2, 0}, 5},
+		{10, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 16
+		{16, coordIJK{0, 0, 0}, 0},
+		{17, coordIJK{2, 0, 2}, 1},
+		{15, coordIJK{2, 2, 0}, 5},
+		{11, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 17
+		{17, coordIJK{0, 0, 0}, 0},
+		{18, coordIJK{2, 0, 2}, 1},
+		{16, coordIJK{2, 2, 0}, 5},
+		{12, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 18
+		{18, coordIJK{0, 0, 0}, 0},
+		{19, coordIJK{2, 0, 2}, 1},
+		{17, coordIJK{2, 2, 0}, 5},
+		{13, coordIJK{0, 2, 2}, 3},
+	},
+	{ // face 19
+		{19, coordIJK{0, 0, 0}, 0},
+		{15, coordIJK{2, 0, 2}, 1},
+		{18, coordIJK{2, 2, 0}, 5},
+		{14, coordIJK{0, 2, 2}, 3},
+	},
+}
+
+// adjacentFaceDir gives the direction (dirIJ/dirKI/dirJK) from the origin face
+// to the destination face, in the origin face's coordinate system, 0 if they
+// are the same face, or -1 if the faces are not adjacent.
+var adjacentFaceDir = [numIcosaFaces][numIcosaFaces]int{
+	{0, dirKI, -1, -1, dirIJ, dirJK, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // face 0
+	{dirIJ, 0, dirKI, -1, -1, -1, dirJK, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // face 1
+	{-1, dirIJ, 0, dirKI, -1, -1, -1, dirJK, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // face 2
+	{-1, -1, dirIJ, 0, dirKI, -1, -1, -1, dirJK, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // face 3
+	{dirKI, -1, -1, dirIJ, 0, -1, -1, -1, -1, dirJK, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // face 4
+	{dirJK, -1, -1, -1, -1, 0, -1, -1, -1, -1, dirIJ, -1, -1, -1, dirKI, -1, -1, -1, -1, -1}, // face 5
+	{-1, dirJK, -1, -1, -1, -1, 0, -1, -1, -1, dirKI, dirIJ, -1, -1, -1, -1, -1, -1, -1, -1}, // face 6
+	{-1, -1, dirJK, -1, -1, -1, -1, 0, -1, -1, -1, dirKI, dirIJ, -1, -1, -1, -1, -1, -1, -1}, // face 7
+	{-1, -1, -1, dirJK, -1, -1, -1, -1, 0, -1, -1, -1, dirKI, dirIJ, -1, -1, -1, -1, -1, -1}, // face 8
+	{-1, -1, -1, -1, dirJK, -1, -1, -1, -1, 0, -1, -1, -1, dirKI, dirIJ, -1, -1, -1, -1, -1}, // face 9
+	{-1, -1, -1, -1, -1, dirIJ, dirKI, -1, -1, -1, 0, -1, -1, -1, -1, dirJK, -1, -1, -1, -1}, // face 10
+	{-1, -1, -1, -1, -1, -1, dirIJ, dirKI, -1, -1, -1, 0, -1, -1, -1, -1, dirJK, -1, -1, -1}, // face 11
+	{-1, -1, -1, -1, -1, -1, -1, dirIJ, dirKI, -1, -1, -1, 0, -1, -1, -1, -1, dirJK, -1, -1}, // face 12
+	{-1, -1, -1, -1, -1, -1, -1, -1, dirIJ, dirKI, -1, -1, -1, 0, -1, -1, -1, -1, dirJK, -1}, // face 13
+	{-1, -1, -1, -1, -1, dirKI, -1, -1, -1, dirIJ, -1, -1, -1, -1, 0, -1, -1, -1, -1, dirJK}, // face 14
+	{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, dirJK, -1, -1, -1, -1, 0, dirIJ, -1, -1, dirKI}, // face 15
+	{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, dirJK, -1, -1, -1, dirKI, 0, dirIJ, -1, -1}, // face 16
+	{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, dirJK, -1, -1, -1, dirKI, 0, dirIJ, -1}, // face 17
+	{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, dirJK, -1, -1, -1, dirKI, 0, dirIJ}, // face 18
+	{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, dirJK, dirIJ, -1, -1, dirKI, 0}, // face 19
+}
+
+// maxDimByCIIres is the maximum IJK dimension value, by Class II resolution,
+// used to detect overage past a face edge. Odd (Class III) entries are -1
+// because the overage check operates on Class II grids only.
+var maxDimByCIIres = [maxResolution + 2]int{
+	2, -1, 14, -1, 98, -1, 686, -1, 4802, -1, 33614, -1, 235298, -1, 1647086, -1, 11529602,
+}
+
+// unitScaleByCIIres is the unit-scale distance, by Class II resolution, used to
+// translate IJK coordinates onto an adjacent face. Odd entries are -1 for the
+// same reason as maxDimByCIIres.
+var unitScaleByCIIres = [maxResolution + 2]int{
+	1, -1, 7, -1, 49, -1, 343, -1, 2401, -1, 16807, -1, 117649, -1, 823543, -1, 5764801,
+}
+
+// baseCellHomeFijk maps each base cell to its "home" face and the normalized IJK
+// coordinates of its center on that face — the starting point for decoding a
+// cell back into a face-centered coordinate.
+var baseCellHomeFijk = [numBaseCells]faceIJK{
+	{1, coordIJK{1, 0, 0}},  // base cell 0
+	{2, coordIJK{1, 1, 0}},  // base cell 1
+	{1, coordIJK{0, 0, 0}},  // base cell 2
+	{2, coordIJK{1, 0, 0}},  // base cell 3
+	{0, coordIJK{2, 0, 0}},  // base cell 4
+	{1, coordIJK{1, 1, 0}},  // base cell 5
+	{1, coordIJK{0, 0, 1}},  // base cell 6
+	{2, coordIJK{0, 0, 0}},  // base cell 7
+	{0, coordIJK{1, 0, 0}},  // base cell 8
+	{2, coordIJK{0, 1, 0}},  // base cell 9
+	{1, coordIJK{0, 1, 0}},  // base cell 10
+	{1, coordIJK{0, 1, 1}},  // base cell 11
+	{3, coordIJK{1, 0, 0}},  // base cell 12
+	{3, coordIJK{1, 1, 0}},  // base cell 13
+	{11, coordIJK{2, 0, 0}}, // base cell 14
+	{4, coordIJK{1, 0, 0}},  // base cell 15
+	{0, coordIJK{0, 0, 0}},  // base cell 16
+	{6, coordIJK{0, 1, 0}},  // base cell 17
+	{0, coordIJK{0, 0, 1}},  // base cell 18
+	{2, coordIJK{0, 1, 1}},  // base cell 19
+	{7, coordIJK{0, 0, 1}},  // base cell 20
+	{2, coordIJK{0, 0, 1}},  // base cell 21
+	{0, coordIJK{1, 1, 0}},  // base cell 22
+	{6, coordIJK{0, 0, 1}},  // base cell 23
+	{10, coordIJK{2, 0, 0}}, // base cell 24
+	{6, coordIJK{0, 0, 0}},  // base cell 25
+	{3, coordIJK{0, 0, 0}},  // base cell 26
+	{11, coordIJK{1, 0, 0}}, // base cell 27
+	{4, coordIJK{1, 1, 0}},  // base cell 28
+	{3, coordIJK{0, 1, 0}},  // base cell 29
+	{0, coordIJK{0, 1, 1}},  // base cell 30
+	{4, coordIJK{0, 0, 0}},  // base cell 31
+	{5, coordIJK{0, 1, 0}},  // base cell 32
+	{0, coordIJK{0, 1, 0}},  // base cell 33
+	{7, coordIJK{0, 1, 0}},  // base cell 34
+	{11, coordIJK{1, 1, 0}}, // base cell 35
+	{7, coordIJK{0, 0, 0}},  // base cell 36
+	{10, coordIJK{1, 0, 0}}, // base cell 37
+	{12, coordIJK{2, 0, 0}}, // base cell 38
+	{6, coordIJK{1, 0, 1}},  // base cell 39
+	{7, coordIJK{1, 0, 1}},  // base cell 40
+	{4, coordIJK{0, 0, 1}},  // base cell 41
+	{3, coordIJK{0, 0, 1}},  // base cell 42
+	{3, coordIJK{0, 1, 1}},  // base cell 43
+	{4, coordIJK{0, 1, 0}},  // base cell 44
+	{6, coordIJK{1, 0, 0}},  // base cell 45
+	{11, coordIJK{0, 0, 0}}, // base cell 46
+	{8, coordIJK{0, 0, 1}},  // base cell 47
+	{5, coordIJK{0, 0, 1}},  // base cell 48
+	{14, coordIJK{2, 0, 0}}, // base cell 49
+	{5, coordIJK{0, 0, 0}},  // base cell 50
+	{12, coordIJK{1, 0, 0}}, // base cell 51
+	{10, coordIJK{1, 1, 0}}, // base cell 52
+	{4, coordIJK{0, 1, 1}},  // base cell 53
+	{12, coordIJK{1, 1, 0}}, // base cell 54
+	{7, coordIJK{1, 0, 0}},  // base cell 55
+	{11, coordIJK{0, 1, 0}}, // base cell 56
+	{10, coordIJK{0, 0, 0}}, // base cell 57
+	{13, coordIJK{2, 0, 0}}, // base cell 58
+	{10, coordIJK{0, 0, 1}}, // base cell 59
+	{11, coordIJK{0, 0, 1}}, // base cell 60
+	{9, coordIJK{0, 1, 0}},  // base cell 61
+	{8, coordIJK{0, 1, 0}},  // base cell 62
+	{6, coordIJK{2, 0, 0}},  // base cell 63
+	{8, coordIJK{0, 0, 0}},  // base cell 64
+	{9, coordIJK{0, 0, 1}},  // base cell 65
+	{14, coordIJK{1, 0, 0}}, // base cell 66
+	{5, coordIJK{1, 0, 1}},  // base cell 67
+	{16, coordIJK{0, 1, 1}}, // base cell 68
+	{8, coordIJK{1, 0, 1}},  // base cell 69
+	{5, coordIJK{1, 0, 0}},  // base cell 70
+	{12, coordIJK{0, 0, 0}}, // base cell 71
+	{7, coordIJK{2, 0, 0}},  // base cell 72
+	{12, coordIJK{0, 1, 0}}, // base cell 73
+	{10, coordIJK{0, 1, 0}}, // base cell 74
+	{9, coordIJK{0, 0, 0}},  // base cell 75
+	{13, coordIJK{1, 0, 0}}, // base cell 76
+	{16, coordIJK{0, 0, 1}}, // base cell 77
+	{15, coordIJK{0, 1, 1}}, // base cell 78
+	{15, coordIJK{0, 1, 0}}, // base cell 79
+	{16, coordIJK{0, 1, 0}}, // base cell 80
+	{14, coordIJK{1, 1, 0}}, // base cell 81
+	{13, coordIJK{1, 1, 0}}, // base cell 82
+	{5, coordIJK{2, 0, 0}},  // base cell 83
+	{8, coordIJK{1, 0, 0}},  // base cell 84
+	{14, coordIJK{0, 0, 0}}, // base cell 85
+	{9, coordIJK{1, 0, 1}},  // base cell 86
+	{14, coordIJK{0, 0, 1}}, // base cell 87
+	{17, coordIJK{0, 0, 1}}, // base cell 88
+	{12, coordIJK{0, 0, 1}}, // base cell 89
+	{16, coordIJK{0, 0, 0}}, // base cell 90
+	{17, coordIJK{0, 1, 1}}, // base cell 91
+	{15, coordIJK{0, 0, 1}}, // base cell 92
+	{16, coordIJK{1, 0, 1}}, // base cell 93
+	{9, coordIJK{1, 0, 0}},  // base cell 94
+	{15, coordIJK{0, 0, 0}}, // base cell 95
+	{13, coordIJK{0, 0, 0}}, // base cell 96
+	{8, coordIJK{2, 0, 0}},  // base cell 97
+	{13, coordIJK{0, 1, 0}}, // base cell 98
+	{17, coordIJK{1, 0, 1}}, // base cell 99
+	{19, coordIJK{0, 1, 0}}, // base cell 100
+	{14, coordIJK{0, 1, 0}}, // base cell 101
+	{19, coordIJK{0, 1, 1}}, // base cell 102
+	{17, coordIJK{0, 1, 0}}, // base cell 103
+	{13, coordIJK{0, 0, 1}}, // base cell 104
+	{17, coordIJK{0, 0, 0}}, // base cell 105
+	{16, coordIJK{1, 0, 0}}, // base cell 106
+	{9, coordIJK{2, 0, 0}},  // base cell 107
+	{15, coordIJK{1, 0, 1}}, // base cell 108
+	{15, coordIJK{1, 0, 0}}, // base cell 109
+	{18, coordIJK{0, 1, 1}}, // base cell 110
+	{18, coordIJK{0, 0, 1}}, // base cell 111
+	{19, coordIJK{0, 0, 1}}, // base cell 112
+	{17, coordIJK{1, 0, 0}}, // base cell 113
+	{19, coordIJK{0, 0, 0}}, // base cell 114
+	{18, coordIJK{0, 1, 0}}, // base cell 115
+	{18, coordIJK{1, 0, 1}}, // base cell 116
+	{19, coordIJK{2, 0, 0}}, // base cell 117
+	{19, coordIJK{1, 0, 0}}, // base cell 118
+	{18, coordIJK{0, 0, 0}}, // base cell 119
+	{19, coordIJK{1, 0, 1}}, // base cell 120
+	{18, coordIJK{1, 0, 0}}, // base cell 121
 }
