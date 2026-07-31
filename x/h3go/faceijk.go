@@ -460,19 +460,46 @@ func (v vec2d) almostEquals(b vec2d) bool {
 	return math.Abs(v.x-b.x) < fltEpsilon && math.Abs(v.y-b.y) < fltEpsilon
 }
 
+// Precomputed trig for toVec3's inverse gnomonic projection, so the hot path
+// uses multiply-adds and a single sqrt instead of atan2/atan/sin/cos.
+var (
+	ap7RotCos = math.Cos(mAP7RotRads)
+	ap7RotSin = math.Sin(mAP7RotRads)
+
+	faceAxis0Cos, faceAxis0Sin = faceAxis0Trig()
+)
+
+// faceAxis0Trig precomputes the cosine and sine of each face's axis-0 azimuth.
+func faceAxis0Trig() (cos, sin [NumIcosaFaces]float64) {
+	for i := range faceAxesAzRadsCII {
+		cos[i] = math.Cos(faceAxesAzRadsCII[i][0])
+		sin[i] = math.Sin(faceAxesAzRadsCII[i][0])
+	}
+
+	return cos, sin
+}
+
 // toVec3 converts a 2D Hex coordinate on a face into a 3D unit vector. It is the
 // inverse of the gnomonic projection: the radius is inverse-scaled per
 // resolution (and by a further third for substrate grids), the gnomonic scaling
-// is undone with atan, and the result is placed at the computed azimuth from the
-// face center. A point at the face center maps to the face center vector.
+// is undone, and the result is placed at the computed azimuth from the face
+// center. A point at the face center maps to the face center vector.
+//
+// The angle work is done with precomputed cos/sin rather than atan2/atan/sin/cos:
+// the in-plane angle's cos/sin come straight from the vector, the per-resolution
+// and per-face rotations fold in via angle-addition, and the inverse gnomonic
+// uses cos(atan r)=1/√(1+r²), sin(atan r)=r/√(1+r²).
 func (v vec2d) toVec3(face, res int, substrate bool) vec3d {
-	r := v.mag()
-	if r < epsilon {
+	mag := v.mag()
+	if mag < epsilon {
 		return faceCenterPoint[face]
 	}
 
-	theta := math.Atan2(v.y, v.x)
+	// cos/sin of the in-plane angle theta = atan2(y, x), taken directly.
+	cosTheta := v.x / mag
+	sinTheta := v.y / mag
 
+	r := mag
 	for range res {
 		r *= mRSqrt7
 	}
@@ -489,17 +516,29 @@ func (v vec2d) toVec3(face, res int, substrate bool) vec3d {
 	}
 
 	r *= res0UGnomonic
-	r = math.Atan(r)
 
+	// Class III rotates the angle by mAP7RotRads before projecting (theta += rot).
 	if !substrate && isResClassIII(res) {
-		theta = posAngleRads(theta + mAP7RotRads)
+		cosTheta, sinTheta = cosTheta*ap7RotCos-sinTheta*ap7RotSin,
+			sinTheta*ap7RotCos+cosTheta*ap7RotSin
 	}
 
-	theta = posAngleRads(faceAxesAzRadsCII[face][0] - theta)
+	// Azimuth from the face center is faceAxis0 - theta; expand cos/sin of the
+	// difference from the precomputed face-axis trig.
+	cosA := faceAxis0Cos[face]
+	sinA := faceAxis0Sin[face]
+	cosAz := cosA*cosTheta + sinA*sinTheta
+	sinAz := sinA*cosTheta - cosA*sinTheta
+
+	// Inverse gnomonic: the projected angle is atan(r); use the half-angle
+	// identities to skip atan and the following sin/cos.
+	invHyp := 1.0 / math.Sqrt(1.0+r*r)
+	cosR := invHyp
+	sinR := r * invHyp
 
 	north, east := faceCenterPoint[face].tangentBasis()
-	dir := north.linComb(math.Cos(theta), math.Sin(theta), east)
-	out := faceCenterPoint[face].linComb(math.Cos(r), math.Sin(r), dir)
+	dir := north.linComb(cosAz, sinAz, east)
+	out := faceCenterPoint[face].linComb(cosR, sinR, dir)
 	out.normalize()
 
 	return out
@@ -738,13 +777,24 @@ func (c Cell) toFaceIjkWithInitializedFijk(fijk faceIJK) (faceIJK, bool) {
 	ijk := fijk.coord
 
 	for r := 1; r <= res; r++ {
-		if isResClassIII(r) { // rotate ccw
-			ijk.downAp7()
+		// Down-aperture-7 into the finer grid, then step to the indexing digit's
+		// neighbor. downAp7/downAp7r and neighbor each normalize; here they are
+		// fused so a single normalize closes the iteration, which is exact
+		// because normalize is invariant to a uniform offset.
+		if isResClassIII(r) { // Class III: rotate ccw
+			ijk = coordIJK{i: 3*ijk.i + ijk.j, j: 3*ijk.j + ijk.k, k: ijk.i + 3*ijk.k}
 		} else { // Class II: rotate cw
-			ijk.downAp7r()
+			ijk = coordIJK{i: 3*ijk.i + ijk.k, j: ijk.i + 3*ijk.j, k: ijk.j + 3*ijk.k}
 		}
 
-		ijk = ijk.neighbor(indexDigit(c, r))
+		if digit := indexDigit(c, r); digit > centerDigit && digit < invalidDigit {
+			unit := unitVecs[digit]
+			ijk.i += unit.i
+			ijk.j += unit.j
+			ijk.k += unit.k
+		}
+
+		ijk.normalize()
 	}
 
 	fijk.coord = ijk

@@ -260,6 +260,16 @@ func TestGridDomainErrors(t *testing.T) {
 	if _, err := origin.GridRing(-1); !errors.Is(err, ErrDomain) {
 		t.Fatalf("GridRing(-1): got %v, want ErrDomain", err)
 	}
+
+	if _, err := GridDisksUnsafe([]Cell{origin}, -1); !errors.Is(err, ErrDomain) {
+		t.Fatalf("GridDisksUnsafe(-1): got %v, want ErrDomain", err)
+	}
+
+	// gridDiskUnsafeInto guards k itself; every public caller validates first,
+	// so this is the only path that reaches the guard.
+	if _, err := origin.gridDiskUnsafeInto(-1, nil); !errors.Is(err, ErrDomain) {
+		t.Fatalf("gridDiskUnsafeInto(-1): got %v, want ErrDomain", err)
+	}
 }
 
 // TestGridPentagonFallback checks that the unsafe variants report ErrPentagon on
