@@ -56,7 +56,7 @@ func (c Cell) DirectedEdges() ([]DirectedEdge, error) {
 
 // IsValid reports whether the index is a valid H3 directed edge.
 func (e DirectedEdge) IsValid() bool {
-	neighborDirection := Cell(e).reservedBits()
+	neighborDirection := reservedBits(e)
 	if neighborDirection <= centerDigit || neighborDirection >= numDigits {
 		return false
 	}
@@ -75,11 +75,11 @@ func (e DirectedEdge) IsValid() bool {
 
 // Origin returns the origin cell of the directed edge.
 func (e DirectedEdge) Origin() (Cell, error) {
-	if Cell(e).mode() != directedEdgeMode {
+	if modeOf(e) != directedEdgeMode {
 		return 0, ErrDirectedEdgeInvalid
 	}
 
-	return Cell(e).setMode(cellMode).setReservedBits(0), nil
+	return ownerCell(e), nil
 }
 
 // Destination returns the destination cell of the directed edge.
@@ -89,7 +89,7 @@ func (e DirectedEdge) Destination() (Cell, error) {
 		return 0, err
 	}
 
-	direction := Cell(e).reservedBits()
+	direction := reservedBits(e)
 
 	destination, _, err := origin.neighborRotations(direction, 0)
 
@@ -133,7 +133,7 @@ func (e DirectedEdge) Cells() ([]Cell, error) {
 // The boundary may contain an extra vertex where the edge crosses an
 // icosahedron face boundary.
 func (e DirectedEdge) Boundary() (CellBoundary, error) {
-	direction := Cell(e).reservedBits()
+	direction := reservedBits(e)
 
 	origin, err := e.Origin()
 	if err != nil {
@@ -160,13 +160,13 @@ func (e DirectedEdge) Boundary() (CellBoundary, error) {
 
 // Resolution returns the resolution of the directed edge.
 func (e DirectedEdge) Resolution() int {
-	return Cell(e).Resolution()
+	return resolution(e)
 }
 
 // IndexDigit returns the indexing digit of the directed edge at res, for res in
 // [1, MaxResolution].
 func (e DirectedEdge) IndexDigit(res int) (int, error) {
-	return Cell(e).IndexDigit(res)
+	return indexDigitChecked(e, res)
 }
 
 // DirectedEdgeFromString returns a DirectedEdge parsed from its hexadecimal

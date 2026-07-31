@@ -21,6 +21,13 @@ import (
 	"sort"
 )
 
+// Counter-clockwise orderings of a cell's directed edges into its linked loop.
+// idxHex is for hexagons (six edges); idxPent is for pentagons (five edges).
+var (
+	idxHex  = [numCellEdges]int{0, 4, 3, 5, 1, 2}
+	idxPent = [numCellEdges - 1]int{0, 1, 3, 2, 4}
+)
+
 // arc is one directed edge of a cell during multipolygon assembly. Arcs form
 // doubly-linked loops (counter-clockwise) and a union-find forest whose roots
 // identify connected components (each component becomes one polygon).
@@ -33,13 +40,6 @@ type arc struct {
 	removed bool
 	visited bool
 }
-
-// Counter-clockwise orderings of a cell's directed edges into its linked loop.
-// idxHex is for hexagons (six edges); idxPent is for pentagons (five edges).
-var (
-	idxHex  = [numCellEdges]int{0, 4, 3, 5, 1, 2}
-	idxPent = [numCellEdges - 1]int{0, 1, 3, 2, 4}
-)
 
 // root returns the representative arc of the connected component, compressing
 // the path along the way.
@@ -174,7 +174,7 @@ func cancelArcPairs(arcs []*arc, index map[DirectedEdge]*arc) {
 // belongs to and its area, used to order loops within and across polygons.
 type outlineLoop struct {
 	loop GeoLoop
-	root Cell
+	root DirectedEdge
 	area float64
 }
 
@@ -210,7 +210,7 @@ func buildOutlineLoops(arcs []*arc) []outlineLoop {
 		}
 
 		loops = append(loops, outlineLoop{
-			root: Cell(start.root().id),
+			root: start.root().id,
 			loop: verts,
 			area: CellBoundary(verts).areaRads2(),
 		})

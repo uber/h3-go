@@ -31,19 +31,19 @@ func TestSetH3IndexValue(t *testing.T) {
 		t.Fatalf("base cell = %d, want 12", h.BaseCellNumber())
 	}
 
-	if h.mode() != cellMode {
-		t.Fatalf("mode = %d, want %d", h.mode(), cellMode)
+	if modeOf(h) != cellMode {
+		t.Fatalf("mode = %d, want %d", modeOf(h), cellMode)
 	}
 
 	for r := 1; r <= 5; r++ {
-		if h.indexDigit(r) != 1 {
-			t.Fatalf("digit %d = %d, want 1", r, h.indexDigit(r))
+		if indexDigit(h, r) != 1 {
+			t.Fatalf("digit %d = %d, want 1", r, indexDigit(h, r))
 		}
 	}
 
 	for r := 6; r <= MaxResolution; r++ {
-		if h.indexDigit(r) != invalidDigit {
-			t.Fatalf("digit %d = %d, want %d", r, h.indexDigit(r), invalidDigit)
+		if indexDigit(h, r) != invalidDigit {
+			t.Fatalf("digit %d = %d, want %d", r, indexDigit(h, r), invalidDigit)
 		}
 	}
 

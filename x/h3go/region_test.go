@@ -177,7 +177,7 @@ func TestPolygonToCellsBasic(t *testing.T) {
 		t.Fatal("PolygonToCells: got no cells, want some")
 	}
 
-	bboxes := bboxesFromGeoPolygon(polygon)
+	bboxes := polygon.toBboxes()
 
 	for _, cell := range cells {
 		center, err := cell.LatLng()
@@ -278,7 +278,7 @@ func TestPolygonFloodStepValidCells(t *testing.T) {
 	t.Parallel()
 
 	polygon := GeoPolygon{GeoLoop: sfSquareLoop}
-	bboxes := bboxesFromGeoPolygon(polygon)
+	bboxes := polygon.toBboxes()
 
 	center := LatLng{Lat: 37.76, Lng: -122.43}
 
@@ -323,25 +323,25 @@ func TestMaxPolygonToCellsSizeVertexFloor(t *testing.T) {
 func TestBBoxFromGeoLoop(t *testing.T) {
 	t.Parallel()
 
-	if got := bboxFromGeoLoop(GeoLoop{}); got != (bbox{}) {
-		t.Fatalf("bboxFromGeoLoop(empty): got %+v, want zero", got)
+	if got := (GeoLoop{}).toBbox(); got != (bbox{}) {
+		t.Fatalf("empty.toBbox(): got %+v, want zero", got)
 	}
 
-	normal := bboxFromGeoLoop(sfSquareLoop)
+	normal := sfSquareLoop.toBbox()
 	if normal.north <= normal.south || normal.east <= normal.west {
-		t.Fatalf("bboxFromGeoLoop(normal): unexpected %+v", normal)
+		t.Fatalf("normal.toBbox(): unexpected %+v", normal)
 	}
 
 	if normal.isTransmeridian() {
 		t.Fatal("sf square should not be transmeridian")
 	}
 
-	trans := bboxFromGeoLoop(GeoLoop{
+	trans := GeoLoop{
 		{Lat: 10, Lng: 178},
 		{Lat: 10, Lng: -178},
 		{Lat: -10, Lng: -178},
 		{Lat: -10, Lng: 178},
-	})
+	}.toBbox()
 	if !trans.isTransmeridian() {
 		t.Fatalf("expected transmeridian bbox, got %+v", trans)
 	}
@@ -402,7 +402,7 @@ func TestHexRadiusKm(t *testing.T) {
 func TestBBoxEstimatesResolutionError(t *testing.T) {
 	t.Parallel()
 
-	box := bboxFromGeoLoop(sfSquareLoop)
+	box := sfSquareLoop.toBbox()
 	if _, err := bboxHexEstimate(box, -1); err == nil {
 		t.Fatal("bboxHexEstimate(res -1): got nil error, want failure")
 	}
@@ -448,7 +448,7 @@ func TestPointInsideGeoLoopNudges(t *testing.T) {
 		{Lat: 2, Lng: 2},
 		{Lat: 2, Lng: 0},
 	}
-	box := bboxFromGeoLoop(loop)
+	box := loop.toBbox()
 
 	// Latitude exactly equal to a vertex latitude triggers the lat nudge; the
 	// longitude equal to a vertex longitude triggers the lng nudge.
@@ -474,7 +474,7 @@ func TestPointInsidePolygonHole(t *testing.T) {
 		{Lat: 37.76, Lng: -122.45},
 	}
 	polygon := GeoPolygon{GeoLoop: sfSquareLoop, Holes: []GeoLoop{hole}}
-	bboxes := bboxesFromGeoPolygon(polygon)
+	bboxes := polygon.toBboxes()
 
 	inHole := LatLng{Lat: 37.77, Lng: -122.435}
 	if pointInsidePolygon(polygon, bboxes, inHole) {
