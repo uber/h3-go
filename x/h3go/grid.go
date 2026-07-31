@@ -248,21 +248,107 @@ func (c Cell) neighborRotations(dir, rotations int) (Cell, int, error) {
 	return current, rotations, nil
 }
 
+// maxGridDiskSize returns the maximum number of cells in a grid disk of radius
+// k: the origin plus six cells per ring. It sizes the output buffer up front so
+// the traversal never has to grow it.
+func maxGridDiskSize(k int) int {
+	return 3*k*(k+1) + 1
+}
+
+// ringSize returns the number of cells in the hollow ring at grid distance d: 1
+// at the origin, 6*d otherwise.
+func ringSize(d int) int {
+	if d == 0 {
+		return 1
+	}
+
+	return 6 * d
+}
+
+// gridDiskUnsafeInto appends the grid disk of radius k around c to dst, the
+// origin first and then each ring outward, using the fast spiral traversal. It
+// fails with ErrPentagon on pentagon distortion, having appended a partial
+// result the caller is expected to discard. The caller sizes dst's capacity.
+func (c Cell) gridDiskUnsafeInto(k int, dst []Cell) ([]Cell, error) {
+	if k < 0 {
+		return dst, ErrDomain
+	}
+
+	cursor := c
+	dst = append(dst, cursor)
+
+	if cursor.IsPentagon() {
+		return dst, ErrPentagon
+	}
+
+	rotations := 0
+	for ring := 1; ring <= k; ring++ {
+		// Step outward to the start of the next ring before tracing it.
+		next, rot, err := cursor.neighborRotations(nextRingDirection, rotations)
+		if err != nil {
+			return dst, err
+		}
+
+		cursor, rotations = next, rot
+		if cursor.IsPentagon() {
+			return dst, ErrPentagon
+		}
+
+		for direction := 0; direction < 6; direction++ {
+			for i := 0; i < ring; i++ {
+				next, rot, err := cursor.neighborRotations(directions[direction], rotations)
+				if err != nil {
+					return dst, err
+				}
+
+				cursor, rotations = next, rot
+				dst = append(dst, cursor)
+
+				if cursor.IsPentagon() {
+					return dst, ErrPentagon
+				}
+			}
+		}
+	}
+
+	return dst, nil
+}
+
+// gridDiskInto appends the grid disk of radius k around c to dst, trying the
+// fast spiral first and falling back to the safe breadth-first traversal on
+// pentagon distortion. The caller sizes dst's capacity.
+func (c Cell) gridDiskInto(k int, dst []Cell) ([]Cell, error) {
+	start := len(dst)
+
+	dst, err := c.gridDiskUnsafeInto(k, dst)
+	if err == nil {
+		return dst, nil
+	}
+
+	// Discard the partial spiral and refill from the safe traversal.
+	dst = dst[:start]
+
+	rings, err := c.GridDiskDistancesSafe(k)
+	if err != nil {
+		return dst, err
+	}
+
+	for _, ring := range rings {
+		dst = append(dst, ring...)
+	}
+
+	return dst, nil
+}
+
 // GridDisk returns the cells within grid distance k of the origin cell. The
 // origin is included. Output ordering is not significant. It falls back to the
 // safe traversal when the fast one meets pentagon distortion.
 func (c Cell) GridDisk(k int) ([]Cell, error) {
-	rings, err := c.GridDiskDistances(k)
-	if err != nil {
-		return nil, err
+	if k < 0 {
+		return nil, ErrDomain
 	}
 
-	var out []Cell
-	for _, ring := range rings {
-		out = append(out, ring...)
-	}
-
-	return out, nil
+	return c.gridDiskInto(k, make([]Cell, 0, maxGridDiskSize(k)))
 }
 
 // GridDisk returns the cells within grid distance k of the origin cell.
@@ -272,25 +358,32 @@ func GridDisk(origin Cell, k int) ([]Cell, error) {
 
 // GridDisksUnsafe returns, for each origin, the cells within grid distance k of
 // that origin. The outer slice matches the order of origins; inner ordering is
-// not significant. It fails if any disk encounters pentagon distortion.
+// not significant. It fails if any disk encounters pentagon distortion. Every
+// disk shares one backing buffer sized for the worst case, so the result costs
+// two allocations regardless of the number of origins.
 func GridDisksUnsafe(origins []Cell, k int) ([][]Cell, error) {
 	if len(origins) == 0 {
 		return nil, nil
 	}
 
+	if k < 0 {
+		return nil, ErrDomain
+	}
+
 	out := make([][]Cell, len(origins))
+	buf := make([]Cell, 0, len(origins)*maxGridDiskSize(k))
+
 	for i, origin := range origins {
-		rings, err := origin.GridDiskDistancesUnsafe(k)
+		start := len(buf)
+
+		var err error
+
+		buf, err = origin.gridDiskUnsafeInto(k, buf)
 		if err != nil {
 			return nil, err
 		}
 
-		var flat []Cell
-		for _, ring := range rings {
-			flat = append(flat, ring...)
-		}
-
-		out[i] = flat
+		out[i] = buf[start:len(buf):len(buf)]
 	}
 
 	return out, nil
@@ -323,55 +416,21 @@ func (c Cell) GridDiskDistancesUnsafe(k int) ([][]Cell, error) {
 		return nil, ErrDomain
 	}
 
-	rings := make([][]Cell, k+1)
-
-	cursor := c
-	rings[0] = append(rings[0], cursor)
-
-	if cursor.IsPentagon() {
-		return nil, ErrPentagon
+	buf, err := c.gridDiskUnsafeInto(k, make([]Cell, 0, maxGridDiskSize(k)))
+	if err != nil {
+		return nil, err
 	}
 
-	ring := 1
-	direction := 0
-	i := 0
-	rotations := 0
+	// The spiral fills buf ring by ring, so each ring is a contiguous window
+	// into the one backing array.
+	rings := make([][]Cell, k+1)
 
-	for ring <= k {
-		if direction == 0 && i == 0 {
-			next, rot, err := cursor.neighborRotations(nextRingDirection, rotations)
-			if err != nil {
-				return nil, err
-			}
+	offset := 0
 
-			cursor, rotations = next, rot
-			if cursor.IsPentagon() {
-				return nil, ErrPentagon
-			}
-		}
-
-		next, rot, err := cursor.neighborRotations(directions[direction], rotations)
-		if err != nil {
-			return nil, err
-		}
-
-		cursor, rotations = next, rot
-		rings[ring] = append(rings[ring], cursor)
-
-		i++
-		if i == ring {
-			i = 0
-			direction++
-
-			if direction == 6 {
-				direction = 0
-				ring++
-			}
-		}
-
-		if cursor.IsPentagon() {
-			return nil, ErrPentagon
-		}
+	for d := 0; d <= k; d++ {
+		size := ringSize(d)
+		rings[d] = buf[offset : offset+size : offset+size]
+		offset += size
 	}
 
 	return rings, nil
@@ -392,6 +451,19 @@ func (c Cell) GridDiskDistancesSafe(k int) ([][]Cell, error) {
 	}
 
 	rings := make([][]Cell, k+1)
+
+	// Give every ring an exact-capacity window into one shared buffer so the
+	// breadth-first appends below never reallocate.
+	buf := make([]Cell, maxGridDiskSize(k))
+
+	offset := 0
+
+	for d := 0; d <= k; d++ {
+		size := ringSize(d)
+		rings[d] = buf[offset : offset : offset+size]
+		offset += size
+	}
+
 	seen := map[Cell]int{c: 0}
 	rings[0] = append(rings[0], c)
 
@@ -473,7 +545,8 @@ func (c Cell) GridRingUnsafe(k int) ([]Cell, error) {
 	}
 
 	lastIndex := cursor
-	out := []Cell{cursor}
+	out := make([]Cell, 0, ringSize(k))
+	out = append(out, cursor)
 
 	for direction := 0; direction < 6; direction++ {
 		for pos := 0; pos < k; pos++ {
