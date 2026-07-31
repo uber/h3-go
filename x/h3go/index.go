@@ -38,6 +38,8 @@ const (
 	baseCellMask = 0x7F
 	// modeMask masks the 4-bit mode field after shifting.
 	modeMask = 0xF
+	// reservedMask masks the 3-bit reserved field after shifting.
+	reservedMask = 0x7
 
 	// digitRegionOffset is the number of non-digit bits above the 15×3-bit digit
 	// region (high + mode + reserved + resolution + base cell = 19).
@@ -91,6 +93,24 @@ func (c Cell) setIndexDigit(res, digit int) Cell {
 func (c Cell) setBaseCell(baseCell int) Cell {
 	c &= ^(Cell(baseCellMask) << baseCellOffset)
 	c |= Cell(baseCell) << baseCellOffset
+
+	return c
+}
+
+// setMode returns the index with its 4-bit mode field set to mode.
+func (c Cell) setMode(mode int) Cell {
+	c &= ^(Cell(modeMask) << modeOffset)
+	c |= Cell(mode) << modeOffset
+
+	return c
+}
+
+// setReservedBits returns the index with its 3-bit reserved field set to value.
+// The reserved field holds the direction of a directed edge or the vertex number
+// of a vertex.
+func (c Cell) setReservedBits(value int) Cell {
+	c &= ^(Cell(reservedMask) << reservedOffset)
+	c |= Cell(value) << reservedOffset
 
 	return c
 }
@@ -240,4 +260,25 @@ func hasDeletedSubsequence(h uint64, baseCell int) bool {
 // firstOneIndex returns the index of the most significant set bit.
 func firstOneIndex(h uint64) int {
 	return (bitSize - 1) - bits.LeadingZeros64(h)
+}
+
+// Index is the constraint satisfied by the H3 index types. They share the same
+// 64-bit encoding and are distinguished by their mode field.
+type Index interface {
+	Cell | DirectedEdge | Vertex
+}
+
+// IsValidIndex reports whether index is valid for its mode (cell, directed edge,
+// or vertex).
+func IsValidIndex[T Index](index T) bool {
+	switch int(index>>modeOffset) & modeMask {
+	case cellMode:
+		return Cell(index).IsValid()
+	case directedEdgeMode:
+		return DirectedEdge(index).IsValid()
+	case vertexMode:
+		return Vertex(index).IsValid()
+	default:
+		return false
+	}
 }

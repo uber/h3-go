@@ -40,14 +40,16 @@ type CellBoundary []LatLng
 // Error codes. Messages mirror the cgo-backed h3 package so the two
 // implementations report equivalent failures.
 var (
-	ErrFailed             = errors.New("the operation failed")
-	ErrDomain             = errors.New("argument was outside of acceptable range")
-	ErrLatLngDomain       = errors.New("latitude or longitude arguments were outside of acceptable range")
-	ErrResolutionDomain   = errors.New("resolution argument was outside of acceptable range")
-	ErrResolutionMismatch = errors.New("H3Index cell arguments had incompatible resolutions")
-	ErrCellInvalid        = errors.New("H3Index cell argument was not valid")
-	ErrDuplicateInput     = errors.New("duplicate input was encountered in the arguments")
-	ErrPentagon           = errors.New("pentagon distortion was encountered")
+	ErrFailed              = errors.New("the operation failed")
+	ErrDomain              = errors.New("argument was outside of acceptable range")
+	ErrLatLngDomain        = errors.New("latitude or longitude arguments were outside of acceptable range")
+	ErrResolutionDomain    = errors.New("resolution argument was outside of acceptable range")
+	ErrResolutionMismatch  = errors.New("H3Index cell arguments had incompatible resolutions")
+	ErrCellInvalid         = errors.New("H3Index cell argument was not valid")
+	ErrDirectedEdgeInvalid = errors.New("H3Index directed edge argument was not valid")
+	ErrNotNeighbors        = errors.New("H3Index cell arguments were not neighbors")
+	ErrDuplicateInput      = errors.New("duplicate input was encountered in the arguments")
+	ErrPentagon            = errors.New("pentagon distortion was encountered")
 )
 
 // Internal types for the pure Go projection pipeline.
@@ -138,6 +140,8 @@ const (
 
 	// H3 index bit-layout offsets and masks, shared with the cgo h3 package.
 	cellMode         = h3core.CellMode
+	directedEdgeMode = h3core.DirectedEdgeMode
+	vertexMode       = h3core.VertexMode
 	modeOffset       = h3core.ModeOffset
 	resolutionOffset = h3core.ResolutionOffset
 	baseCellOffset   = h3core.BaseCellOffset
@@ -145,6 +149,15 @@ const (
 	digitMask        = h3core.DigitMask
 	resolutionMask   = h3core.ResolutionMask
 	maxResolution    = h3core.MaxResolution
+
+	// numCellEdges is the number of directed edges originating at a cell.
+	numCellEdges = 6
+	// numEdgeCells is the number of cells a directed edge connects.
+	numEdgeCells = 2
+	// invalidVertexNum marks a vertex number that is not valid for a cell.
+	invalidVertexNum = -1
+	// invalidRotations marks a base cell that is not found on a queried face.
+	invalidRotations = -1
 )
 
 // --- Lookup tables ---
