@@ -219,3 +219,141 @@ func TestCellToLatLngInvalidIndex(t *testing.T) {
 		t.Fatalf("CellToLatLng(0x7fffffffffffffff): got %v, want %v", err, ErrCellInvalid)
 	}
 }
+
+// TestGreatCircleDistance checks the haversine distance in radians, kilometers,
+// and meters against a known city pair, plus the zero-distance and symmetry
+// properties.
+func TestGreatCircleDistance(t *testing.T) {
+	t.Parallel()
+
+	sf := LatLng{Lat: 37.7749, Lng: -122.4194}
+	ny := LatLng{Lat: 40.7128, Lng: -74.0060}
+
+	t.Run("known_pair", func(t *testing.T) {
+		t.Parallel()
+
+		assertRelClose(t, GreatCircleDistanceRads(sf, ny), 0.64810644562192898, "rads")
+		assertRelClose(t, GreatCircleDistanceKm(sf, ny), 4129.090819109696, "km")
+		assertRelClose(t, GreatCircleDistanceM(sf, ny), 4129090.819109696, "m")
+	})
+
+	t.Run("zero_distance", func(t *testing.T) {
+		t.Parallel()
+
+		if got := GreatCircleDistanceRads(sf, sf); math.Abs(got) > 1e-12 {
+			t.Fatalf("GreatCircleDistanceRads(sf, sf) = %v, want ~0", got)
+		}
+	})
+
+	t.Run("symmetric", func(t *testing.T) {
+		t.Parallel()
+
+		if a, b := GreatCircleDistanceRads(sf, ny), GreatCircleDistanceRads(ny, sf); a != b {
+			t.Fatalf("distance not symmetric: %v vs %v", a, b)
+		}
+	})
+}
+
+// TestHexagonAreaAvg checks the average-area getters: a known resolution-0 value,
+// strictly decreasing area with finer resolution, and the resolution-domain error.
+func TestHexagonAreaAvg(t *testing.T) {
+	t.Parallel()
+
+	t.Run("known_and_monotonic", func(t *testing.T) {
+		t.Parallel()
+
+		km0, err := HexagonAreaAvgKm2(0)
+		if err != nil {
+			t.Fatalf("HexagonAreaAvgKm2(0): %v", err)
+		}
+
+		assertRelClose(t, km0, 4.357449416078383e+06, "area km2 res0")
+
+		prevKm, prevM := math.Inf(1), math.Inf(1)
+
+		for res := 0; res <= maxResolution; res++ {
+			km, err := HexagonAreaAvgKm2(res)
+			if err != nil {
+				t.Fatalf("HexagonAreaAvgKm2(%d): %v", res, err)
+			}
+
+			m2, err := HexagonAreaAvgM2(res)
+			if err != nil {
+				t.Fatalf("HexagonAreaAvgM2(%d): %v", res, err)
+			}
+
+			if km >= prevKm || m2 >= prevM {
+				t.Fatalf("res %d: area not decreasing (km=%v prevKm=%v)", res, km, prevKm)
+			}
+
+			assertRelClose(t, m2, km*1e6, "m2 vs km2*1e6")
+			prevKm, prevM = km, m2
+		}
+	})
+
+	t.Run("out_of_range", func(t *testing.T) {
+		t.Parallel()
+
+		for _, res := range []int{-1, maxResolution + 1} {
+			if _, err := HexagonAreaAvgKm2(res); !errors.Is(err, ErrResolutionDomain) {
+				t.Fatalf("HexagonAreaAvgKm2(%d): got %v, want %v", res, err, ErrResolutionDomain)
+			}
+
+			if _, err := HexagonAreaAvgM2(res); !errors.Is(err, ErrResolutionDomain) {
+				t.Fatalf("HexagonAreaAvgM2(%d): got %v, want %v", res, err, ErrResolutionDomain)
+			}
+		}
+	})
+}
+
+// TestHexagonEdgeLengthAvg checks the average-edge-length getters: a known
+// resolution-0 value, strictly decreasing length with finer resolution, and the
+// resolution-domain error.
+func TestHexagonEdgeLengthAvg(t *testing.T) {
+	t.Parallel()
+
+	t.Run("known_and_monotonic", func(t *testing.T) {
+		t.Parallel()
+
+		km0, err := HexagonEdgeLengthAvgKm(0)
+		if err != nil {
+			t.Fatalf("HexagonEdgeLengthAvgKm(0): %v", err)
+		}
+
+		assertRelClose(t, km0, 1281.256011, "edge km res0")
+
+		prevKm, prevM := math.Inf(1), math.Inf(1)
+
+		for res := 0; res <= maxResolution; res++ {
+			km, err := HexagonEdgeLengthAvgKm(res)
+			if err != nil {
+				t.Fatalf("HexagonEdgeLengthAvgKm(%d): %v", res, err)
+			}
+
+			m, err := HexagonEdgeLengthAvgM(res)
+			if err != nil {
+				t.Fatalf("HexagonEdgeLengthAvgM(%d): %v", res, err)
+			}
+
+			if km >= prevKm || m >= prevM {
+				t.Fatalf("res %d: length not decreasing (km=%v prevKm=%v)", res, km, prevKm)
+			}
+
+			prevKm, prevM = km, m
+		}
+	})
+
+	t.Run("out_of_range", func(t *testing.T) {
+		t.Parallel()
+
+		for _, res := range []int{-1, maxResolution + 1} {
+			if _, err := HexagonEdgeLengthAvgKm(res); !errors.Is(err, ErrResolutionDomain) {
+				t.Fatalf("HexagonEdgeLengthAvgKm(%d): got %v, want %v", res, err, ErrResolutionDomain)
+			}
+
+			if _, err := HexagonEdgeLengthAvgM(res); !errors.Is(err, ErrResolutionDomain) {
+				t.Fatalf("HexagonEdgeLengthAvgM(%d): got %v, want %v", res, err, ErrResolutionDomain)
+			}
+		}
+	})
+}
