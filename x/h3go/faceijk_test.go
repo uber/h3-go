@@ -19,6 +19,8 @@ package h3go
 import (
 	"errors"
 	"testing"
+
+	"github.com/uber/h3-go/v4/internal/h3core"
 )
 
 // farCoord is far beyond maxFaceCoord and stays out of range even after the
@@ -75,5 +77,119 @@ func TestFaceIjkToH3OutOfRange(t *testing.T) {
 				t.Fatalf("faceIjkToH3 res %d: cell = %#x, want 0", tt.giveRes, uint64(got))
 			}
 		})
+	}
+}
+
+// TestIcosahedronFacesKnown ports the testGetIcosahedronFaces.c regression cases:
+// single-face and multi-face hexagons, and pentagons at several resolutions.
+func TestIcosahedronFacesKnown(t *testing.T) {
+	t.Parallel()
+
+	validFaces := func(t *testing.T, c Cell) []int {
+		t.Helper()
+
+		faces, err := c.IcosahedronFaces()
+		if err != nil {
+			t.Fatalf("IcosahedronFaces(%015x): %v", uint64(c), err)
+		}
+
+		for _, face := range faces {
+			if face < 0 || face > 19 {
+				t.Fatalf("face %d out of range for %015x", face, uint64(c))
+			}
+		}
+
+		return faces
+	}
+
+	t.Run("single_face_hexes", func(t *testing.T) {
+		t.Parallel()
+
+		// Base cell 16 sits at the center of an icosahedron face, so all of its
+		// children share that single face.
+		baseCell16 := setH3Index(0, 16, centerDigit)
+		for _, childRes := range []int{2, 3} {
+			children, err := baseCell16.Children(childRes)
+			if err != nil {
+				t.Fatalf("Children(%d): %v", childRes, err)
+			}
+
+			for _, child := range children {
+				if got := validFaces(t, child); len(got) != 1 {
+					t.Fatalf("child %015x: got %d faces, want 1", uint64(child), len(got))
+				}
+			}
+		}
+	})
+
+	t.Run("hexagon_with_edge_vertices", func(t *testing.T) {
+		t.Parallel()
+		// Class II pentagon neighbor: one face, two adjacent vertices on an edge.
+		if got := validFaces(t, CellFromString("821c37fffffffff")); len(got) != 1 {
+			t.Fatalf("got %d faces, want 1", len(got))
+		}
+	})
+
+	t.Run("hexagon_with_distortion", func(t *testing.T) {
+		t.Parallel()
+		// Class III pentagon neighbor: distortion spans two faces.
+		if got := validFaces(t, CellFromString("831c06fffffffff")); len(got) != 2 {
+			t.Fatalf("got %d faces, want 2", len(got))
+		}
+	})
+
+	t.Run("hexagon_crossing_faces", func(t *testing.T) {
+		t.Parallel()
+		// Class II hexagon with two vertices on an edge.
+		if got := validFaces(t, CellFromString("821ce7fffffffff")); len(got) != 2 {
+			t.Fatalf("got %d faces, want 2", len(got))
+		}
+	})
+
+	t.Run("pentagons", func(t *testing.T) {
+		t.Parallel()
+		// Class III (res 1), Class II (res 2), and res 15 pentagons on base cell 4.
+		for _, res := range []int{1, 2, 15} {
+			pentagon := setH3Index(res, 4, centerDigit)
+			if !pentagon.IsPentagon() {
+				t.Fatalf("setH3Index(%d,4,0) is not a pentagon", res)
+			}
+
+			if got := validFaces(t, pentagon); len(got) != 5 {
+				t.Fatalf("res %d pentagon: got %d faces, want 5", res, len(got))
+			}
+		}
+	})
+
+	t.Run("base_cell_hexagons", func(t *testing.T) {
+		t.Parallel()
+
+		for bc := range NumBaseCells {
+			if h3core.IsBaseCellPentagon[bc] {
+				continue
+			}
+
+			baseCell := setH3Index(0, bc, centerDigit)
+			if got := validFaces(t, baseCell); len(got) < 1 {
+				t.Fatalf("base cell %d: got no faces", bc)
+			}
+		}
+	})
+}
+
+// TestIcosahedronFacesInvalid covers the defensive error paths: an out-of-range
+// base cell (projection failure) and a malformed index whose vertices span more
+// faces than the maximum (the hash-set overflow guard).
+func TestIcosahedronFacesInvalid(t *testing.T) {
+	t.Parallel()
+
+	corrupt := CellFromString("8928308280fffff").setBaseCell(NumBaseCells)
+	if _, err := corrupt.IcosahedronFaces(); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("corrupt base cell: got %v, want ErrCellInvalid", err)
+	}
+
+	overflow := Cell(0x08191d58a34080d2)
+	if _, err := overflow.IcosahedronFaces(); !errors.Is(err, ErrFailed) {
+		t.Fatalf("face-count overflow: got %v, want ErrFailed", err)
 	}
 }

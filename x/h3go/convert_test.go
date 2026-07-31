@@ -42,8 +42,7 @@ func TestIndexToString(t *testing.T) {
 }
 
 // TestIndexFromString covers IndexFromString, including junk/empty input (which
-// yields 0, matching the cgo binding that discards the parse error) and the
-// "0x" prefix.
+// yields 0, discarding the parse error) and the "0x" prefix.
 func TestIndexFromString(t *testing.T) {
 	t.Parallel()
 

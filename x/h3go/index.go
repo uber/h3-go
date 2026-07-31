@@ -27,11 +27,6 @@ const (
 	base16  = 16
 	bitSize = 64
 
-	// numBaseCells is the number of H3 base cells (NUM_BASE_CELLS).
-	numBaseCells = h3core.NumBaseCells
-	// numPentagons is the number of H3 pentagons, the same at every resolution.
-	numPentagons = h3core.NumPentagons
-
 	// reservedOffset is the bit offset of the reserved field (H3_RESERVED_OFFSET).
 	reservedOffset = 56
 	// baseCellMask masks the 7-bit base cell field after shifting.
@@ -43,15 +38,15 @@ const (
 
 	// digitRegionOffset is the number of non-digit bits above the 15×3-bit digit
 	// region (high + mode + reserved + resolution + base cell = 19).
-	digitRegionOffset = bitSize - maxResolution*perDigitOffset
+	digitRegionOffset = bitSize - MaxResolution*perDigitOffset
 
 	// validCellTopBits is the expected value of the top 8 bits of a valid cell:
 	// high bit=0, mode=1 (cell), reserved=000.
 	validCellTopBits = 0b00001000
 )
 
-// pow7 holds precomputed powers of 7: pow7[i] == 7^i for i in [0, maxResolution].
-var pow7 = [maxResolution + 1]int64{
+// pow7 holds precomputed powers of 7: pow7[i] == 7^i for i in [0, MaxResolution].
+var pow7 = [MaxResolution + 1]int64{
 	1,
 	7,
 	49,
@@ -77,12 +72,12 @@ func (c Cell) mode() int {
 
 // indexDigit returns the indexing digit of the index at res.
 func (c Cell) indexDigit(res int) int {
-	return int((c >> ((maxResolution - res) * perDigitOffset)) & digitMask)
+	return int((c >> ((MaxResolution - res) * perDigitOffset)) & digitMask)
 }
 
 // setIndexDigit returns the index with the digit at res set to digit.
 func (c Cell) setIndexDigit(res, digit int) Cell {
-	shift := (maxResolution - res) * perDigitOffset
+	shift := (MaxResolution - res) * perDigitOffset
 	c &= ^(Cell(digitMask) << shift)
 	c |= Cell(digit) << shift
 
@@ -128,9 +123,9 @@ func (c Cell) BaseCellNumber() int {
 }
 
 // NumCells returns the number of cells at the given resolution. Resolutions
-// outside [0, maxResolution] return 0.
+// outside [0, MaxResolution] return 0.
 func NumCells(res int) int {
-	if res < 0 || res > maxResolution {
+	if res < 0 || res > MaxResolution {
 		return 0
 	}
 	// See h3api.h for the formula derivation.
@@ -173,7 +168,7 @@ func (c Cell) IsPentagon() bool {
 // IndexDigit returns the indexing digit of the cell at res, which starts at 1
 // for resolution 1 up to and including resolution 15.
 func (c Cell) IndexDigit(res int) (int, error) {
-	if res < 1 || res > maxResolution {
+	if res < 1 || res > MaxResolution {
 		return 0, ErrResolutionDomain
 	}
 
@@ -196,7 +191,7 @@ func (c Cell) IsValid() bool {
 	}
 
 	bc := c.BaseCellNumber()
-	if bc >= numBaseCells {
+	if bc >= NumBaseCells {
 		return false
 	}
 
@@ -220,7 +215,7 @@ func (c Cell) IsValid() bool {
 func hasAny7UptoRes(h uint64, res int) bool {
 	const mhi uint64 = 0b100100100100100100100100100100100100100100100
 	const mlo = mhi >> 2
-	shift := perDigitOffset * (maxResolution - res)
+	shift := perDigitOffset * (MaxResolution - res)
 	h >>= shift
 	h <<= shift
 	h = h & mhi & (^h - mlo)
@@ -230,7 +225,7 @@ func hasAny7UptoRes(h uint64, res int) bool {
 
 // hasAll7AfterRes reports whether all unused digits after res are set to 7.
 func hasAll7AfterRes(h uint64, res int) bool {
-	if res >= maxResolution {
+	if res >= MaxResolution {
 		return true
 	}
 	shift := digitRegionOffset + perDigitOffset*res

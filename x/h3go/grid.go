@@ -67,7 +67,7 @@ func (c Cell) neighborRotations(dir, rotations int) (Cell, int, error) {
 	newRotations := 0
 
 	oldBaseCell := current.BaseCellNumber()
-	if oldBaseCell < 0 || oldBaseCell >= numBaseCells {
+	if oldBaseCell < 0 || oldBaseCell >= NumBaseCells {
 		return 0, 0, ErrCellInvalid
 	}
 
@@ -571,7 +571,7 @@ func (c Cell) directionForNeighbor(destination Cell) int {
 // base cell's coordinate system on the given face, or invalidRotations if the
 // base cell does not appear on that face.
 func baseCellToCCWrot60(baseCell, face int) int {
-	if face < 0 || face >= numIcosaFaces {
+	if face < 0 || face >= NumIcosaFaces {
 		return invalidRotations
 	}
 

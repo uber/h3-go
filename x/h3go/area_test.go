@@ -98,12 +98,45 @@ func TestCellAreaRes0SumsToSphere(t *testing.T) {
 	assertRelClose(t, sum, 4*math.Pi, "res0 area sum")
 }
 
+// TestCellAreaNullIslandTable ports the testH3CellArea.c specific_cell_area
+// regression: the exact area in km² of the cell containing (0, 0) at each
+// resolution, to a tight absolute tolerance.
+func TestCellAreaNullIslandTable(t *testing.T) {
+	t.Parallel()
+
+	areasKm2 := []float64{
+		2.562182162955496e+06, 4.476842017201860e+05, 6.596162242711056e+04,
+		9.228872919002590e+03, 1.318694490797110e+03, 1.879593512281298e+02,
+		2.687164354763186e+01, 3.840848847060638e+00, 5.486939641329893e-01,
+		7.838600808637444e-02, 1.119834221989390e-02, 1.599777169186614e-03,
+		2.285390931423380e-04, 3.264850232091780e-05, 4.664070326136774e-06,
+		6.662957615868888e-07,
+	}
+
+	// The C fixture checks res 0..MAX_H3_RES-1.
+	for res := 0; res < MaxResolution; res++ {
+		cell, err := LatLngToCell(LatLng{Lat: 0, Lng: 0}, res)
+		if err != nil {
+			t.Fatalf("LatLngToCell(res %d): %v", res, err)
+		}
+
+		area, err := CellAreaKm2(cell)
+		if err != nil {
+			t.Fatalf("CellAreaKm2(res %d): %v", res, err)
+		}
+
+		if math.Abs(area-areasKm2[res]) >= 1e-8 {
+			t.Fatalf("CellAreaKm2(res %d): got %.15e, want %.15e", res, area, areasKm2[res])
+		}
+	}
+}
+
 // TestCellAreaInvalidBaseCell covers the error branch of CellAreaRads2/Km2/M2,
 // reached when the boundary cannot be computed for an out-of-range base cell.
 func TestCellAreaInvalidBaseCell(t *testing.T) {
 	t.Parallel()
 
-	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(numBaseCells)<<baseCellOffset
+	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(NumBaseCells)<<baseCellOffset
 
 	if _, err := CellAreaRads2(bad); err == nil {
 		t.Fatal("CellAreaRads2: got nil error, want failure")

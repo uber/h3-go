@@ -164,7 +164,7 @@ func (e DirectedEdge) Resolution() int {
 }
 
 // IndexDigit returns the indexing digit of the directed edge at res, for res in
-// [1, maxResolution].
+// [1, MaxResolution].
 func (e DirectedEdge) IndexDigit(res int) (int, error) {
 	return Cell(e).IndexDigit(res)
 }

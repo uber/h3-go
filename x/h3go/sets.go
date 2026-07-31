@@ -34,9 +34,10 @@ func setH3Index(res, baseCell, initDigit int) Cell {
 }
 
 // Res0Cells returns all the cells at resolution 0 (the base cells). The error
-// return is always nil; it exists for parity with the cgo-backed h3 package.
+// return is always nil; it exists to match the signature of the other cell
+// enumerators.
 func Res0Cells() ([]Cell, error) {
-	out := make([]Cell, numBaseCells)
+	out := make([]Cell, NumBaseCells)
 	for bc := range out {
 		out[bc] = setH3Index(0, bc, centerDigit)
 	}
@@ -46,12 +47,12 @@ func Res0Cells() ([]Cell, error) {
 
 // Pentagons returns all the pentagons at the given resolution.
 func Pentagons(res int) ([]Cell, error) {
-	if res < 0 || res > maxResolution {
+	if res < 0 || res > MaxResolution {
 		return nil, ErrResolutionDomain
 	}
-	out := make([]Cell, 0, numPentagons)
+	out := make([]Cell, 0, NumPentagons)
 
-	for bc := range numBaseCells {
+	for bc := range NumBaseCells {
 		if h3core.IsBaseCellPentagon[bc] {
 			out = append(out, setH3Index(res, bc, centerDigit))
 		}

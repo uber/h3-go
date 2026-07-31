@@ -58,7 +58,7 @@ func reverseCorpus(t *testing.T) []Cell {
 		latOffset  = 90.0
 		lngSpan    = 360.0
 		lngOffset  = 180.0
-		resCount   = maxResolution + 1
+		resCount   = MaxResolution + 1
 	)
 
 	rng := rand.New(rand.NewSource(seed))
@@ -79,8 +79,8 @@ func reverseCorpus(t *testing.T) []Cell {
 
 // TestCellToBoundarySweep exercises the boundary builders over the reverse
 // corpus and checks each boundary is well-formed: a sane vertex count and every
-// vertex in geographic range. Exact-value correctness is covered by the cgo
-// parity tests.
+// vertex in geographic range. Exact-value correctness is covered by the parity
+// tests.
 func TestCellToBoundarySweep(t *testing.T) {
 	t.Parallel()
 
@@ -114,7 +114,7 @@ func TestCellToBoundarySweep(t *testing.T) {
 func TestCellToBoundaryInvalidBaseCell(t *testing.T) {
 	t.Parallel()
 
-	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(numBaseCells)<<baseCellOffset
+	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(NumBaseCells)<<baseCellOffset
 
 	if _, err := CellToBoundary(bad); err == nil {
 		t.Fatalf("CellToBoundary(%015x): got nil error, want ErrCellInvalid", uint64(bad))
@@ -210,11 +210,10 @@ func TestCellToBoundaryKnownValues(t *testing.T) {
 }
 
 // TestCellToBoundaryDoublePrecisionVertex is the regression for the double-
-// precision edge-intersection case in the cgo reference: a res-1 pentagon whose
-// distortion vertices shift between float and double precision. The boundary
-// must be geometrically consistent with indexing — a point that indexes to the
-// cell must fall inside the boundary, and a point that does not must fall
-// outside.
+// precision edge-intersection case: a res-1 pentagon whose distortion vertices
+// shift between float and double precision. The boundary must be geometrically
+// consistent with indexing — a point that indexes to the cell must fall inside
+// the boundary, and a point that does not must fall outside.
 func TestCellToBoundaryDoublePrecisionVertex(t *testing.T) {
 	t.Parallel()
 
