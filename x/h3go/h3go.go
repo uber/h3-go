@@ -134,6 +134,7 @@ const (
 	ikAxesDigit  = 5
 	ijAxesDigit  = 6
 	invalidDigit = 7
+	numDigits    = 7
 
 	// H3 index bit-layout offsets and masks, shared with the cgo h3 package.
 	cellMode         = h3core.CellMode
@@ -891,4 +892,69 @@ var baseCellNeighbor60CCWRots = [numBaseCells][7]int{
 	{0, 0, 0, 0, 0, 0, 1},  // base cell 119
 	{0, 5, 0, 0, 5, 5, 0},  // base cell 120
 	{0, 0, 1, 0, 1, 5, 1},  // base cell 121
+}
+
+// pentagonRotations maps the base-cell direction (or leading digit) to the
+// number of 60° clockwise index rotations needed when unfolding a pentagon,
+// indexed by [origin leading digit][direction]. A -1 marks an invalid k-axis
+// combination.
+var pentagonRotations = [7][7]int{
+	{0, -1, 0, 0, 0, 0, 0},
+	{-1, -1, -1, -1, -1, -1, -1},
+	{0, -1, 0, 0, 0, 1, 0},
+	{0, -1, 0, 0, 1, 1, 0},
+	{0, -1, 0, 5, 0, 0, 0},
+	{0, -1, 5, 5, 0, 0, 0},
+	{0, -1, 0, 0, 0, 0, 0},
+}
+
+// pentagonRotationsReverse reverses the rotation pentagonRotations introduces
+// when the origin is on a pentagon, indexed by [leading digit][direction].
+var pentagonRotationsReverse = [7][7]int{
+	{0, 0, 0, 0, 0, 0, 0},
+	{-1, -1, -1, -1, -1, -1, -1},
+	{0, 1, 0, 0, 0, 0, 0},
+	{0, 1, 0, 0, 0, 1, 0},
+	{0, 5, 0, 0, 0, 0, 0},
+	{0, 5, 0, 5, 0, 0, 0},
+	{0, 0, 0, 0, 0, 0, 0},
+}
+
+// pentagonRotationsReverseNonpolar reverses the pentagon rotation when the index
+// is on a non-polar pentagon and the origin is not, indexed by
+// [reverse direction][leading digit].
+var pentagonRotationsReverseNonpolar = [7][7]int{
+	{0, 0, 0, 0, 0, 0, 0},
+	{-1, -1, -1, -1, -1, -1, -1},
+	{0, 1, 0, 0, 0, 0, 0},
+	{0, 1, 0, 0, 0, 1, 0},
+	{0, 5, 0, 0, 0, 0, 0},
+	{0, 1, 0, 5, 1, 1, 0},
+	{0, 0, 0, 0, 0, 0, 0},
+}
+
+// pentagonRotationsReversePolar reverses the pentagon rotation when the index is
+// on a polar pentagon and the origin is not, indexed by
+// [reverse direction][leading digit].
+var pentagonRotationsReversePolar = [7][7]int{
+	{0, 0, 0, 0, 0, 0, 0},
+	{-1, -1, -1, -1, -1, -1, -1},
+	{0, 1, 1, 1, 1, 1, 1},
+	{0, 1, 0, 0, 0, 1, 0},
+	{0, 1, 0, 0, 1, 1, 1},
+	{0, 1, 0, 5, 1, 1, 0},
+	{0, 1, 1, 0, 1, 1, 1},
+}
+
+// failedDirections marks the direction pairs that cannot be unfolded across a
+// pentagon (any unfolding across more than one icosahedron face), indexed by
+// [origin direction][index direction].
+var failedDirections = [7][7]bool{
+	{false, false, false, false, false, false, false},
+	{false, false, false, false, false, false, false},
+	{false, false, false, false, true, true, false},
+	{false, false, false, false, true, false, true},
+	{false, false, true, true, false, false, false},
+	{false, false, true, false, false, false, true},
+	{false, false, false, true, false, true, false},
 }
