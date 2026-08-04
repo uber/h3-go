@@ -1,6 +1,7 @@
 package h3
 
 import (
+	"strconv"
 	"testing"
 )
 
@@ -53,6 +54,41 @@ func BenchmarkCellToLatLng(b *testing.B) {
 func BenchmarkLatLngToCell(b *testing.B) {
 	for range b.N {
 		cell, _ = LatLngToCell(geo, 15)
+	}
+}
+
+func BenchmarkLatLngToCellBatch(b *testing.B) {
+	for _, n := range []int{1, 64, 1024, 16384, 1_000_000, 10_000_000} {
+		lls := make([]LatLng, n)
+		for i := range lls {
+			lls[i] = geo
+		}
+
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			for b.Loop() {
+				cells, _ = LatLngToCellBatch(lls, 15)
+			}
+		})
+	}
+}
+
+// Baseline: same workload via the per-call LatLngToCell in a Go loop,
+// so reviewers can confirm the speedup at each batch size by comparing
+// matching sub-benchmark names with benchstat.
+func BenchmarkLatLngToCellBaseline(b *testing.B) {
+	for _, n := range []int{1, 64, 1024, 16384, 1_000_000, 10_000_000} {
+		lls := make([]LatLng, n)
+		for i := range lls {
+			lls[i] = geo
+		}
+
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			for b.Loop() {
+				for _, ll := range lls {
+					cell, _ = LatLngToCell(ll, 15)
+				}
+			}
+		})
 	}
 }
 
