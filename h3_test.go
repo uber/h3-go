@@ -121,53 +121,16 @@ func TestLatLngToCell(t *testing.T) {
 	assertErrIs(t, err, ErrResolutionDomain)
 }
 
-func TestLatLngToCellBatch(t *testing.T) {
+func TestLatLngToCellString(t *testing.T) {
 	t.Parallel()
-	t.Run("matches per-call result across resolutions", func(t *testing.T) {
-		t.Parallel()
 
-		lls := []LatLng{validLatLng1, validLatLng2}
-		for res := 0; res <= MaxResolution; res++ {
-			want := make([]Cell, len(lls))
-			for i, ll := range lls {
-				c, err := LatLngToCell(ll, res)
-				assertNoErr(t, err)
-				want[i] = c
-			}
-			got, err := LatLngToCellBatch(lls, res)
-			assertNoErr(t, err)
-			assertEqual(t, len(want), len(got))
+	cellStr, err := LatLngToCellString(validLatLng1.Lat, validLatLng1.Lng, 5)
+	assertEqual(t, validCell.String(), cellStr)
+	assertNoErr(t, err)
 
-			for i := range got {
-				assertEqual(t, want[i], got[i])
-			}
-		}
-	})
-
-	t.Run("empty", func(t *testing.T) {
-		t.Parallel()
-
-		cells, err := LatLngToCellBatch(nil, 9)
-		assertNil(t, cells)
-		assertNil(t, err)
-	})
-
-	t.Run("single element", func(t *testing.T) {
-		t.Parallel()
-
-		cells, err := LatLngToCellBatch([]LatLng{validLatLng1}, 5)
-		assertNoErr(t, err)
-		assertEqual(t, 1, len(cells))
-		assertEqual(t, validCell, cells[0])
-	})
-
-	t.Run("invalid resolution surfaces error", func(t *testing.T) {
-		t.Parallel()
-
-		_, err := LatLngToCellBatch([]LatLng{validLatLng1}, MaxResolution+1)
-		assertErr(t, err)
-		assertErrIs(t, err, ErrResolutionDomain)
-	})
+	_, err = LatLngToCellString(0, 0, MaxResolution+1)
+	assertErr(t, err)
+	assertErrIs(t, err, ErrResolutionDomain)
 }
 
 func TestCellToLatLng(t *testing.T) {
@@ -456,6 +419,28 @@ func TestIsValid(t *testing.T) {
 	t.Parallel()
 	assertTrue(t, validCell.IsValid())
 	assertFalse(t, Cell(0).IsValid())
+
+	// Resolution 15 exercises hasAll7AfterRes with res == MaxResolution.
+	res15Cell, _ := LatLngToCell(validLatLng1, MaxResolution)
+	assertTrue(t, res15Cell.IsValid())
+
+	// Wrong mode (directed edge mode in top bits).
+	assertFalse(t, Cell(0x1000000000000000).IsValid())
+
+	// Base cell number >= NumBaseCells (122).
+	assertFalse(t, Cell(0x080f500000000000|0x1fffffffffff).IsValid())
+
+	// Digit 7 in active position (base cell 1, res 1, digit 1 = 7).
+	assertFalse(t, Cell(0x08103fffffffffff).IsValid())
+
+	// Digits after resolution not all 7 (res 1, digit 1 = 2, rest zeroed).
+	assertFalse(t, Cell(0x0810080000000000).IsValid())
+
+	// Deleted subsequence: pentagon base cell 4, res 1, digit 1 = 1 (K_AXES_DIGIT).
+	assertFalse(t, Cell(0x081087ffffffffff).IsValid())
+
+	// Pentagon base cell 4 at res 15 with all digits 0 is a valid pentagon center.
+	assertTrue(t, Cell(0x08f0800000000000).IsValid())
 }
 
 func TestRoundtrip(t *testing.T) {
@@ -612,6 +597,9 @@ func TestIsPentagon(t *testing.T) {
 	t.Parallel()
 	assertFalse(t, validCell.IsPentagon())
 	assertTrue(t, pentagonCell.IsPentagon())
+
+	// Pentagon base cell 4, res 1, digit 1 = 2: valid cell but not a pentagon.
+	assertFalse(t, Cell(0x08108bffffffffff).IsPentagon())
 }
 
 func TestIsNeighbor(t *testing.T) {

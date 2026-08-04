@@ -66,8 +66,14 @@ linters:
       - path: _test\.go
         linters:
           - dupl
+          - goconst
           - gosec
           - govet
+      # x/h3go is a pure-Go reimplementation of H3's geometry: the geometric and
+      # bit-layout constants are inherent to the algorithms, not tunable magic.
+      - path: x/h3go/
+        linters:
+          - mnd
 
 formatters:
   enable:
