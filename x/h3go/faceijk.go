@@ -109,8 +109,9 @@ func (v vec3d) toHex2d(res int) (face int, hex vec2d) {
 		r *= mSqrt7
 	}
 
-	hex.x = r * math.Cos(theta)
-	hex.y = r * math.Sin(theta)
+	sin, cos := math.Sincos(theta)
+	hex.x = r * cos
+	hex.y = r * sin
 
 	return face, hex
 }
@@ -418,8 +419,11 @@ func (v vec2d) toVec3(face, res int, substrate bool) vec3d {
 	theta = posAngleRads(faceAxesAzRadsCII[face][0] - theta)
 
 	north, east := faceCenterPoint[face].tangentBasis()
-	dir := north.linComb(math.Cos(theta), math.Sin(theta), east)
-	out := faceCenterPoint[face].linComb(math.Cos(r), math.Sin(r), dir)
+
+	sinT, cosT := math.Sincos(theta)
+	sinR, cosR := math.Sincos(r)
+	dir := north.linComb(cosT, sinT, east)
+	out := faceCenterPoint[face].linComb(cosR, sinR, dir)
 	out.normalize()
 
 	return out

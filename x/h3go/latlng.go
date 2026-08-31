@@ -55,12 +55,13 @@ func (c Cell) LatLng() (LatLng, error) {
 // --- Vec3d math ---
 
 func latLngToVec3(lat, lng float64) vec3d {
-	r := math.Cos(lat)
+	sinLat, cosLat := math.Sincos(lat)
+	sinLng, cosLng := math.Sincos(lng)
 
 	return vec3d{
-		x: math.Cos(lng) * r,
-		y: math.Sin(lng) * r,
-		z: math.Sin(lat),
+		x: cosLng * cosLat,
+		y: sinLng * cosLat,
+		z: sinLat,
 	}
 }
 
