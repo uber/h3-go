@@ -99,6 +99,17 @@ func TestDirectedEdgeNotNeighbors(t *testing.T) {
 	}
 }
 
+// TestReverseDirectedEdgeFuzzFail ports the testDirectedEdge.c fuzz_fail
+// regression: a malformed index whose decoded origin and destination are not
+// neighbors must report ErrNotNeighbors rather than producing an edge.
+func TestReverseDirectedEdgeFuzzFail(t *testing.T) {
+	t.Parallel()
+
+	if _, err := DirectedEdge(0x1001fff7ff2fbfff).Reverse(); !errors.Is(err, ErrNotNeighbors) {
+		t.Fatalf("Reverse(fuzz): got %v, want ErrNotNeighbors", err)
+	}
+}
+
 // TestDirectedEdgeBoundary checks the edge boundary against the cell boundary it
 // is derived from over the corpus.
 func TestDirectedEdgeBoundary(t *testing.T) {
@@ -223,7 +234,7 @@ func TestDirectedEdgeInvalid(t *testing.T) {
 func TestDirectedEdgeDestinationError(t *testing.T) {
 	t.Parallel()
 
-	corrupt := CellFromString("8928308280fffff").setBaseCell(numBaseCells)
+	corrupt := CellFromString("8928308280fffff").setBaseCell(NumBaseCells)
 	edge := DirectedEdge(corrupt.setMode(directedEdgeMode).setReservedBits(jAxesDigit))
 
 	if _, err := edge.Destination(); err == nil {

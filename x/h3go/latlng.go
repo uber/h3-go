@@ -16,11 +16,54 @@
 
 package h3go
 
-import "math"
+import (
+	"math"
+	"strconv"
+)
+
+// NewLatLng creates a LatLng from a latitude and longitude in degrees.
+func NewLatLng(lat, lng float64) LatLng {
+	return LatLng{Lat: lat, Lng: lng}
+}
+
+// Cell returns the cell at the given resolution that contains the coordinate.
+func (g LatLng) Cell(res int) (Cell, error) {
+	return LatLngToCell(g, res)
+}
+
+// String returns the coordinate formatted as "(lat, lng)" in degrees.
+func (g LatLng) String() string {
+	buf := make([]byte, 0, latLngStringSize)
+	buf = append(buf, '(')
+	buf = strconv.AppendFloat(buf, g.Lat, 'f', latLngFloatPrecision, 64)
+	buf = append(buf, ',', ' ')
+	buf = strconv.AppendFloat(buf, g.Lng, 'f', latLngFloatPrecision, 64)
+	buf = append(buf, ')')
+
+	return string(buf)
+}
+
+// LatLng string formatting parameters, matching the H3 C library.
+const (
+	latLngFloatPrecision = 5
+	latLngStringSize     = 32
+)
+
+// LatLngToCellString returns the string form of the cell at resolution that
+// contains the coordinate. It is a convenience wrapper for LatLngToCell followed
+// by Cell.String.
+func LatLngToCellString(latitude, longitude float64, res int) (string, error) {
+	cell, err := NewLatLng(latitude, longitude).Cell(res)
+	if err != nil {
+		return "", err
+	}
+
+	return cell.String(), nil
+}
 
 // LatLngToCell returns the Cell at resolution for a geographic coordinate.
 func LatLngToCell(latLng LatLng, res int) (Cell, error) {
-	if res < 0 || res > maxResolution {
+	if res < 0 || res > MaxResolution {
 		return 0, ErrResolutionDomain
 	}
 
@@ -29,8 +72,8 @@ func LatLngToCell(latLng LatLng, res int) (Cell, error) {
 		return 0, ErrLatLngDomain
 	}
 
-	lat := latLng.Lat * degsToRads
-	lng := latLng.Lng * degsToRads
+	lat := latLng.Lat * DegsToRads
+	lng := latLng.Lng * DegsToRads
 	v := latLngToVec3(lat, lng)
 	fijk := v.toFaceIjk(res)
 
@@ -57,10 +100,10 @@ func (c Cell) LatLng() (LatLng, error) {
 // GreatCircleDistanceRads returns the great-circle distance between two points
 // in radians, using the haversine formula. The points are given in degrees.
 func GreatCircleDistanceRads(a, b LatLng) float64 {
-	aLat := a.Lat * degsToRads
-	aLng := a.Lng * degsToRads
-	bLat := b.Lat * degsToRads
-	bLng := b.Lng * degsToRads
+	aLat := a.Lat * DegsToRads
+	aLng := a.Lng * DegsToRads
+	bLat := b.Lat * DegsToRads
+	bLng := b.Lng * DegsToRads
 
 	sinLat := math.Sin((bLat - aLat) / 2)
 	sinLng := math.Sin((bLng - aLng) / 2)
@@ -118,7 +161,7 @@ func EdgeLengthM(e DirectedEdge) (float64, error) {
 
 // hexAreaAvgKm2 holds the average hexagon area at each resolution in square
 // kilometers, indexed by resolution.
-var hexAreaAvgKm2 = [maxResolution + 1]float64{
+var hexAreaAvgKm2 = [MaxResolution + 1]float64{
 	4.357449416078383e+06, 6.097884417941332e+05, 8.680178039899720e+04,
 	1.239343465508816e+04, 1.770347654491307e+03, 2.529038581819449e+02,
 	3.612906216441245e+01, 5.161293359717191e+00, 7.373275975944177e-01,
@@ -129,7 +172,7 @@ var hexAreaAvgKm2 = [maxResolution + 1]float64{
 
 // hexAreaAvgM2 holds the average hexagon area at each resolution in square
 // meters, indexed by resolution.
-var hexAreaAvgM2 = [maxResolution + 1]float64{
+var hexAreaAvgM2 = [MaxResolution + 1]float64{
 	4.357449416078390e+12, 6.097884417941339e+11, 8.680178039899731e+10,
 	1.239343465508818e+10, 1.770347654491309e+09, 2.529038581819452e+08,
 	3.612906216441250e+07, 5.161293359717198e+06, 7.373275975944188e+05,
@@ -140,7 +183,7 @@ var hexAreaAvgM2 = [maxResolution + 1]float64{
 
 // hexEdgeLenAvgKm holds the average hexagon edge length at each resolution in
 // kilometers, indexed by resolution.
-var hexEdgeLenAvgKm = [maxResolution + 1]float64{
+var hexEdgeLenAvgKm = [MaxResolution + 1]float64{
 	1281.256011, 483.0568391, 182.5129565, 68.97922179,
 	26.07175968, 9.854090990, 3.724532667, 1.406475763,
 	0.531414010, 0.200786148, 0.075863783, 0.028663897,
@@ -149,7 +192,7 @@ var hexEdgeLenAvgKm = [maxResolution + 1]float64{
 
 // hexEdgeLenAvgM holds the average hexagon edge length at each resolution in
 // meters, indexed by resolution.
-var hexEdgeLenAvgM = [maxResolution + 1]float64{
+var hexEdgeLenAvgM = [MaxResolution + 1]float64{
 	1281256.011, 483056.8391, 182512.9565, 68979.22179,
 	26071.75968, 9854.090990, 3724.532667, 1406.475763,
 	531.4140101, 200.7861476, 75.86378287, 28.66389748,
@@ -159,7 +202,7 @@ var hexEdgeLenAvgM = [maxResolution + 1]float64{
 // HexagonAreaAvgKm2 returns the average area of a hexagon at the given
 // resolution in square kilometers.
 func HexagonAreaAvgKm2(res int) (float64, error) {
-	if res < 0 || res > maxResolution {
+	if res < 0 || res > MaxResolution {
 		return 0, ErrResolutionDomain
 	}
 
@@ -169,7 +212,7 @@ func HexagonAreaAvgKm2(res int) (float64, error) {
 // HexagonAreaAvgM2 returns the average area of a hexagon at the given resolution
 // in square meters.
 func HexagonAreaAvgM2(res int) (float64, error) {
-	if res < 0 || res > maxResolution {
+	if res < 0 || res > MaxResolution {
 		return 0, ErrResolutionDomain
 	}
 
@@ -179,7 +222,7 @@ func HexagonAreaAvgM2(res int) (float64, error) {
 // HexagonEdgeLengthAvgKm returns the average edge length of a hexagon at the
 // given resolution in kilometers.
 func HexagonEdgeLengthAvgKm(res int) (float64, error) {
-	if res < 0 || res > maxResolution {
+	if res < 0 || res > MaxResolution {
 		return 0, ErrResolutionDomain
 	}
 
@@ -189,7 +232,7 @@ func HexagonEdgeLengthAvgKm(res int) (float64, error) {
 // HexagonEdgeLengthAvgM returns the average edge length of a hexagon at the given
 // resolution in meters.
 func HexagonEdgeLengthAvgM(res int) (float64, error) {
-	if res < 0 || res > maxResolution {
+	if res < 0 || res > MaxResolution {
 		return 0, ErrResolutionDomain
 	}
 
@@ -212,8 +255,8 @@ func latLngToVec3(lat, lng float64) vec3d {
 // in degrees.
 func (v vec3d) toLatLng() LatLng {
 	return LatLng{
-		Lat: radsToDegs * math.Asin(v.z),
-		Lng: radsToDegs * math.Atan2(v.y, v.x),
+		Lat: RadsToDegs * math.Asin(v.z),
+		Lng: RadsToDegs * math.Atan2(v.y, v.x),
 	}
 }
 

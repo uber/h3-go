@@ -18,6 +18,7 @@ package h3go
 
 import (
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -91,12 +92,12 @@ func TestCellToLocalIJErrors(t *testing.T) {
 		t.Fatalf("CellToLocalIJ(non-neighbor base cells): got %v, want ErrFailed", err)
 	}
 
-	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(numBaseCells)<<baseCellOffset
+	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(NumBaseCells)<<baseCellOffset
 	if _, err := CellToLocalIJ(bad, bad); !errors.Is(err, ErrCellInvalid) {
 		t.Fatalf("CellToLocalIJ(bad base cell): got %v, want ErrCellInvalid", err)
 	}
 
-	if _, err := CellToLocalIJ(origin, origin.setBaseCell(numBaseCells)); !errors.Is(err, ErrCellInvalid) {
+	if _, err := CellToLocalIJ(origin, origin.setBaseCell(NumBaseCells)); !errors.Is(err, ErrCellInvalid) {
 		t.Fatalf("CellToLocalIJ(bad target base cell): got %v, want ErrCellInvalid", err)
 	}
 }
@@ -112,7 +113,7 @@ func TestLocalIJToCellErrors(t *testing.T) {
 		t.Fatal("LocalIJToCell(out of range): got nil error, want failure")
 	}
 
-	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(numBaseCells)<<baseCellOffset
+	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(NumBaseCells)<<baseCellOffset
 	if _, err := LocalIJToCell(bad, CoordIJ{I: 0, J: 0}); !errors.Is(err, ErrCellInvalid) {
 		t.Fatalf("LocalIJToCell(bad origin): got %v, want ErrCellInvalid", err)
 	}
@@ -250,9 +251,162 @@ func TestGridMetricsErrorsPropagate(t *testing.T) {
 		t.Fatal("GridPath(far): got nil error, want failure")
 	}
 
-	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(numBaseCells)<<baseCellOffset
+	bad := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(NumBaseCells)<<baseCellOffset
 	if _, err := GridDistance(bad, bad); !errors.Is(err, ErrCellInvalid) {
 		t.Fatalf("GridDistance(bad): got %v, want ErrCellInvalid", err)
+	}
+}
+
+// TestGridDistanceRegressions ports the testGridDistance.c regression cases:
+// distances onto and across pentagons, base-cell neighbors, and the
+// resolution-mismatch and invalid-cell error contracts.
+func TestGridDistanceRegressions(t *testing.T) {
+	t.Parallel()
+
+	t.Run("onto_pentagon", func(t *testing.T) {
+		t.Parallel()
+
+		origin := setH3Index(1, 17, centerDigit)
+		tests := map[string]struct {
+			giveDigit int
+			want      int
+		}{
+			"digit_0": {giveDigit: 0, want: 3},
+			"digit_2": {giveDigit: 2, want: 2},
+			"digit_3": {giveDigit: 3, want: 3},
+			"digit_6": {giveDigit: 6, want: 2},
+		}
+
+		for name, tt := range tests {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+
+				target := setH3Index(1, 14, tt.giveDigit)
+
+				got, err := origin.GridDistance(target)
+				if err != nil {
+					t.Fatalf("GridDistance: %v", err)
+				}
+
+				if got != tt.want {
+					t.Fatalf("GridDistance: got %d, want %d", got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("across_pentagon_fails", func(t *testing.T) {
+		t.Parallel()
+		// Both directions are rejected because of pentagon distortion.
+		origin := Cell(0x820c4ffffffffff)
+		destination := Cell(0x821ce7fffffffff)
+
+		if _, err := GridDistance(destination, origin); err == nil {
+			t.Fatal("GridDistance across pentagon: got nil, want error")
+		}
+
+		if _, err := GridDistance(origin, destination); err == nil {
+			t.Fatal("GridDistance across pentagon (reversed): got nil, want error")
+		}
+	})
+
+	t.Run("base_cell_neighbors", func(t *testing.T) {
+		t.Parallel()
+
+		bc1 := setH3Index(0, 15, centerDigit)
+		bc2 := setH3Index(0, 8, centerDigit)
+		bc3 := setH3Index(0, 31, centerDigit)
+		pent1 := setH3Index(0, 4, centerDigit)
+
+		for _, target := range []Cell{pent1, bc2, bc3} {
+			got, err := bc1.GridDistance(target)
+			if err != nil {
+				t.Fatalf("GridDistance(15, %015x): %v", uint64(target), err)
+			}
+
+			if got != 1 {
+				t.Fatalf("GridDistance(15, %015x): got %d, want 1", uint64(target), got)
+			}
+		}
+
+		if _, err := pent1.GridDistance(bc3); err == nil {
+			t.Fatal("GridDistance(pent1, 31): got nil, want error")
+		}
+	})
+
+	t.Run("resolution_mismatch", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := GridDistance(Cell(0x832830fffffffff), Cell(0x822837fffffffff))
+		if !errors.Is(err, ErrResolutionMismatch) {
+			t.Fatalf("got %v, want ErrResolutionMismatch", err)
+		}
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		t.Parallel()
+
+		invalid := ^Cell(0)
+		if _, err := GridDistance(invalid, invalid); !errors.Is(err, ErrCellInvalid) {
+			t.Fatalf("GridDistance(invalid, invalid): got %v, want ErrCellInvalid", err)
+		}
+
+		bc1 := setH3Index(0, 15, centerDigit)
+		if _, err := GridDistance(bc1, invalid); !errors.Is(err, ErrResolutionMismatch) {
+			t.Fatalf("GridDistance(bc1, invalid): got %v, want ErrResolutionMismatch", err)
+		}
+	})
+}
+
+// TestGridPathRegressions ports the testGridPathCells.c named cases: lines that
+// must fail (crossing multiple faces / pentagon distortion) and one that must
+// succeed where a naive forward interpolation would fail.
+func TestGridPathRegressions(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		giveOrigin Cell
+		giveDest   Cell
+		wantErr    bool
+	}{
+		"across_multiple_faces_fails": {
+			giveOrigin: Cell(0x85285aa7fffffff),
+			giveDest:   Cell(0x851d9b1bfffffff),
+			wantErr:    true,
+		},
+		"pentagon_reverse_interpolation": {
+			giveOrigin: Cell(0x820807fffffffff),
+			giveDest:   Cell(0x8208e7fffffffff),
+			wantErr:    false,
+		},
+		"known_failure": {
+			giveOrigin: Cell(0x8411b61ffffffff),
+			giveDest:   Cell(0x84016d3ffffffff),
+			wantErr:    true,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			path, err := GridPath(tt.giveOrigin, tt.giveDest)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("GridPath: got %v, want error", path)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("GridPath: %v", err)
+			}
+
+			if path[0] != tt.giveOrigin || path[len(path)-1] != tt.giveDest {
+				t.Fatalf("GridPath: endpoints %015x..%015x", uint64(path[0]), uint64(path[len(path)-1]))
+			}
+		})
 	}
 }
 
@@ -527,5 +681,127 @@ func TestGridPathInterpolateError(t *testing.T) {
 
 	if err := gridPathInterpolate(corrupt, pent[0], 1, out, 0, 1); !errors.Is(err, ErrCellInvalid) {
 		t.Fatalf("gridPathInterpolate(corrupt anchor): got %v, want ErrCellInvalid", err)
+	}
+}
+
+// TestLocalIJToCellOverflow ports the testCellToLocalIj.c overflow regressions:
+// high-magnitude IJ coordinates (and a few hand-picked particular cases) must
+// fail rather than overflow the internal cube-coordinate conversion, at every
+// resolution.
+func TestLocalIJToCellOverflow(t *testing.T) {
+	t.Parallel()
+
+	coords := []CoordIJ{
+		{I: math.MinInt32, J: math.MaxInt32},
+		{I: math.MaxInt32, J: math.MinInt32},
+		{I: math.MinInt32, J: math.MinInt32},
+		{I: 553648127, J: -2145378272},
+		{I: math.MaxInt32 - 10, J: -11},
+		{I: math.MaxInt32 - 10, J: -10},
+		{I: math.MaxInt32 - 10, J: -9},
+	}
+
+	for res := 0; res <= MaxResolution; res++ {
+		origin := setH3Index(res, 2, centerDigit)
+		for _, ij := range coords {
+			if _, err := LocalIJToCell(origin, ij); err == nil {
+				t.Fatalf("LocalIJToCell(res %d, %+v): got nil error, want failure", res, ij)
+			}
+		}
+	}
+}
+
+// TestLocalIJToCellNegative ports the testCellToLocalIj.c invalid_negativeIj
+// regression: a specific index with large-negative IJ components must fail.
+func TestLocalIJToCellNegative(t *testing.T) {
+	t.Parallel()
+
+	index := Cell(0x200f202020202020)
+	ij := CoordIJ{I: -14671840, J: math.MinInt32}
+
+	if _, err := LocalIJToCell(index, ij); err == nil {
+		t.Fatal("LocalIJToCell(negative): got nil error, want failure")
+	}
+}
+
+// TestLocalIJToCellBaseCells ports the testCellToLocalIj.c ijBaseCells
+// regression: exact IJ->cell mappings around a res-0 base cell, including the
+// out-of-range failures.
+func TestLocalIJToCellBaseCells(t *testing.T) {
+	t.Parallel()
+
+	origin := Cell(0x8029fffffffffff)
+
+	tests := map[string]struct {
+		giveIJ  CoordIJ
+		want    Cell
+		wantErr bool
+	}{
+		"self":         {giveIJ: CoordIJ{I: 0, J: 0}, want: 0x8029fffffffffff},
+		"i1":           {giveIJ: CoordIJ{I: 1, J: 0}, want: 0x8051fffffffffff},
+		"i2_out":       {giveIJ: CoordIJ{I: 2, J: 0}, wantErr: true},
+		"j2_out":       {giveIJ: CoordIJ{I: 0, J: 2}, wantErr: true},
+		"negative_out": {giveIJ: CoordIJ{I: -2, J: -2}, wantErr: true},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := LocalIJToCell(origin, tt.giveIJ)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("got %015x, want error", uint64(got))
+				}
+
+				return
+			}
+
+			if err != nil || got != tt.want {
+				t.Fatalf("got %015x (%v), want %015x", uint64(got), err, uint64(tt.want))
+			}
+		})
+	}
+}
+
+// TestLocalIJToCellOutOfRange ports the testCellToLocalIj.c ijOutOfRange
+// regression: exact IJ->cell mappings along the i axis, with the far
+// coordinates failing.
+func TestLocalIJToCellOutOfRange(t *testing.T) {
+	t.Parallel()
+
+	origin := Cell(0x81283ffffffffff)
+
+	tests := map[string]struct {
+		giveIJ  CoordIJ
+		want    Cell
+		wantErr bool
+	}{
+		"i0":      {giveIJ: CoordIJ{I: 0, J: 0}, want: 0x81283ffffffffff},
+		"i1":      {giveIJ: CoordIJ{I: 1, J: 0}, want: 0x81293ffffffffff},
+		"i2":      {giveIJ: CoordIJ{I: 2, J: 0}, want: 0x8150bffffffffff},
+		"i3":      {giveIJ: CoordIJ{I: 3, J: 0}, want: 0x8151bffffffffff},
+		"i4_out":  {giveIJ: CoordIJ{I: 4, J: 0}, wantErr: true},
+		"in4_out": {giveIJ: CoordIJ{I: -4, J: 0}, wantErr: true},
+		"j4_out":  {giveIJ: CoordIJ{I: 0, J: 4}, wantErr: true},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := LocalIJToCell(origin, tt.giveIJ)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("got %015x, want error", uint64(got))
+				}
+
+				return
+			}
+
+			if err != nil || got != tt.want {
+				t.Fatalf("got %015x (%v), want %015x", uint64(got), err, uint64(tt.want))
+			}
+		})
 	}
 }

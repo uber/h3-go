@@ -149,7 +149,7 @@ func TestDirectionForVertexNumInvalid(t *testing.T) {
 func TestVertexRotationsError(t *testing.T) {
 	t.Parallel()
 
-	corrupt := CellFromString("8928308280fffff").setBaseCell(numBaseCells)
+	corrupt := CellFromString("8928308280fffff").setBaseCell(NumBaseCells)
 
 	if _, err := corrupt.vertexRotations(); !errors.Is(err, ErrCellInvalid) {
 		t.Fatalf("vertexRotations(corrupt): got %v, want ErrCellInvalid", err)
@@ -171,7 +171,7 @@ func TestVertexOwnerFails(t *testing.T) {
 
 	// A res-0 cell with an out-of-range base cell enters the owner search (res 0)
 	// but cannot determine its vertex direction, so the lookup fails.
-	corrupt := Cell(h3Init).setMode(cellMode).setBaseCell(numBaseCells)
+	corrupt := Cell(h3Init).setMode(cellMode).setBaseCell(NumBaseCells)
 
 	if _, err := corrupt.Vertex(0); !errors.Is(err, ErrFailed) {
 		t.Fatalf("Vertex(corrupt res0): got %v, want ErrFailed", err)
@@ -320,7 +320,7 @@ func TestBaseCellToCCWrot60Invalid(t *testing.T) {
 		t.Fatalf("baseCellToCCWrot60(0, -1): got %d, want %d", got, invalidRotations)
 	}
 
-	if got := baseCellToCCWrot60(numBaseCells, 0); got != invalidRotations {
+	if got := baseCellToCCWrot60(NumBaseCells, 0); got != invalidRotations {
 		t.Fatalf("baseCellToCCWrot60(out of range, 0): got %d, want %d", got, invalidRotations)
 	}
 }
@@ -377,7 +377,7 @@ func TestVertexNeighborErrors(t *testing.T) {
 func TestVertexLatLngOwnerError(t *testing.T) {
 	t.Parallel()
 
-	corrupt := Cell(h3Init).setMode(vertexMode).setBaseCell(numBaseCells)
+	corrupt := Cell(h3Init).setMode(vertexMode).setBaseCell(NumBaseCells)
 
 	if _, err := Vertex(corrupt).LatLng(); !errors.Is(err, ErrCellInvalid) {
 		t.Fatalf("LatLng(corrupt owner): got %v, want ErrCellInvalid", err)
@@ -394,5 +394,40 @@ func TestVertexLatLngOwnerError(t *testing.T) {
 
 	if !IsValidVertex(valid) {
 		t.Fatal("IsValidVertex(valid) should be true")
+	}
+}
+
+// TestCellToVertexInvalidLiterals ports the testVertex.c cellToVertex_invalid2
+// and invalid3 regressions: specific malformed indexes must fail with
+// ErrCellInvalid.
+func TestCellToVertexInvalidLiterals(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		giveCell      Cell
+		giveVertexNum int
+	}{
+		"invalid2": {giveCell: Cell(0x685b2396e900fff9), giveVertexNum: 2},
+		"invalid3": {giveCell: Cell(0x20ff20202020ff35), giveVertexNum: 0},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if _, err := tt.giveCell.Vertex(tt.giveVertexNum); !errors.Is(err, ErrCellInvalid) {
+				t.Fatalf("Vertex: got %v, want ErrCellInvalid", err)
+			}
+		})
+	}
+}
+
+// TestIsValidVertexKnownLiteral ports the testVertex.c isValidVertex_hex
+// regression: a specific known-valid vertex index validates.
+func TestIsValidVertexKnownLiteral(t *testing.T) {
+	t.Parallel()
+
+	if !IsValidVertex(Vertex(0x2222597fffffffff)) {
+		t.Fatal("IsValidVertex(0x2222597fffffffff): got false, want true")
 	}
 }
