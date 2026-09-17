@@ -86,63 +86,74 @@ func (v vec3d) tangentBasis() (north, east vec3d) {
 	return north, east
 }
 
-// azimuthRads returns the azimuth, in radians, of point p2 as seen from point v,
-// measured in v's local tangent plane (clockwise from north). It is used to find
-// the angle of a geographic point relative to a face center.
-func (v vec3d) azimuthRads(p2 vec3d) float64 {
-	north, east := v.tangentBasis()
-	p2Proj := p2.linComb(1.0, -p2.dot(v), v)
-	p2Proj.normalize()
-
-	return math.Atan2(p2Proj.dot(east), p2Proj.dot(north))
-}
-
-// posAngleRads normalizes an angle in radians into the range [0, 2π).
-func posAngleRads(rads float64) float64 {
-	tmp := rads
-	if rads < 0 {
-		tmp += m2PI
-	}
-
-	if tmp >= m2PI {
-		tmp -= m2PI
-	}
-
-	return tmp
-}
+// faceCenterDistSq is the squared chord distance below which a point is treated
+// as sitting on its face center, where the azimuth is singular. It mirrors the
+// original acos(1-sqd/2) < epsilon guard: acos(1-sqd/2) < epsilon ⟺
+// sqd < 2(1-cos epsilon). For epsilon this small that exact form underflows to
+// zero (cos(1e-16) rounds to 1), so use its leading-order equivalent, epsilon².
+const faceCenterDistSq = epsilon * epsilon
 
 // toHex2d gnomonically projects the unit vector v onto its closest icosahedron
 // face and returns that face plus the point's 2D Hex coordinates (centered on
 // the face center) at the given resolution. The radius is scaled by √7 per
 // resolution and the angle is rotated for odd (Class III) resolutions. A point
 // at the face center maps to the origin.
+//
+// The angle work uses precomputed cos/sin instead of acos/atan2/tan/sin/cos: the
+// azimuth's cos/sin come straight from the tangent-plane components (so neither
+// the tangent basis nor the projection need normalizing — the scale cancels in
+// the ratio), the per-face and Class III rotations fold in via angle-subtraction,
+// and the gnomonic tan(acos x) reduces to √(1−x²)/x.
 func (v vec3d) toHex2d(res int) (face int, hex vec2d) {
 	var sqd float64
 
 	face, sqd = v.closestFace()
 
-	r := math.Acos(1 - sqd*0.5)
-	if r < epsilon {
+	// Near the face center the azimuth is singular (the tangent-plane projection
+	// vanishes); the center itself maps to the origin.
+	if sqd < faceCenterDistSq {
 		return face, hex
 	}
 
-	theta := posAngleRads(
-		faceAxesAzRadsCII[face][0] -
-			posAngleRads(faceCenterPoint[face].azimuthRads(v)))
+	// Azimuth of v from the face center, taken as cos/sin from the tangent-plane
+	// components. north and the projection are left un-normalized: both the north
+	// and east components scale by the same factor, which cancels in N/hyp, E/hyp.
+	fc := faceCenterPoint[face]
+	pole := vec3d{0, 0, 1}
+	north := pole.linComb(1.0, -pole.dot(fc), fc)
+	east := north.cross(fc)
+	proj := v.linComb(1.0, -v.dot(fc), fc)
+	nComp := proj.dot(north)
+	eComp := proj.dot(east)
+	hyp := math.Sqrt(nComp*nComp + eComp*eComp)
+	cosAz := nComp / hyp
+	sinAz := eComp / hyp
 
+	// theta = faceAxis0 - azimuth, expanded via angle-subtraction.
+	cosA := faceAxis0Cos[face]
+	sinA := faceAxis0Sin[face]
+	cosTheta := cosA*cosAz + sinA*sinAz
+	sinTheta := sinA*cosAz - cosA*sinAz
+
+	// Class III rotates the angle by -mAP7RotRads.
 	if isResClassIII(res) {
-		theta = posAngleRads(theta - mAP7RotRads)
+		cosTheta, sinTheta = cosTheta*ap7RotCos+sinTheta*ap7RotSin,
+			sinTheta*ap7RotCos-cosTheta*ap7RotSin
 	}
 
-	r = math.Tan(r)
+	// Gnomonic scaling: r = tan(acos x) = √(1−x²)/x with x = 1 − sqd/2. The
+	// √((sqd/2)(2−sqd/2)) form is (1−x)(1+x), avoiding cancellation near center.
+	halfSqd := sqd * 0.5
+	x := 1 - halfSqd
+	r := math.Sqrt(halfSqd*(2-halfSqd)) / x
 	r *= invRes0UGnomonic
 
 	for range res {
 		r *= mSqrt7
 	}
 
-	hex.x = r * math.Cos(theta)
-	hex.y = r * math.Sin(theta)
+	hex.x = r * cosTheta
+	hex.y = r * sinTheta
 
 	return face, hex
 }
