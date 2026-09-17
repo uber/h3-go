@@ -547,6 +547,47 @@ func (c Cell) IsNeighbor(other Cell) (bool, error) {
 	return false, nil
 }
 
+// directionForNeighbor returns the digit direction from origin to destination,
+// the reverse of stepping a neighbor. It returns invalidDigit when the cells are
+// not neighbors. It checks each neighbor in turn, skipping the center (which is
+// the origin) and the deleted k axis for pentagons.
+func (c Cell) directionForNeighbor(destination Cell) int {
+	firstDir := kAxesDigit
+	if c.IsPentagon() {
+		firstDir = jAxesDigit
+	}
+
+	for dir := firstDir; dir < numDigits; dir++ {
+		neighbor, _, err := c.neighborRotations(dir, 0)
+		if err == nil && neighbor == destination {
+			return dir
+		}
+	}
+
+	return invalidDigit
+}
+
+// baseCellToCCWrot60 returns the number of 60° counterclockwise rotations for a
+// base cell's coordinate system on the given face, or invalidRotations if the
+// base cell does not appear on that face.
+func baseCellToCCWrot60(baseCell, face int) int {
+	if face < 0 || face >= numIcosaFaces {
+		return invalidRotations
+	}
+
+	for i := range 3 {
+		for j := range 3 {
+			for k := range 3 {
+				if faceIjkBaseCells[face][i][j][k].baseCell == baseCell {
+					return faceIjkBaseCells[face][i][j][k].ccwRot60
+				}
+			}
+		}
+	}
+
+	return invalidRotations
+}
+
 // newDigitII maps current digit and direction to the new digit on a Class II grid.
 var newDigitII = [7][7]int{
 	{centerDigit, kAxesDigit, jAxesDigit, jkAxesDigit, iAxesDigit,
