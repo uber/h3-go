@@ -19,8 +19,6 @@ package h3go
 import (
 	"errors"
 	"testing"
-
-	"github.com/uber/h3-go/v4/internal/h3core"
 )
 
 // farCoord is far beyond maxFaceCoord and stays out of range even after the
@@ -165,7 +163,7 @@ func TestIcosahedronFacesKnown(t *testing.T) {
 		t.Parallel()
 
 		for bc := range NumBaseCells {
-			if h3core.IsBaseCellPentagon[bc] {
+			if isBaseCellPentagon[bc] {
 				continue
 			}
 

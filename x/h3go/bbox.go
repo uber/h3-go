@@ -18,13 +18,6 @@ package h3go
 
 import "math"
 
-// bbox is a geographic bounding box with degree coordinates, matching the units
-// of the public GeoPolygon. east < west indicates a box crossing the
-// antimeridian.
-type bbox struct {
-	north, south, east, west float64
-}
-
 // Longitude span constants in degrees, the units of the public API. They stand
 // in for the H3 C library's radian M_PI / M_2PI when detecting and normalizing
 // antimeridian-crossing geometry.
@@ -32,12 +25,12 @@ const (
 	piDeg     = 180.0
 	twoPiDeg  = 360.0
 	halfPiDeg = 90.0
-)
 
-// twoPiRad is a full longitude turn in radians, used to normalize
-// antimeridian-crossing geometry where the math must run at the radian scale of
-// the H3 C library.
-const twoPiRad = 2 * math.Pi
+	// twoPiRad is a full longitude turn in radians, used to normalize
+	// antimeridian-crossing geometry where the math must run at the radian scale
+	// of the H3 C library.
+	twoPiRad = 2 * math.Pi
+)
 
 // longitudeNormalization selects how a longitude is shifted so two bounding
 // boxes, either of which may cross the antimeridian, can be compared in one
@@ -49,6 +42,13 @@ const (
 	normalizeEast
 	normalizeWest
 )
+
+// bbox is a geographic bounding box with degree coordinates, matching the units
+// of the public GeoPolygon. east < west indicates a box crossing the
+// antimeridian.
+type bbox struct {
+	north, south, east, west float64
+}
 
 // isTransmeridian reports whether the bounding box crosses the antimeridian.
 func (b bbox) isTransmeridian() bool {
@@ -68,10 +68,10 @@ func (b bbox) contains(point LatLng) bool {
 	return point.Lng >= b.west && point.Lng <= b.east
 }
 
-// bboxFromGeoLoop computes the bounding box of a loop of coordinates. It does not
+// toBbox computes the bounding box of a loop of coordinates. It does not
 // support loops with adjacent points more than 180° of longitude apart (treated
 // as antimeridian crossings) or loops containing a pole.
-func bboxFromGeoLoop(loop GeoLoop) bbox {
+func (loop GeoLoop) toBbox() bbox {
 	if len(loop) == 0 {
 		return bbox{}
 	}
@@ -111,14 +111,14 @@ func bboxFromGeoLoop(loop GeoLoop) bbox {
 	return out
 }
 
-// bboxesFromGeoPolygon returns the bounding box for the outer loop followed by
+// toBboxes returns the bounding box for the outer loop followed by
 // one for each hole, in order.
-func bboxesFromGeoPolygon(polygon GeoPolygon) []bbox {
+func (polygon GeoPolygon) toBboxes() []bbox {
 	bboxes := make([]bbox, len(polygon.Holes)+1)
-	bboxes[0] = bboxFromGeoLoop(polygon.GeoLoop)
+	bboxes[0] = polygon.GeoLoop.toBbox()
 
 	for i := range polygon.Holes {
-		bboxes[i+1] = bboxFromGeoLoop(polygon.Holes[i])
+		bboxes[i+1] = polygon.Holes[i].toBbox()
 	}
 
 	return bboxes

@@ -16,27 +16,29 @@
 
 package h3go
 
-// GeoLoop is an ordered list of geographic coordinates in degrees describing a
-// closed loop; the final point is implicitly connected back to the first.
-type GeoLoop []LatLng
-
-// GeoPolygon is a GeoLoop outer boundary with zero or more GeoLoop holes.
-type GeoPolygon struct {
-	GeoLoop GeoLoop
-	Holes   []GeoLoop
-}
-
 // polygonToCellsBuffer is added to the estimated cell count to cover small
 // polygons near icosahedron edges at odd resolutions, where line tracing needs a
 // little more room than the estimator provides.
 const polygonToCellsBuffer = 12
+
+type (
+	// GeoLoop is an ordered list of geographic coordinates in degrees describing
+	// a closed loop; the final point is implicitly connected back to the first.
+	GeoLoop []LatLng
+
+	// GeoPolygon is a GeoLoop outer boundary with zero or more GeoLoop holes.
+	GeoPolygon struct {
+		GeoLoop GeoLoop
+		Holes   []GeoLoop
+	}
+)
 
 // maxPolygonToCellsSize returns an upper bound on the number of cells that
 // PolygonToCells may produce for the polygon at the given resolution. It is the
 // larger of the bounding-box cell estimate and the total vertex count, plus a
 // small buffer.
 func maxPolygonToCellsSize(polygon GeoPolygon, res int) (int, error) {
-	numHexagons, err := bboxHexEstimate(bboxFromGeoLoop(polygon.GeoLoop), res)
+	numHexagons, err := bboxHexEstimate(polygon.GeoLoop.toBbox(), res)
 	if err != nil {
 		return 0, err
 	}
@@ -96,7 +98,7 @@ func PolygonToCells(polygon GeoPolygon, res int) ([]Cell, error) {
 		return nil, nil
 	}
 
-	bboxes := bboxesFromGeoPolygon(polygon)
+	bboxes := polygon.toBboxes()
 
 	// 1. Trace the outer loop and any holes to seed the search set. Tracing the
 	// first loop surfaces an invalid resolution.
