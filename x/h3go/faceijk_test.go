@@ -18,6 +18,7 @@ package h3go
 
 import (
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -189,5 +190,25 @@ func TestIcosahedronFacesInvalid(t *testing.T) {
 	overflow := Cell(0x08191d58a34080d2)
 	if _, err := overflow.IcosahedronFaces(); !errors.Is(err, ErrFailed) {
 		t.Fatalf("face-count overflow: got %v, want ErrFailed", err)
+	}
+}
+
+// TestToVec3SubstrateClassIII covers the substrate aperture-7 branch that only
+// fires for a hand-built odd-resolution substrate grid: H3's own builders bump
+// res to Class II first, so no public call reaches it. The projected point must
+// still land on the unit sphere.
+func TestToVec3SubstrateClassIII(t *testing.T) {
+	t.Parallel()
+
+	const classIIIRes = 1 // odd => Class III
+	if !isResClassIII(classIIIRes) {
+		t.Fatalf("res %d should be Class III", classIIIRes)
+	}
+
+	point := vec2d{x: 0.5, y: 0.5}.toVec3(0, classIIIRes, true)
+
+	mag := math.Sqrt(point.x*point.x + point.y*point.y + point.z*point.z)
+	if math.Abs(mag-1) > epsilon {
+		t.Fatalf("substrate Class III point off the unit sphere: mag=%v", mag)
 	}
 }
