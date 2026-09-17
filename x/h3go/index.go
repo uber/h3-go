@@ -87,6 +87,14 @@ func (c Cell) setIndexDigit(res, digit int) Cell {
 	return c
 }
 
+// setBaseCell returns the index with its base cell field set to baseCell.
+func (c Cell) setBaseCell(baseCell int) Cell {
+	c &= ^(Cell(baseCellMask) << baseCellOffset)
+	c |= Cell(baseCell) << baseCellOffset
+
+	return c
+}
+
 // BaseCellNumber returns the integer ID (0-121) of the base cell the cell
 // belongs to.
 func BaseCellNumber(c Cell) int {
