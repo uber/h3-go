@@ -25,23 +25,28 @@ import (
 func TestUnionFind(t *testing.T) {
 	t.Parallel()
 
-	first := &arc{rank: 1}
-	first.parent = first
-	second := &arc{rank: 1}
-	second.parent = second
-	third := &arc{rank: 1}
-	third.parent = third
+	arcs := []arc{
+		{rank: 1, parent: 0},
+		{rank: 1, parent: 1},
+		{rank: 1, parent: 2},
+	}
+
+	const (
+		first  = 0
+		second = 1
+		third  = 2
+	)
 
 	// Equal ranks: no swap; first absorbs second.
-	union(first, second)
+	arcUnion(arcs, first, second)
 
 	// Lower-rank first absorbs into higher-rank component: triggers the swap.
-	union(third, first)
+	arcUnion(arcs, third, first)
 
 	// Already in the same component: the merge body is skipped.
-	union(second, third)
+	arcUnion(arcs, second, third)
 
-	if first.root() != second.root() || second.root() != third.root() {
+	if arcRoot(arcs, first) != arcRoot(arcs, second) || arcRoot(arcs, second) != arcRoot(arcs, third) {
 		t.Fatal("all arcs should share one root after the unions")
 	}
 }
