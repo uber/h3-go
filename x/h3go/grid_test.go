@@ -73,8 +73,8 @@ func gridCorpus(t *testing.T) []Cell {
 	return cells
 }
 
-// cellSet returns the cells of in as a set for membership tests, dropping zeros.
-func cellSet(in []Cell) map[Cell]bool {
+// cellsAsMap returns the cells of in as a set for membership tests, dropping zeros.
+func cellsAsMap(in []Cell) map[Cell]bool {
 	set := make(map[Cell]bool, len(in))
 	for _, cell := range in {
 		if cell != 0 {
@@ -566,8 +566,8 @@ func TestGridFreeFunctions(t *testing.T) {
 func assertSameSet(t *testing.T, got, want []Cell, msg string) {
 	t.Helper()
 
-	gotSet := cellSet(got)
-	wantSet := cellSet(want)
+	gotSet := cellsAsMap(got)
+	wantSet := cellsAsMap(want)
 
 	if len(gotSet) != len(wantSet) {
 		t.Fatalf("%s: set sizes differ got=%d want=%d", msg, len(gotSet), len(wantSet))

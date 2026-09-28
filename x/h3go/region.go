@@ -55,17 +55,17 @@ func maxPolygonToCellsSize(polygon GeoPolygon, res int) (int, error) {
 	return numHexagons + polygonToCellsBuffer, nil
 }
 
-// getEdgeHexagons traces a loop with cells of the given resolution, adding every
-// cell whose center the loop passes through to the search set. These seed the
-// flood fill in PolygonToCells.
-func getEdgeHexagons(loop GeoLoop, res int, search map[Cell]bool) error {
+// getEdgeHexagons traces a loop with cells of the given resolution, appending
+// every cell whose center the loop passes through to seeds, deduplicated
+// through seen. These seed the flood fill in PolygonToCells.
+func getEdgeHexagons(loop GeoLoop, res int, seen *cellSet, seeds []Cell) ([]Cell, error) {
 	for i := range loop {
 		origin := loop[i]
 		destination := loop[(i+1)%len(loop)]
 
 		numHexes, err := lineHexEstimate(origin, destination, res)
 		if err != nil {
-			return err
+			return seeds, err
 		}
 
 		invNumHexes := 1.0 / float64(numHexes)
@@ -78,11 +78,13 @@ func getEdgeHexagons(loop GeoLoop, res int, search map[Cell]bool) error {
 			// res and finiteness are already validated by lineHexEstimate above,
 			// so this conversion cannot fail here.
 			cell, _ := LatLngToCell(interpolate, res)
-			search[cell] = true
+			if seen.insert(cell) {
+				seeds = append(seeds, cell)
+			}
 		}
 	}
 
-	return nil
+	return seeds, nil
 }
 
 // PolygonToCells returns the cells of the given resolution whose centers fall
@@ -101,10 +103,22 @@ func PolygonToCells(polygon GeoPolygon, res int) ([]Cell, error) {
 	bboxes := polygon.toBboxes()
 
 	// 1. Trace the outer loop and any holes to seed the search set. Tracing the
-	// first loop surfaces an invalid resolution.
-	search := make(map[Cell]bool)
-	for _, loop := range append([]GeoLoop{polygon.GeoLoop}, polygon.Holes...) {
-		if err := getEdgeHexagons(loop, res, search); err != nil {
+	// first loop surfaces an invalid resolution. The seed set starts empty and
+	// grows on demand since its size is not known until the loops are traced.
+	var (
+		seen  cellSet
+		seeds []Cell
+		err   error
+	)
+
+	seeds, err = getEdgeHexagons(polygon.GeoLoop, res, &seen, seeds)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, hole := range polygon.Holes {
+		seeds, err = getEdgeHexagons(hole, res, &seen, seeds)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -117,42 +131,40 @@ func PolygonToCells(polygon GeoPolygon, res int) ([]Cell, error) {
 
 	// 2. Flood fill: from each search cell, test it and its neighbors for
 	// containment, and use the newly contained cells as the next search set.
-	found := make(map[Cell]bool, sizeHint)
+	// found is the output, appended in discovery order; foundSet only answers
+	// membership. Each generation's search set is the slice of found cells the
+	// previous generation appended, so no per-generation buffer is needed.
+	foundSet := newCellSet(sizeHint)
+	found := make([]Cell, 0, sizeHint)
 
-	searchList := make([]Cell, 0, len(search))
-	for cell := range search {
-		searchList = append(searchList, cell)
+	search := seeds
+	for len(search) > 0 {
+		start := len(found)
+		found = polygonFloodStep(polygon, bboxes, search, &foundSet, found)
+		search = found[start:]
 	}
 
-	for len(searchList) > 0 {
-		searchList = polygonFloodStep(polygon, bboxes, searchList, found)
-	}
-
-	out := make([]Cell, 0, len(found))
-	for cell := range found {
-		out = append(out, cell)
-	}
-
-	return out, nil
+	return found, nil
 }
 
 // polygonFloodStep expands one generation of the polygon flood fill: for each
-// cell in searchList, it tests the cell and its neighbors and records those whose
-// center is inside the polygon, returning the newly found cells. Every cell here
-// comes from a prior LatLngToCell or grid-disk step, so it is always valid and
-// the projection calls cannot fail.
-func polygonFloodStep(polygon GeoPolygon, bboxes []bbox, searchList []Cell, found map[Cell]bool) []Cell {
-	var nextSearch []Cell
+// cell in search, it tests the cell and its neighbors and appends those whose
+// center is inside the polygon to found, recording them in foundSet. Every cell
+// here comes from a prior LatLngToCell or grid-disk step, so it is always valid
+// and the projection calls cannot fail.
+//
+// search may alias a tail of found. That is safe: appends only write past
+// found's current length, which is past the end of search, and if append
+// reallocates, search keeps reading the old backing array.
+func polygonFloodStep(polygon GeoPolygon, bboxes []bbox, search []Cell, foundSet *cellSet, found []Cell) []Cell {
+	// disk holds one radius-1 disk at a time and stays on the stack.
+	var disk [oneRingSize]Cell
 
-	// disk is reused across cells so the grid-disk lookup below allocates once
-	// rather than once per search cell.
-	var disk []Cell
+	for _, searchHex := range search {
+		ring, _ := searchHex.gridDiskInto(1, disk[:0])
 
-	for _, searchHex := range searchList {
-		disk, _ = searchHex.gridDiskInto(1, disk[:0])
-
-		for _, hex := range disk {
-			if found[hex] {
+		for _, hex := range ring {
+			if foundSet.contains(hex) {
 				continue
 			}
 
@@ -161,13 +173,13 @@ func polygonFloodStep(polygon GeoPolygon, bboxes []bbox, searchList []Cell, foun
 				continue
 			}
 
-			found[hex] = true
+			foundSet.insert(hex)
 
-			nextSearch = append(nextSearch, hex)
+			found = append(found, hex)
 		}
 	}
 
-	return nextSearch
+	return found
 }
 
 // Cells returns the cells of the given resolution whose centers fall within the

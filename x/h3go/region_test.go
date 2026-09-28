@@ -266,9 +266,28 @@ func TestPolygonToCellsDegenerate(t *testing.T) {
 func TestGetEdgeHexagonsError(t *testing.T) {
 	t.Parallel()
 
-	search := make(map[Cell]bool)
-	if err := getEdgeHexagons(sfSquareLoop, -1, search); err == nil {
+	var seen cellSet
+	if _, err := getEdgeHexagons(sfSquareLoop, -1, &seen, nil); err == nil {
 		t.Fatal("getEdgeHexagons(res -1): got nil error, want failure")
+	}
+}
+
+// TestPolygonToCellsHoleTraceError covers the error path where the outer loop
+// traces cleanly but a hole cannot be traced.
+func TestPolygonToCellsHoleTraceError(t *testing.T) {
+	t.Parallel()
+
+	polygon := GeoPolygon{
+		GeoLoop: sfSquareLoop,
+		Holes: []GeoLoop{{
+			{Lat: math.NaN(), Lng: -122.43},
+			{Lat: 37.76, Lng: -122.42},
+			{Lat: 37.75, Lng: -122.42},
+		}},
+	}
+
+	if _, err := PolygonToCells(polygon, 8); !errors.Is(err, ErrFailed) {
+		t.Fatalf("PolygonToCells(NaN hole): got %v, want ErrFailed", err)
 	}
 }
 
@@ -287,11 +306,17 @@ func TestPolygonFloodStepValidCells(t *testing.T) {
 		t.Fatalf("LatLngToCell: %v", err)
 	}
 
-	found := map[Cell]bool{}
+	var foundSet cellSet
 
-	next := polygonFloodStep(polygon, bboxes, []Cell{seed}, found)
-	if len(found) == 0 || len(next) == 0 {
-		t.Fatalf("polygonFloodStep found %d cells, next %d; want some", len(found), len(next))
+	found := polygonFloodStep(polygon, bboxes, []Cell{seed}, &foundSet, nil)
+	if len(found) == 0 || foundSet.count != len(found) {
+		t.Fatalf("polygonFloodStep found %d cells, set holds %d; want some and equal", len(found), foundSet.count)
+	}
+
+	for _, cell := range found {
+		if !foundSet.contains(cell) {
+			t.Fatalf("polygonFloodStep: found cell %v missing from set", cell)
+		}
 	}
 }
 
