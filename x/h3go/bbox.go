@@ -144,15 +144,39 @@ func (c Cell) hexRadiusKm() float64 {
 	return GreatCircleDistanceKm(center, boundary[0])
 }
 
+// pentagonRadiiKm holds the radius of a pentagon at each resolution. The
+// polygon size estimators need it on every call, and computing it means
+// projecting a full cell boundary, so it is derived once here with the same
+// code path the estimators used to run inline.
+var pentagonRadiiKm = func() [MaxResolution + 1]float64 {
+	var radii [MaxResolution + 1]float64
+
+	for res := range radii {
+		// res is in range by construction, so Pentagons cannot fail.
+		pentagons, _ := Pentagons(res)
+		radii[res] = pentagons[0].hexRadiusKm()
+	}
+
+	return radii
+}()
+
+// pentagonRadiusKm returns the radius of a pentagon at the given resolution,
+// failing with ErrResolutionDomain for a resolution out of range.
+func pentagonRadiusKm(res int) (float64, error) {
+	if res < 0 || res > MaxResolution {
+		return 0, ErrResolutionDomain
+	}
+
+	return pentagonRadiiKm[res], nil
+}
+
 // bboxHexEstimate estimates the number of cells of the given resolution that fit
 // within the Cartesian-projected bounding box.
 func bboxHexEstimate(box bbox, res int) (int, error) {
-	pentagons, err := Pentagons(res)
+	pentagonRadiusKm, err := pentagonRadiusKm(res)
 	if err != nil {
 		return 0, err
 	}
-
-	pentagonRadiusKm := pentagons[0].hexRadiusKm()
 
 	// Area of a regular hexagon is 3/2*sqrt(3) * r * r. The pentagon has the most
 	// distortion (smallest edges), shrunk by 20% in case the box perfectly bounds
@@ -188,12 +212,10 @@ func bboxHexEstimate(box bbox, res int) (int, error) {
 // lineHexEstimate estimates the number of cells of the given resolution needed
 // to trace the Cartesian-projected line between two points.
 func lineHexEstimate(origin, destination LatLng, res int) (int, error) {
-	pentagons, err := Pentagons(res)
+	pentagonRadiusKm, err := pentagonRadiusKm(res)
 	if err != nil {
 		return 0, err
 	}
-
-	pentagonRadiusKm := pentagons[0].hexRadiusKm()
 
 	distKm := GreatCircleDistanceKm(origin, destination)
 

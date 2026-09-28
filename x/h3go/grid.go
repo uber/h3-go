@@ -504,13 +504,6 @@ func (c Cell) GridDiskDistancesSafe(k int) ([][]Cell, error) {
 	return rings, nil
 }
 
-// hashSlot returns the starting probe slot for c in an open-addressing set of
-// the given size.
-func hashSlot(c Cell, size int) int {
-	//nolint:gosec // an H3 index is a 64-bit value; int64->uint64 is a lossless reinterpretation.
-	return int(uint64(c) % uint64(size))
-}
-
 // GridDiskDistancesSafe returns the cells within grid distance k of the origin,
 // grouped by ring, using a breadth-first traversal that tolerates pentagon
 // distortion.

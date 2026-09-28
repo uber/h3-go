@@ -94,6 +94,9 @@ const (
 
 	// numCellEdges is the number of directed edges originating at a cell.
 	numCellEdges = 6
+	// oneRingSize is the cell count of a grid disk of radius 1: the origin
+	// plus one neighbor per edge.
+	oneRingSize = numCellEdges + 1
 	// numEdgeCells is the number of cells a directed edge connects.
 	numEdgeCells = 2
 	// invalidVertexNum marks a vertex number that is not valid for a cell.
