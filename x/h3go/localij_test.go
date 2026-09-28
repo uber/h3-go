@@ -641,9 +641,9 @@ func TestLocalIJDefensive(t *testing.T) {
 
 	for r := pentagon.Resolution() - 1; r >= 0; r-- {
 		if isResClassIII(r + 1) {
-			kOffset.downAp7()
+			kOffset = kOffset.downAp7()
 		} else {
-			kOffset.downAp7r()
+			kOffset = kOffset.downAp7r()
 		}
 	}
 
