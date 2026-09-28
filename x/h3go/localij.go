@@ -165,9 +165,9 @@ func (c Cell) cellToLocalIjk(target Cell) (coordIJK, error) {
 		// Scale the offset to the index resolution.
 		for r := res - 1; r >= 0; r-- {
 			if isResClassIII(r + 1) {
-				offset.downAp7()
+				offset = offset.downAp7()
 			} else {
-				offset.downAp7r()
+				offset = offset.downAp7r()
 			}
 		}
 
@@ -175,8 +175,7 @@ func (c Cell) cellToLocalIjk(target Cell) (coordIJK, error) {
 			offset = offset.rotate60cw()
 		}
 
-		coord = coord.add(offset)
-		coord.normalize()
+		coord = coord.add(offset).normalize()
 	case originOnPent && indexOnPent:
 		// Same pentagon base cell.
 		originLeadingDigit := c.leadingNonZeroDigit()
@@ -239,17 +238,14 @@ func (c Cell) localIjkToCell(ijk coordIJK) (Cell, error) {
 		var lastCenter coordIJK
 
 		if isResClassIII(r + 1) {
-			ijkCopy.upAp7()
-			lastCenter = ijkCopy
-			lastCenter.downAp7()
+			ijkCopy = ijkCopy.upAp7()
+			lastCenter = ijkCopy.downAp7()
 		} else {
-			ijkCopy.upAp7r()
-			lastCenter = ijkCopy
-			lastCenter.downAp7r()
+			ijkCopy = ijkCopy.upAp7r()
+			lastCenter = ijkCopy.downAp7r()
 		}
 
-		diff := lastIJK.sub(lastCenter)
-		diff.normalize()
+		diff := lastIJK.sub(lastCenter).normalize()
 		out = out.setIndexDigit(r+1, diff.unitToDigit())
 	}
 
@@ -386,8 +382,7 @@ func CellToLocalIJ(origin, cell Cell) (CoordIJ, error) {
 // LocalIJToCell returns the cell at the IJ coordinates anchored by origin. It is
 // the inverse of CellToLocalIJ, subject to the same pentagon and range limits.
 func LocalIJToCell(origin Cell, ij CoordIJ) (Cell, error) {
-	ijk := coordIJK{i: ij.I, j: ij.J, k: 0}
-	ijk.normalize()
+	ijk := coordIJK{i: ij.I, j: ij.J}.normalize()
 
 	return origin.localIjkToCell(ijk)
 }
@@ -459,8 +454,8 @@ func gridPathInterpolate(start, end Cell, distance int, out []Cell, outOffset, o
 		return err
 	}
 
-	startIjk.toCube()
-	endIjk.toCube()
+	startIjk = startIjk.toCube()
+	endIjk = endIjk.toCube()
 
 	invDistance := 1.0 / float64(distance)
 	iStep := float64(endIjk.i-startIjk.i) * invDistance
@@ -473,7 +468,7 @@ func gridPathInterpolate(start, end Cell, distance int, out []Cell, outOffset, o
 			float64(startIjk.j)+jStep*float64(n),
 			float64(startIjk.k)+kStep*float64(n),
 		)
-		current.fromCube()
+		current = current.fromCube()
 
 		cell, err := start.localIjkToCell(current)
 		if err != nil {

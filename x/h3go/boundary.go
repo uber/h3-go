@@ -150,8 +150,7 @@ func (fijk faceIJK) pentToCellBoundary(out CellBoundary, res, start, length int)
 				ijk = ijk.rotate60ccw()
 			}
 
-			ijk = ijk.add(fijkOrient.translate.scale(unitScaleByCIIres[adjRes] * 3))
-			ijk.normalize()
+			ijk = ijk.add(fijkOrient.translate.scale(unitScaleByCIIres[adjRes] * 3)).normalize()
 			tmpFijk.coord = ijk
 
 			orig2d1 := ijk.toHex2d()

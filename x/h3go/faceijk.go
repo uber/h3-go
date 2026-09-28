@@ -168,78 +168,61 @@ func (v vec3d) toFaceIjk(res int) faceIJK {
 
 // --- CoordIJK helpers ---
 
-// normalize reduces an IJK coordinate to its canonical form by subtracting the
-// minimum component from all three, so that at least one component is zero (IJK
-// coordinates are only defined up to a uniform offset).
-func (c *coordIJK) normalize() {
-	m := c.i
-	if c.j < m {
-		m = c.j
-	}
+// normalize returns the canonical form of an IJK coordinate: the minimum
+// component subtracted from all three, so that at least one component is zero
+// (IJK coordinates are only defined up to a uniform offset).
+func (c coordIJK) normalize() coordIJK {
+	m := min(c.i, c.j, c.k)
 
-	if c.k < m {
-		m = c.k
-	}
-
-	c.i -= m
-	c.j -= m
-	c.k -= m
+	return coordIJK{i: c.i - m, j: c.j - m, k: c.k - m}
 }
 
-// upAp7 transforms an IJK coordinate to the next coarser resolution on the
-// Class II aperture-7 grid (the "up" direction), rounding to the nearest parent
-// cell and re-normalizing.
-func (c *coordIJK) upAp7() {
+// upAp7 returns the IJK coordinate at the next coarser resolution on the Class
+// II aperture-7 grid (the "up" direction), rounded to the nearest parent cell
+// and normalized.
+func (c coordIJK) upAp7() coordIJK {
 	i := c.i - c.k
 	j := c.j - c.k
-	c.i = int(math.Round(float64(3*i-j) * mOneSeventh))
-	c.j = int(math.Round(float64(i+2*j) * mOneSeventh))
-	c.k = 0
-	c.normalize()
+
+	return coordIJK{
+		i: int(math.Round(float64(3*i-j) * mOneSeventh)),
+		j: int(math.Round(float64(i+2*j) * mOneSeventh)),
+	}.normalize()
 }
 
-// upAp7r transforms an IJK coordinate to the next coarser resolution on the
-// Class III (rotated) aperture-7 grid, rounding to the nearest parent cell and
-// re-normalizing.
-func (c *coordIJK) upAp7r() {
+// upAp7r returns the IJK coordinate at the next coarser resolution on the Class
+// III (rotated) aperture-7 grid, rounded to the nearest parent cell and
+// normalized.
+func (c coordIJK) upAp7r() coordIJK {
 	i := c.i - c.k
 	j := c.j - c.k
-	c.i = int(math.Round(float64(2*i+j) * mOneSeventh))
-	c.j = int(math.Round(float64(3*j-i) * mOneSeventh))
-	c.k = 0
-	c.normalize()
+
+	return coordIJK{
+		i: int(math.Round(float64(2*i+j) * mOneSeventh)),
+		j: int(math.Round(float64(3*j-i) * mOneSeventh)),
+	}.normalize()
 }
 
-// downAp7 transforms an IJK coordinate to the next finer resolution on the
-// Class II aperture-7 grid (the "down" direction, the exact inverse of upAp7),
-// then re-normalizes.
-func (c *coordIJK) downAp7() {
-	i, j, k := c.i, c.j, c.k
-	c.i = 3*i + j
-	c.j = 3*j + k
-	c.k = i + 3*k
-	c.normalize()
+// downAp7 returns the IJK coordinate at the next finer resolution on the Class
+// II aperture-7 grid (the "down" direction, the exact inverse of upAp7),
+// normalized.
+func (c coordIJK) downAp7() coordIJK {
+	return coordIJK{i: 3*c.i + c.j, j: 3*c.j + c.k, k: c.i + 3*c.k}.normalize()
 }
 
-// downAp7r transforms an IJK coordinate to the next finer resolution on the
-// Class III (rotated) aperture-7 grid (the inverse of upAp7r), then
-// re-normalizes.
-func (c *coordIJK) downAp7r() {
-	i, j, k := c.i, c.j, c.k
-	c.i = 3*i + k
-	c.j = i + 3*j
-	c.k = j + 3*k
-	c.normalize()
+// downAp7r returns the IJK coordinate at the next finer resolution on the Class
+// III (rotated) aperture-7 grid (the inverse of upAp7r), normalized.
+func (c coordIJK) downAp7r() coordIJK {
+	return coordIJK{i: 3*c.i + c.k, j: c.i + 3*c.j, k: c.j + 3*c.k}.normalize()
 }
 
 // toDigit maps a unit IJK coordinate (one of the seven cells in a single
 // aperture-7 neighborhood: the center plus its six neighbors) to the
 // corresponding H3 digit (0–6) via a lookup table.
 func (c coordIJK) toDigit() int {
-	c.normalize()
-	i, j, k := c.i, c.j, c.k
+	c = c.normalize()
 
-	return unitIjkToDigitLUT[i][j][k]
+	return unitIjkToDigitLUT[c.i][c.j][c.k]
 }
 
 // add returns the component-wise sum of two IJK coordinates.
@@ -253,21 +236,15 @@ func (c coordIJK) scale(factor int) coordIJK {
 }
 
 // rotate60ccw returns the IJK coordinate rotated 60° counterclockwise about the
-// origin, re-normalized.
+// origin, normalized.
 func (c coordIJK) rotate60ccw() coordIJK {
-	out := coordIJK{i: c.i + c.k, j: c.i + c.j, k: c.j + c.k}
-	out.normalize()
-
-	return out
+	return coordIJK{i: c.i + c.k, j: c.i + c.j, k: c.j + c.k}.normalize()
 }
 
 // rotate60cw returns the IJK coordinate rotated 60° clockwise about the origin,
-// re-normalized.
+// normalized.
 func (c coordIJK) rotate60cw() coordIJK {
-	out := coordIJK{i: c.i + c.j, j: c.j + c.k, k: c.i + c.k}
-	out.normalize()
-
-	return out
+	return coordIJK{i: c.i + c.j, j: c.j + c.k, k: c.i + c.k}.normalize()
 }
 
 // sub returns the component-wise difference c - b.
@@ -279,8 +256,7 @@ func (c coordIJK) sub(b coordIJK) coordIJK {
 // component of their normalized difference (normalization leaves all components
 // non-negative).
 func (c coordIJK) distance(b coordIJK) int {
-	diff := c.sub(b)
-	diff.normalize()
+	diff := c.sub(b).normalize()
 
 	return max(diff.i, diff.j, diff.k)
 }
@@ -288,49 +264,41 @@ func (c coordIJK) distance(b coordIJK) int {
 // unitToDigit maps an IJK coordinate to its digit if, once normalized, it is the
 // center or one of the six unit neighbors, returning invalidDigit otherwise.
 func (c coordIJK) unitToDigit() int {
-	c.normalize()
+	c = c.normalize()
 
-	if c.i < 0 || c.i > 1 || c.j < 0 || c.j > 1 || c.k < 0 || c.k > 1 {
+	// Each unsigned comparison rejects both negatives and values above one.
+	if uint(c.i) > 1 || uint(c.j) > 1 || uint(c.k) > 1 {
 		return invalidDigit
 	}
 
 	return unitIjkToDigitLUT[c.i][c.j][c.k]
 }
 
-// toCube converts an IJK coordinate in place to cube coordinates, suitable for
-// linear interpolation along a grid line.
-func (c *coordIJK) toCube() {
-	c.i = -c.i + c.k
-	c.j = c.j - c.k
-	c.k = -c.i - c.j
+// toCube returns the IJK coordinate as cube coordinates, suitable for linear
+// interpolation along a grid line.
+func (c coordIJK) toCube() coordIJK {
+	i := -c.i + c.k
+	j := c.j - c.k
+
+	return coordIJK{i: i, j: j, k: -i - j}
 }
 
-// fromCube converts cube coordinates in place back to a normalized IJK
-// coordinate, the inverse of toCube.
-func (c *coordIJK) fromCube() {
-	c.i = -c.i
-	c.k = 0
-	c.normalize()
+// fromCube returns the normalized IJK coordinate for cube coordinates, the
+// inverse of toCube.
+func (c coordIJK) fromCube() coordIJK {
+	return coordIJK{i: -c.i, j: c.j}.normalize()
 }
 
-// downAp3 transforms an IJK coordinate to the next finer resolution on the
-// Class II aperture-3 substrate grid (counterclockwise), then re-normalizes.
-func (c *coordIJK) downAp3() {
-	i, j, k := c.i, c.j, c.k
-	c.i = 2*i + j
-	c.j = 2*j + k
-	c.k = i + 2*k
-	c.normalize()
+// downAp3 returns the IJK coordinate at the next finer resolution on the Class
+// II aperture-3 substrate grid (counterclockwise), normalized.
+func (c coordIJK) downAp3() coordIJK {
+	return coordIJK{i: 2*c.i + c.j, j: 2*c.j + c.k, k: c.i + 2*c.k}.normalize()
 }
 
-// downAp3r transforms an IJK coordinate to the next finer resolution on the
-// Class III aperture-3 substrate grid (clockwise), then re-normalizes.
-func (c *coordIJK) downAp3r() {
-	i, j, k := c.i, c.j, c.k
-	c.i = 2*i + k
-	c.j = i + 2*j
-	c.k = j + 2*k
-	c.normalize()
+// downAp3r returns the IJK coordinate at the next finer resolution on the Class
+// III aperture-3 substrate grid (clockwise), normalized.
+func (c coordIJK) downAp3r() coordIJK {
+	return coordIJK{i: 2*c.i + c.k, j: c.i + 2*c.j, k: c.j + 2*c.k}.normalize()
 }
 
 // neighbor returns the IJK coordinate of the cell one step from c in the given
@@ -338,8 +306,7 @@ func (c *coordIJK) downAp3r() {
 // unchanged.
 func (c coordIJK) neighbor(digit int) coordIJK {
 	if digit > centerDigit && digit < invalidDigit {
-		c = c.add(unitVecs[digit])
-		c.normalize()
+		c = c.add(unitVecs[digit]).normalize()
 	}
 
 	return c
@@ -443,9 +410,7 @@ func (v vec2d) toCoordIJK() coordIJK {
 		h.j = -h.j
 	}
 
-	h.normalize()
-
-	return h
+	return h.normalize()
 }
 
 // mag returns the magnitude (length) of a 2D vector.
@@ -704,32 +669,30 @@ func (fijk faceIJK) toH3(res int) (Cell, error) {
 		return h, nil
 	}
 
+	// Walk the coordinate up to the base cell one resolution at a time; the
+	// digit at each resolution is the offset of the finer coordinate from the
+	// center of its parent.
 	fijkBC := fijk
-	ijk := &fijkBC.coord
+	ijk := fijk.coord
 
 	for r := res - 1; r >= 0; r-- {
-		lastIJK := *ijk
+		lastIJK := ijk
 
 		var lastCenter coordIJK
 
 		if isResClassIII(r + 1) {
-			ijk.upAp7()
-			lastCenter = *ijk
-			lastCenter.downAp7()
+			ijk = ijk.upAp7()
+			lastCenter = ijk.downAp7()
 		} else {
-			ijk.upAp7r()
-			lastCenter = *ijk
-			lastCenter.downAp7r()
+			ijk = ijk.upAp7r()
+			lastCenter = ijk.downAp7r()
 		}
 
-		diff := coordIJK{
-			i: lastIJK.i - lastCenter.i,
-			j: lastIJK.j - lastCenter.j,
-			k: lastIJK.k - lastCenter.k,
-		}
-		diff.normalize()
+		diff := lastIJK.sub(lastCenter).normalize()
 		h = h.setIndexDigit(r+1, diff.toDigit())
 	}
+
+	fijkBC.coord = ijk
 
 	if fijkBC.coord.i > maxFaceCoord || fijkBC.coord.j > maxFaceCoord ||
 		fijkBC.coord.k > maxFaceCoord {
@@ -790,8 +753,12 @@ func (c Cell) toFaceIjkWithInitializedFijk(fijk faceIJK) (faceIJK, bool) {
 	for r := 1; r <= res; r++ {
 		// Down-aperture-7 into the finer grid, then step to the indexing digit's
 		// neighbor. downAp7/downAp7r and neighbor each normalize; here they are
-		// fused so a single normalize closes the iteration, which is exact
-		// because normalize is invariant to a uniform offset.
+		// fused and left unnormalized until after the loop. That is exact
+		// because both aperture maps send a uniform offset to a uniform offset
+		// (the all-ones vector is an eigenvector of each), so normalizing once
+		// at the end yields the same coordinate. Deferring it also keeps ijk in
+		// registers: a pointer-receiver call inside the loop would pin it to
+		// the stack. Magnitudes stay below 2^32 after 15 resolutions.
 		if isResClassIII(r) { // Class III: rotate ccw
 			ijk = coordIJK{i: 3*ijk.i + ijk.j, j: 3*ijk.j + ijk.k, k: ijk.i + 3*ijk.k}
 		} else { // Class II: rotate cw
@@ -800,14 +767,11 @@ func (c Cell) toFaceIjkWithInitializedFijk(fijk faceIJK) (faceIJK, bool) {
 
 		if digit := indexDigit(c, r); digit > centerDigit && digit < invalidDigit {
 			unit := unitVecs[digit]
-			ijk.i += unit.i
-			ijk.j += unit.j
-			ijk.k += unit.k
+			ijk = coordIJK{i: ijk.i + unit.i, j: ijk.j + unit.j, k: ijk.k + unit.k}
 		}
-
-		ijk.normalize()
 	}
 
+	ijk = ijk.normalize()
 	fijk.coord = ijk
 
 	return fijk, possibleOverage
@@ -839,7 +803,7 @@ func (c Cell) toFaceIjk() (faceIJK, error) {
 	// If we're in Class III, drop into the next finer Class II grid to adjust.
 	res := c.Resolution()
 	if isResClassIII(res) {
-		fijk.coord.downAp7r()
+		fijk.coord = fijk.coord.downAp7r()
 
 		res++
 	}
@@ -864,7 +828,7 @@ func (c Cell) toFaceIjk() (faceIJK, error) {
 		}
 
 		if res != c.Resolution() {
-			fijk.coord.upAp7r()
+			fijk.coord = fijk.coord.upAp7r()
 		}
 	} else if res != c.Resolution() {
 		fijk.coord = origIJK
@@ -924,8 +888,7 @@ func (fijk faceIJK) adjustOverageClassII(res int, pentLeading4, substrate bool) 
 			unitScale *= 3
 		}
 
-		ijk = ijk.add(fijkOrient.translate.scale(unitScale))
-		ijk.normalize()
+		ijk = ijk.add(fijkOrient.translate.scale(unitScale)).normalize()
 
 		// Overage points on pentagon boundaries can end up on a face edge.
 		if substrate && ijk.i+ijk.j+ijk.k == maxDim {
@@ -973,11 +936,10 @@ func (fijk faceIJK) toVerts(res int) (int, [numHexVerts]faceIJK) {
 		verts = vertsCIII
 	}
 
-	fijk.coord.downAp3()
-	fijk.coord.downAp3r()
+	fijk.coord = fijk.coord.downAp3().downAp3r()
 
 	if isResClassIII(res) {
-		fijk.coord.downAp7r()
+		fijk.coord = fijk.coord.downAp7r()
 
 		res++
 	}
@@ -985,9 +947,7 @@ func (fijk faceIJK) toVerts(res int) (int, [numHexVerts]faceIJK) {
 	var out [numHexVerts]faceIJK
 
 	for i := range numHexVerts {
-		coord := fijk.coord.add(verts[i])
-		coord.normalize()
-		out[i] = faceIJK{face: fijk.face, coord: coord}
+		out[i] = faceIJK{face: fijk.face, coord: fijk.coord.add(verts[i]).normalize()}
 	}
 
 	return res, out
@@ -1009,11 +969,10 @@ func (fijk faceIJK) pentToVerts(res int) (int, [numPentVerts]faceIJK) {
 		verts = vertsCIII
 	}
 
-	fijk.coord.downAp3()
-	fijk.coord.downAp3r()
+	fijk.coord = fijk.coord.downAp3().downAp3r()
 
 	if isResClassIII(res) {
-		fijk.coord.downAp7r()
+		fijk.coord = fijk.coord.downAp7r()
 
 		res++
 	}
@@ -1021,9 +980,7 @@ func (fijk faceIJK) pentToVerts(res int) (int, [numPentVerts]faceIJK) {
 	var out [numPentVerts]faceIJK
 
 	for i := range numPentVerts {
-		coord := fijk.coord.add(verts[i])
-		coord.normalize()
-		out[i] = faceIJK{face: fijk.face, coord: coord}
+		out[i] = faceIJK{face: fijk.face, coord: fijk.coord.add(verts[i]).normalize()}
 	}
 
 	return res, out
