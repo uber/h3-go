@@ -177,6 +177,14 @@ func TestBoundaryAreaClockwiseNormalizes(t *testing.T) {
 	assertRelClose(t, small+large, 4*math.Pi, "ccw + cw area")
 }
 
+func TestBoundaryAreaEmpty(t *testing.T) {
+	t.Parallel()
+
+	if got := (CellBoundary{}).areaRads2(); got != 0 {
+		t.Fatalf("empty boundary area = %v, want 0", got)
+	}
+}
+
 // assertRelClose fails if got and want differ by more than a small relative
 // tolerance, suitable for comparing values that span many orders of magnitude.
 func assertRelClose(t *testing.T, got, want float64, label string) {
