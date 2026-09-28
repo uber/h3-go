@@ -22,10 +22,6 @@ import (
 	"testing"
 )
 
-// maxCellBoundaryVerts bounds how many vertices a cell boundary can have: each
-// topological vertex plus at most one distortion vertex per edge.
-const maxCellBoundaryVerts = 2 * numHexVerts
-
 // reverseCorpus builds a rich set of cells for the reverse-projection white-box
 // tests. It combines the shared corpus, the descendants of every pentagon (which
 // reach the pentagon rotation and overage branches), and a large deterministic

@@ -55,6 +55,16 @@ const (
 	numHexVerts  = 6
 	numPentVerts = 5
 
+	// maxCellBoundaryVerts is the most vertices a cell boundary can have: six
+	// topological vertices plus up to four where Class III edges cross
+	// icosahedron face edges.
+	maxCellBoundaryVerts = 10
+
+	// maxEdgeBoundaryVerts is the most vertices a directed edge boundary can
+	// have: its two endpoints plus one where a Class III edge crosses an
+	// icosahedron face edge.
+	maxEdgeBoundaryVerts = 3
+
 	// fltEpsilon is the 32-bit float epsilon used to detect when a cell-boundary
 	// edge intersection coincides with an existing vertex, matching the H3 C
 	// library's use of FLT_EPSILON.

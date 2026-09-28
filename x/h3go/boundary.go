@@ -32,6 +32,13 @@ func CellToBoundary(c Cell) (CellBoundary, error) {
 // Boundary returns the geographic boundary of the cell as an ordered list of
 // vertices in degrees.
 func (c Cell) Boundary() (CellBoundary, error) {
+	return c.appendBoundary(make(CellBoundary, 0, maxCellBoundaryVerts))
+}
+
+// appendBoundary appends the geographic boundary of the cell to out and returns
+// the extended slice. Callers that consume the boundary immediately can pass a
+// stack buffer to avoid a heap allocation.
+func (c Cell) appendBoundary(out CellBoundary) (CellBoundary, error) {
 	fijk, err := c.toFaceIjk()
 	if err != nil {
 		return nil, err
@@ -39,19 +46,20 @@ func (c Cell) Boundary() (CellBoundary, error) {
 
 	res := c.Resolution()
 	if c.IsPentagon() {
-		return fijk.pentToCellBoundary(res, 0, numPentVerts), nil
+		return fijk.pentToCellBoundary(out, res, 0, numPentVerts), nil
 	}
 
-	return fijk.toCellBoundary(res, 0, numHexVerts), nil
+	return fijk.toCellBoundary(out, res, 0, numHexVerts), nil
 }
 
-// toCellBoundary builds the geographic boundary of a hexagon cell from its
-// FaceIJK address. It walks length topological vertices starting at start,
-// adjusting each onto the correct face and inserting an extra vertex wherever a
-// Class III cell edge crosses an icosahedron face edge (so each half of the edge
-// projects with the correct face). start and length select a sub-range of the
-// loop, which directed-edge boundaries use to project a single edge.
-func (fijk faceIJK) toCellBoundary(res, start, length int) CellBoundary {
+// toCellBoundary appends the geographic boundary of a hexagon cell, built from
+// its FaceIJK address, to out. It walks length topological vertices starting at
+// start, adjusting each onto the correct face and inserting an extra vertex
+// wherever a Class III cell edge crosses an icosahedron face edge (so each half
+// of the edge projects with the correct face). start and length select a
+// sub-range of the loop, which directed-edge boundaries use to project a single
+// edge.
+func (fijk faceIJK) toCellBoundary(out CellBoundary, res, start, length int) CellBoundary {
 	adjRes, fijkVerts := fijk.toVerts(res)
 	centerFace := fijk.face
 
@@ -61,8 +69,6 @@ func (fijk faceIJK) toCellBoundary(res, start, length int) CellBoundary {
 	if length == numHexVerts {
 		additionalIteration = 1
 	}
-
-	var boundary CellBoundary
 
 	lastFace := -1
 	lastOverage := noOverage
@@ -93,36 +99,34 @@ func (fijk faceIJK) toCellBoundary(res, start, length int) CellBoundary {
 			// If the intersection lands on a hexagon vertex, both adjacent edges
 			// lie on a single face and no extra vertex is needed.
 			if !orig2d0.almostEquals(inter) && !orig2d1.almostEquals(inter) {
-				boundary = append(boundary, inter.toVec3(centerFace, adjRes, true).toLatLng())
+				out = append(out, inter.toVec3(centerFace, adjRes, true).toLatLng())
 			}
 		}
 
 		// The final extra iteration only tests for an edge intersection.
 		if vert < start+numHexVerts {
-			boundary = append(boundary, vfijk.coord.toHex2d().toVec3(vfijk.face, adjRes, true).toLatLng())
+			out = append(out, vfijk.coord.toHex2d().toVec3(vfijk.face, adjRes, true).toLatLng())
 		}
 
 		lastFace = vfijk.face
 		lastOverage = ov
 	}
 
-	return boundary
+	return out
 }
 
-// pentToCellBoundary builds the geographic boundary of a pentagon cell from its
-// FaceIJK address. Every Class III pentagon edge crosses an icosahedron edge, so
-// a crossing vertex is inserted on each such edge. start and length select a
-// sub-range of the loop, which directed-edge boundaries use to project a single
-// edge.
-func (fijk faceIJK) pentToCellBoundary(res, start, length int) CellBoundary {
+// pentToCellBoundary appends the geographic boundary of a pentagon cell, built
+// from its FaceIJK address, to out. Every Class III pentagon edge crosses an
+// icosahedron edge, so a crossing vertex is inserted on each such edge. start
+// and length select a sub-range of the loop, which directed-edge boundaries use
+// to project a single edge.
+func (fijk faceIJK) pentToCellBoundary(out CellBoundary, res, start, length int) CellBoundary {
 	adjRes, fijkVerts := fijk.pentToVerts(res)
 
 	additionalIteration := 0
 	if length == numPentVerts {
 		additionalIteration = 1
 	}
-
-	var boundary CellBoundary
 
 	var lastFijk faceIJK
 
@@ -154,17 +158,17 @@ func (fijk faceIJK) pentToCellBoundary(res, start, length int) CellBoundary {
 
 			edge0, edge1 := icosaEdge(adjRes, adjacentFaceDir[tmpFijk.face][vfijk.face])
 			inter := orig2d0.intersect(orig2d1, edge0, edge1)
-			boundary = append(boundary, inter.toVec3(tmpFijk.face, adjRes, true).toLatLng())
+			out = append(out, inter.toVec3(tmpFijk.face, adjRes, true).toLatLng())
 		}
 
 		if vert < start+numPentVerts {
-			boundary = append(boundary, vfijk.coord.toHex2d().toVec3(vfijk.face, adjRes, true).toLatLng())
+			out = append(out, vfijk.coord.toHex2d().toVec3(vfijk.face, adjRes, true).toLatLng())
 		}
 
 		lastFijk = vfijk
 	}
 
-	return boundary
+	return out
 }
 
 // icosaEdge returns the two 2D substrate endpoints of the icosahedron face edge

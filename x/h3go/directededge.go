@@ -39,8 +39,15 @@ func (c Cell) DirectedEdge(other Cell) (DirectedEdge, error) {
 // DirectedEdges returns the six directed edges with c as the origin. For a
 // pentagon, the edge in the deleted k direction is omitted.
 func (c Cell) DirectedEdges() ([]DirectedEdge, error) {
+	return c.appendDirectedEdges(make([]DirectedEdge, 0, numCellEdges)), nil
+}
+
+// appendDirectedEdges appends the directed edges with c as the origin to out, in
+// direction order, and returns the extended slice. For a pentagon, the edge in
+// the deleted k direction is omitted. Callers that consume the edges immediately
+// can pass a stack buffer to avoid a heap allocation.
+func (c Cell) appendDirectedEdges(out []DirectedEdge) []DirectedEdge {
 	isPent := c.IsPentagon()
-	out := make([]DirectedEdge, 0, numCellEdges)
 
 	for i := range numCellEdges {
 		if isPent && i == 0 {
@@ -51,7 +58,7 @@ func (c Cell) DirectedEdges() ([]DirectedEdge, error) {
 		out = append(out, DirectedEdge(edge))
 	}
 
-	return out, nil
+	return out
 }
 
 // IsValid reports whether the index is a valid H3 directed edge.
@@ -133,6 +140,13 @@ func (e DirectedEdge) Cells() ([]Cell, error) {
 // The boundary may contain an extra vertex where the edge crosses an
 // icosahedron face boundary.
 func (e DirectedEdge) Boundary() (CellBoundary, error) {
+	return e.appendBoundary(make(CellBoundary, 0, maxEdgeBoundaryVerts))
+}
+
+// appendBoundary appends the coordinates of the directed edge to out and returns
+// the extended slice. Callers that consume the boundary immediately can pass a
+// stack buffer or a shared output slice to avoid a heap allocation per edge.
+func (e DirectedEdge) appendBoundary(out CellBoundary) (CellBoundary, error) {
 	direction := reservedBits(e)
 
 	origin, err := e.Origin()
@@ -152,10 +166,10 @@ func (e DirectedEdge) Boundary() (CellBoundary, error) {
 
 	res := origin.Resolution()
 	if origin.IsPentagon() {
-		return fijk.pentToCellBoundary(res, startVertex, numEdgeCells), nil
+		return fijk.pentToCellBoundary(out, res, startVertex, numEdgeCells), nil
 	}
 
-	return fijk.toCellBoundary(res, startVertex, numEdgeCells), nil
+	return fijk.toCellBoundary(out, res, startVertex, numEdgeCells), nil
 }
 
 // Resolution returns the resolution of the directed edge.
