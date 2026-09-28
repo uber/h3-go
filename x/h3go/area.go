@@ -52,14 +52,26 @@ func CellAreaM2(c Cell) (float64, error) {
 // sums the signed Cagnoli area contribution of each edge arc (assumed to be the
 // shorter geodesic) with compensated summation, then normalizes a clockwise loop
 // into [0, 4π] by adding the full-sphere area.
+//
+// Every vertex bounds two edges, so its trig terms are evaluated once and
+// carried from one edge to the next rather than recomputed per edge.
 func (b CellBoundary) areaRads2() float64 {
+	if len(b) == 0 {
+		return 0
+	}
+
 	var adder kahanAdder
 
-	verts := len(b)
-	for i := range verts {
-		next := (i + 1) % verts
-		adder.add(b[i].cagnoli(b[next]))
+	first := b[0].cagnoliVertex()
+	prev := first
+
+	for i := 1; i < len(b); i++ {
+		cur := b[i].cagnoliVertex()
+		adder.add(prev.cagnoli(cur))
+		prev = cur
 	}
+
+	adder.add(prev.cagnoli(first))
 
 	if adder.sum < 0 {
 		adder.add(2 * m2PI) // 4π, the area of the whole sphere
@@ -68,17 +80,33 @@ func (b CellBoundary) areaRads2() float64 {
 	return adder.sum
 }
 
+// cagnoliVertex holds the per-vertex terms of the Cagnoli edge formula: the
+// sine and cosine of lat/2 + π/4, and the longitude in degrees.
+type cagnoliVertex struct {
+	sinHalfLat float64
+	cosHalfLat float64
+	lng        float64
+}
+
+// cagnoliVertex evaluates the per-vertex Cagnoli terms of a point given in
+// degrees.
+func (ll LatLng) cagnoliVertex() cagnoliVertex {
+	halfLat := ll.Lat*DegsToRads/2 + math.Pi/4
+
+	return cagnoliVertex{
+		sinHalfLat: math.Sin(halfLat),
+		cosHalfLat: math.Cos(halfLat),
+		lng:        ll.Lng,
+	}
+}
+
 // cagnoli returns the signed area contribution, in radians, of the boundary edge
-// arc from ll to other (lat/lng in degrees), following the d3-geo spherical-area
-// formulation.
-func (ll LatLng) cagnoli(other LatLng) float64 {
-	lat := ll.Lat*DegsToRads/2 + math.Pi/4
-	otherLat := other.Lat*DegsToRads/2 + math.Pi/4
+// arc from v to other, following the d3-geo spherical-area formulation.
+func (v cagnoliVertex) cagnoli(other cagnoliVertex) float64 {
+	sa := v.sinHalfLat * other.sinHalfLat
+	ca := v.cosHalfLat * other.cosHalfLat
 
-	sa := math.Sin(lat) * math.Sin(otherLat)
-	ca := math.Cos(lat) * math.Cos(otherLat)
-
-	delta := (other.Lng - ll.Lng) * DegsToRads
+	delta := (other.lng - v.lng) * DegsToRads
 	sinDelta := math.Sin(delta)
 	cosDelta := math.Cos(delta)
 

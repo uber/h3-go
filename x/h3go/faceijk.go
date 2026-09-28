@@ -443,6 +443,8 @@ var (
 	ap7RotSin = math.Sin(mAP7RotRads)
 
 	faceAxis0Cos, faceAxis0Sin = faceAxis0Trig()
+
+	faceTangentNorth, faceTangentEast = faceTangentBases()
 )
 
 // faceAxis0Trig precomputes the cosine and sine of each face's axis-0 azimuth.
@@ -453,6 +455,16 @@ func faceAxis0Trig() (cos, sin [NumIcosaFaces]float64) {
 	}
 
 	return cos, sin
+}
+
+// faceTangentBases precomputes the tangent-plane basis at each face center,
+// which toVec3 needs on every call.
+func faceTangentBases() (north, east [NumIcosaFaces]vec3d) {
+	for i := range faceCenterPoint {
+		north[i], east[i] = faceCenterPoint[i].tangentBasis()
+	}
+
+	return north, east
 }
 
 // toVec3 converts a 2D Hex coordinate on a face into a 3D unit vector. It is the
@@ -512,8 +524,7 @@ func (v vec2d) toVec3(face, res int, substrate bool) vec3d {
 	cosR := invHyp
 	sinR := r * invHyp
 
-	north, east := faceCenterPoint[face].tangentBasis()
-	dir := north.linComb(cosAz, sinAz, east)
+	dir := faceTangentNorth[face].linComb(cosAz, sinAz, faceTangentEast[face])
 	out := faceCenterPoint[face].linComb(cosR, sinR, dir)
 	out.normalize()
 
@@ -917,23 +928,27 @@ func (fijk faceIJK) adjustPentVertOverage(res int) (faceIJK, overage) {
 	return fijk, ov
 }
 
+// Vertices of an origin-centered cell, listed ccw from the i-axis, in the Class
+// II and Class III substrate grids respectively. A pentagon's vertices are the
+// first five of a hexagon's. The tables are package-level so the vertex builders
+// index them in place rather than copying them on every call.
+var (
+	cellVertsCII = [numHexVerts]coordIJK{
+		{2, 1, 0}, {1, 2, 0}, {0, 2, 1}, {0, 1, 2}, {1, 0, 2}, {2, 0, 1},
+	}
+	cellVertsCIII = [numHexVerts]coordIJK{
+		{5, 4, 0}, {1, 5, 0}, {0, 5, 4}, {0, 1, 5}, {4, 0, 5}, {5, 0, 1},
+	}
+)
+
 // toVerts returns the substrate FaceIJK addresses of a hexagon's six vertices,
 // along with the (possibly incremented) substrate resolution. The cell center is
 // moved into an aperture-33r substrate grid, and Class III cells get an extra
 // clockwise aperture-7 step to land on a Class II substrate.
 func (fijk faceIJK) toVerts(res int) (int, [numHexVerts]faceIJK) {
-	// Vertices of an origin-centered cell, listed ccw from the i-axis, in the
-	// Class II and Class III substrate grids respectively.
-	vertsCII := [numHexVerts]coordIJK{
-		{2, 1, 0}, {1, 2, 0}, {0, 2, 1}, {0, 1, 2}, {1, 0, 2}, {2, 0, 1},
-	}
-	vertsCIII := [numHexVerts]coordIJK{
-		{5, 4, 0}, {1, 5, 0}, {0, 5, 4}, {0, 1, 5}, {4, 0, 5}, {5, 0, 1},
-	}
-
-	verts := vertsCII
+	verts := &cellVertsCII
 	if isResClassIII(res) {
-		verts = vertsCIII
+		verts = &cellVertsCIII
 	}
 
 	fijk.coord = fijk.coord.downAp3().downAp3r()
@@ -957,16 +972,9 @@ func (fijk faceIJK) toVerts(res int) (int, [numHexVerts]faceIJK) {
 // vertices, along with the (possibly incremented) substrate resolution, using
 // the same substrate construction as toVerts.
 func (fijk faceIJK) pentToVerts(res int) (int, [numPentVerts]faceIJK) {
-	vertsCII := [numPentVerts]coordIJK{
-		{2, 1, 0}, {1, 2, 0}, {0, 2, 1}, {0, 1, 2}, {1, 0, 2},
-	}
-	vertsCIII := [numPentVerts]coordIJK{
-		{5, 4, 0}, {1, 5, 0}, {0, 5, 4}, {0, 1, 5}, {4, 0, 5},
-	}
-
-	verts := vertsCII
+	verts := &cellVertsCII
 	if isResClassIII(res) {
-		verts = vertsCIII
+		verts = &cellVertsCIII
 	}
 
 	fijk.coord = fijk.coord.downAp3().downAp3r()
