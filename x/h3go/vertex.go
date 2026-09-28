@@ -317,11 +317,13 @@ func (v Vertex) LatLng() (LatLng, error) {
 
 	res := owner.Resolution()
 
+	var buf [1]LatLng
+
 	var boundary CellBoundary
 	if owner.IsPentagon() {
-		boundary = fijk.pentToCellBoundary(res, vertexNum, 1)
+		boundary = fijk.pentToCellBoundary(buf[:0], res, vertexNum, 1)
 	} else {
-		boundary = fijk.toCellBoundary(res, vertexNum, 1)
+		boundary = fijk.toCellBoundary(buf[:0], res, vertexNum, 1)
 	}
 
 	return boundary[0], nil

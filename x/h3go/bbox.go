@@ -134,11 +134,13 @@ func (c Cell) hexRadiusKm() float64 {
 	res := c.Resolution()
 	center := fijk.toVec3(res).toLatLng()
 
+	var buf [maxCellBoundaryVerts]LatLng
+
 	var boundary CellBoundary
 	if c.IsPentagon() {
-		boundary = fijk.pentToCellBoundary(res, 0, numPentVerts)
+		boundary = fijk.pentToCellBoundary(buf[:0], res, 0, numPentVerts)
 	} else {
-		boundary = fijk.toCellBoundary(res, 0, numHexVerts)
+		boundary = fijk.toCellBoundary(buf[:0], res, 0, numHexVerts)
 	}
 
 	return GreatCircleDistanceKm(center, boundary[0])

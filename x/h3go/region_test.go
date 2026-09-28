@@ -309,8 +309,8 @@ func TestPolygonFloodStepValidCells(t *testing.T) {
 	var foundSet cellSet
 
 	found := polygonFloodStep(polygon, bboxes, []Cell{seed}, &foundSet, nil)
-	if len(found) == 0 || foundSet.count != len(found) {
-		t.Fatalf("polygonFloodStep found %d cells, set holds %d; want some and equal", len(found), foundSet.count)
+	if len(found) == 0 || foundSet.table.count != len(found) {
+		t.Fatalf("polygonFloodStep found %d cells, set holds %d; want some and equal", len(found), foundSet.table.count)
 	}
 
 	for _, cell := range found {

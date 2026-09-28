@@ -17,8 +17,8 @@
 package h3go
 
 import (
+	"cmp"
 	"slices"
-	"sort"
 )
 
 // Counter-clockwise orderings of a cell's directed edges into its linked loop.
@@ -101,14 +101,16 @@ func validateCellSet(cells []Cell) error {
 // buildArcs creates the arcs for every cell, linking each cell's edges into a
 // counter-clockwise loop and indexing them by edge id for reverse lookup. Every
 // arc in a cell starts in the cell's own connected component. All arcs share one
-// backing slice; links are indices into it.
-func buildArcs(cells []Cell) ([]arc, map[DirectedEdge]int) {
+// backing slice; links are indices into it, and the returned table maps each
+// edge id to its arc index.
+func buildArcs(cells []Cell) ([]arc, flatTable[DirectedEdge, int]) {
 	arcs := make([]arc, 0, len(cells)*numCellEdges)
-	index := make(map[DirectedEdge]int, len(cells)*numCellEdges)
+	index := newFlatTable[DirectedEdge, int](len(cells) * numCellEdges)
 
 	for _, cell := range cells {
-		// cell is valid here, so enumerating its edges cannot fail.
-		edges, _ := cell.DirectedEdges()
+		var edgeBuf [numCellEdges]DirectedEdge
+
+		edges := cell.appendDirectedEdges(edgeBuf[:0])
 		count := len(edges)
 		base := len(arcs)
 
@@ -131,7 +133,7 @@ func buildArcs(cells []Cell) ([]arc, map[DirectedEdge]int) {
 		}
 
 		for i := 0; i < count; i++ {
-			index[arcs[base+i].id] = base + i
+			index.insert(arcs[base+i].id, base+i)
 		}
 	}
 
@@ -141,7 +143,7 @@ func buildArcs(cells []Cell) ([]arc, map[DirectedEdge]int) {
 // cancelArcPairs removes each pair of opposite edges shared by two adjacent
 // cells, stitching the linked loops back together and merging the two arcs'
 // connected components. What remains are the outline loops of the cell set.
-func cancelArcPairs(arcs []arc, index map[DirectedEdge]int) {
+func cancelArcPairs(arcs []arc, index *flatTable[DirectedEdge, int]) {
 	for current := range arcs {
 		if arcs[current].removed {
 			continue
@@ -150,7 +152,7 @@ func cancelArcPairs(arcs []arc, index map[DirectedEdge]int) {
 		// arcs[current].id is a valid edge, so reversing it cannot fail.
 		reversed, _ := arcs[current].id.Reverse()
 
-		opposite, ok := index[reversed]
+		opposite, ok := index.lookup(reversed)
 		if !ok {
 			continue
 		}
@@ -191,34 +193,50 @@ func buildOutlineLoops(arcs []arc) []outlineLoop {
 			continue
 		}
 
-		var verts GeoLoop
+		// Count the loop's arcs first so the vertex slice is allocated once.
+		// Each arc contributes its start vertex, plus a crossing vertex where a
+		// Class III edge meets an icosahedron face edge.
+		arcCount := 0
+		for current := start; ; current = arcs[current].next {
+			arcCount++
 
-		current := start
-		for {
-			// arcs[current].id is valid, so its boundary cannot fail.
-			boundary, _ := arcs[current].id.Boundary()
-			verts = append(verts, boundary[:len(boundary)-1]...)
+			if arcs[current].next == start {
+				break
+			}
+		}
+
+		vertsPerArc := 1
+		if isResClassIII(arcs[start].id.Resolution()) {
+			vertsPerArc = numEdgeCells
+		}
+
+		verts := make(CellBoundary, 0, arcCount*vertsPerArc)
+
+		for current := start; ; current = arcs[current].next {
+			// arcs[current].id is valid, so its boundary cannot fail. The edge's
+			// end vertex is the next arc's start vertex, so it is dropped.
+			verts, _ = arcs[current].id.appendBoundary(verts)
+			verts = verts[:len(verts)-1]
 			arcs[current].visited = true
-			current = arcs[current].next
 
-			if arcs[current].id == arcs[start].id {
+			if arcs[current].next == start {
 				break
 			}
 		}
 
 		loops = append(loops, outlineLoop{
 			root: arcs[arcRoot(arcs, start)].id,
-			loop: verts,
-			area: CellBoundary(verts).areaRads2(),
+			loop: GeoLoop(verts),
+			area: verts.areaRads2(),
 		})
 	}
 
-	sort.SliceStable(loops, func(i, j int) bool {
-		if loops[i].root != loops[j].root {
-			return loops[i].root < loops[j].root
+	slices.SortStableFunc(loops, func(first, second outlineLoop) int {
+		if first.root != second.root {
+			return cmp.Compare(first.root, second.root)
 		}
 
-		return loops[i].area < loops[j].area
+		return cmp.Compare(first.area, second.area)
 	})
 
 	return loops
@@ -250,8 +268,8 @@ func assembleMultiPolygon(loops []outlineLoop) []GeoPolygon {
 		i = j
 	}
 
-	sort.SliceStable(polys, func(i, j int) bool {
-		return polys[i].outerArea > polys[j].outerArea
+	slices.SortStableFunc(polys, func(first, second sortablePoly) int {
+		return cmp.Compare(second.outerArea, first.outerArea)
 	})
 
 	out := make([]GeoPolygon, len(polys))
@@ -298,7 +316,7 @@ func CellsToMultiPolygon(cells []Cell) ([]GeoPolygon, error) {
 	}
 
 	arcs, index := buildArcs(cells)
-	cancelArcPairs(arcs, index)
+	cancelArcPairs(arcs, &index)
 
 	loops := buildOutlineLoops(arcs)
 	if len(loops) == 0 {
