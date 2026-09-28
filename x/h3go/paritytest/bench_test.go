@@ -21,6 +21,7 @@
 package paritytest
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/uber/h3-go/v4"
@@ -476,6 +477,19 @@ func BenchmarkGridRingUnsafe(b *testing.B) {
 		func() { out, _ := benchCell.GridRingUnsafe(5); blackhole = out },
 		func() { out, _ := benchGoCell.GridRingUnsafe(5); blackhole = out },
 	)
+}
+
+// BenchmarkGridDiskPentagon measures the safe breadth-first fallback that
+// GridDisk takes when the origin is a pentagon, across increasing radii.
+func BenchmarkGridDiskPentagon(b *testing.B) {
+	for _, k := range []int{10, 20, 30, 40} {
+		b.Run(fmt.Sprintf("k=%d", k), func(b *testing.B) {
+			compare(b,
+				func() { out, _ := h3.GridDisk(benchPentagon, k); blackhole = out },
+				func() { out, _ := h3go.GridDisk(benchGoPentagon, k); blackhole = out },
+			)
+		})
+	}
 }
 
 func BenchmarkGridDisksUnsafe(b *testing.B) {
