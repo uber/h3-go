@@ -464,45 +464,51 @@ func (c Cell) GridDiskDistancesSafe(k int) ([][]Cell, error) {
 		offset += size
 	}
 
-	seen := map[Cell]int{c: 0}
+	// Each completed ring is the queue for the next one, so no separate queue
+	// is needed. Membership uses an open-addressing hash set sized at twice
+	// the disk so probing stays short; the zero Cell is the empty-slot marker.
+	seen := make([]Cell, 2*len(buf))
+	seen[hashSlot(c, len(seen))] = c
 	rings[0] = append(rings[0], c)
 
-	type queued struct {
-		cell Cell
-		dist int
-	}
+	for dist := 0; dist < k; dist++ {
+		for _, head := range rings[dist] {
+			for _, dir := range directions {
+				neighbor, _, err := head.neighborRotations(dir, 0)
+				if err != nil {
+					if errors.Is(err, ErrPentagon) {
+						continue
+					}
 
-	queue := []queued{{c, 0}}
-	for len(queue) > 0 {
-		head := queue[0]
-		queue = queue[1:]
+					return nil, err
+				}
 
-		if head.dist >= k {
-			continue
-		}
+				slot := hashSlot(neighbor, len(seen))
+				for seen[slot] != 0 && seen[slot] != neighbor {
+					slot++
+					if slot == len(seen) {
+						slot = 0
+					}
+				}
 
-		for _, dir := range directions {
-			neighbor, _, err := head.cell.neighborRotations(dir, 0)
-			if err != nil {
-				if errors.Is(err, ErrPentagon) {
+				if seen[slot] == neighbor {
 					continue
 				}
 
-				return nil, err
+				seen[slot] = neighbor
+				rings[dist+1] = append(rings[dist+1], neighbor)
 			}
-
-			dist := head.dist + 1
-			if prev, ok := seen[neighbor]; ok && prev <= dist {
-				continue
-			}
-
-			seen[neighbor] = dist
-			rings[dist] = append(rings[dist], neighbor)
-			queue = append(queue, queued{neighbor, dist})
 		}
 	}
 
 	return rings, nil
+}
+
+// hashSlot returns the starting probe slot for c in an open-addressing set of
+// the given size.
+func hashSlot(c Cell, size int) int {
+	//nolint:gosec // an H3 index is a 64-bit value; int64->uint64 is a lossless reinterpretation.
+	return int(uint64(c) % uint64(size))
 }
 
 // GridDiskDistancesSafe returns the cells within grid distance k of the origin,

@@ -85,6 +85,12 @@ var (
 	benchDisk   = mustCells(h3.GridDisk(benchCell, 4))
 	benchGoDisk = toGoCells(benchDisk)
 
+	// A pentagon origin forces GridDisk off the fast spiral and onto the safe
+	// breadth-first fallback, which is the path with distinct performance
+	// characteristics between implementations.
+	benchPentagon   = mustCells(h3.Pentagons(benchRes))[0]
+	benchGoPentagon = h3goCell(benchPentagon)
+
 	// Local IJ coordinates of the neighbour relative to the working cell.
 	benchLocalIJ   = mustIJ(h3.CellToLocalIJ(benchCell, benchNeighbor))
 	benchGoLocalIJ = h3go.CoordIJ{I: benchLocalIJ.I, J: benchLocalIJ.J}
