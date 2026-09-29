@@ -237,10 +237,8 @@ func (c Cell) neighborRotations(dir, rotations int) (Cell, int, error) {
 				rotations++
 			}
 		}
-	} else {
-		for range newRotations {
-			current = current.rotate60ccw()
-		}
+	} else if newRotations != 0 {
+		current = current.rotate60ccwBy(newRotations)
 	}
 
 	rotations = (rotations + newRotations) % 6

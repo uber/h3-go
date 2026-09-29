@@ -575,6 +575,25 @@ func rotate60cw(digit int) int {
 	}
 }
 
+// digitRotate60ccw[n][d] is digit d rotated 60° counterclockwise n times, for
+// n in [0, 6). It lets a multi-step rotation of an index walk its digits once.
+var digitRotate60ccw = digitRotations()
+
+// digitRotations builds digitRotate60ccw by composing single rotations.
+func digitRotations() (ccw [6][invalidDigit + 1]int) {
+	for digit := range ccw[0] {
+		ccw[0][digit] = digit
+	}
+
+	for n := 1; n < len(ccw); n++ {
+		for digit := range ccw[n] {
+			ccw[n][digit] = rotate60ccw(ccw[n-1][digit])
+		}
+	}
+
+	return ccw
+}
+
 // --- H3 index rotation ---
 
 // rotate60ccw returns c with every resolution digit rotated 60°
@@ -583,6 +602,21 @@ func (c Cell) rotate60ccw() Cell {
 	res := c.Resolution()
 	for r := 1; r <= res; r++ {
 		c = c.setIndexDigit(r, rotate60ccw(indexDigit(c, r)))
+	}
+
+	return c
+}
+
+// rotate60ccwBy returns c rotated 60° counterclockwise rotations times about its
+// base cell center, walking the digits once. rotations must be in [1, 6);
+// callers skip the call when there is nothing to rotate, since most neighbor
+// steps have no base-cell rotation and this function is too large to inline.
+func (c Cell) rotate60ccwBy(rotations int) Cell {
+	table := &digitRotate60ccw[rotations]
+
+	res := c.Resolution()
+	for r := 1; r <= res; r++ {
+		c = c.setIndexDigit(r, table[indexDigit(c, r)])
 	}
 
 	return c
@@ -699,8 +733,7 @@ func (fijk faceIJK) toH3(res int) (Cell, error) {
 			lastCenter = ijk.downAp7r()
 		}
 
-		diff := lastIJK.sub(lastCenter).normalize()
-		h = h.setIndexDigit(r+1, diff.toDigit())
+		h = h.setIndexDigit(r+1, lastIJK.sub(lastCenter).toDigit())
 	}
 
 	fijkBC.coord = ijk
@@ -729,10 +762,8 @@ func (fijk faceIJK) toH3(res int) (Cell, error) {
 		for range numRots {
 			h = h.rotatePent60ccw()
 		}
-	} else {
-		for range numRots {
-			h = h.rotate60ccw()
-		}
+	} else if numRots != 0 {
+		h = h.rotate60ccwBy(numRots)
 	}
 
 	return h, nil

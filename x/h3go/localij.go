@@ -245,8 +245,7 @@ func (c Cell) localIjkToCell(ijk coordIJK) (Cell, error) {
 			lastCenter = ijkCopy.downAp7r()
 		}
 
-		diff := lastIJK.sub(lastCenter).normalize()
-		out = out.setIndexDigit(r+1, diff.unitToDigit())
+		out = out.setIndexDigit(r+1, lastIJK.sub(lastCenter).unitToDigit())
 	}
 
 	if ijkCopy.i > 1 || ijkCopy.j > 1 || ijkCopy.k > 1 {

@@ -16,7 +16,10 @@
 
 package h3go
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 // TestIndexToString covers IndexToString hex formatting.
 func TestIndexToString(t *testing.T) {
@@ -50,10 +53,16 @@ func TestIndexFromString(t *testing.T) {
 		giveString string
 		wantIndex  uint64
 	}{
-		"max":        {giveString: "ffffffffffffffff", wantIndex: 0xffffffffffffffff},
-		"empty":      {giveString: "", wantIndex: 0},
-		"junk":       {giveString: "**", wantIndex: 0},
-		"hex_prefix": {giveString: "0xcafe", wantIndex: 0xcafe},
+		"max":               {giveString: "ffffffffffffffff", wantIndex: 0xffffffffffffffff},
+		"empty":             {giveString: "", wantIndex: 0},
+		"junk":              {giveString: "**", wantIndex: 0},
+		"hex_prefix":        {giveString: "0xcafe", wantIndex: 0xcafe},
+		"hex_prefix_upper":  {giveString: "0XCAFE", wantIndex: 0xcafe},
+		"upper_digits":      {giveString: "8928308280FFFFF", wantIndex: 0x8928308280fffff},
+		"junk_after_prefix": {giveString: "0x**", wantIndex: 0},
+		"bare_prefix":       {giveString: "0x", wantIndex: 0},
+		"leading_zeros":     {giveString: "00000000000000000001", wantIndex: 1},
+		"overflow":          {giveString: "1ffffffffffffffff", wantIndex: math.MaxUint64},
 	}
 
 	for name, tt := range tests {

@@ -199,12 +199,14 @@ func (e DirectedEdge) String() string {
 
 // MarshalText implements the encoding.TextMarshaler interface.
 func (e DirectedEdge) MarshalText() ([]byte, error) {
-	return []byte(e.String()), nil
+	//nolint:gosec // an H3 index is a 64-bit value; int64->uint64 is a lossless reinterpretation.
+	return appendIndexHex(uint64(e)), nil
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
 func (e *DirectedEdge) UnmarshalText(text []byte) error {
-	*e = DirectedEdgeFromString(string(text))
+	//nolint:gosec // an H3 index is a 64-bit value; uint64->int64 is a lossless reinterpretation.
+	*e = DirectedEdge(parseIndexHex(text))
 	if !e.IsValid() {
 		return errors.New("invalid directed edge index")
 	}

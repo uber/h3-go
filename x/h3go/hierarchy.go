@@ -49,6 +49,14 @@ func (c Cell) zeroIndexDigits(start, end int) Cell {
 	return c & mask
 }
 
+// fillIndexDigits sets the index digits from start to end inclusive to the
+// unused-digit marker (all ones). The caller guarantees start <= end.
+func (c Cell) fillIndexDigits(start, end int) Cell {
+	digits := Cell(1)<<(perDigitOffset*(end-start+1)) - 1
+
+	return c | digits<<(perDigitOffset*(MaxResolution-end))
+}
+
 // hasChildAtRes reports whether childRes is a valid child resolution for c.
 func (c Cell) hasChildAtRes(childRes int) bool {
 	parentRes := c.Resolution()
@@ -82,12 +90,7 @@ func (c Cell) Parent(parentRes int) (Cell, error) {
 		return c, nil
 	}
 
-	parentH := c.setResolution(parentRes)
-	for i := parentRes + 1; i <= childRes; i++ {
-		parentH = parentH.setIndexDigit(i, digitMask)
-	}
-
-	return parentH, nil
+	return c.setResolution(parentRes).fillIndexDigits(parentRes+1, childRes), nil
 }
 
 // ImmediateParent returns the immediate parent of the cell.
