@@ -100,9 +100,14 @@ var (
 	benchGoPolygon = toGoPolygon(benchPolygon)
 )
 
-// blackhole is the shared sink that keeps the compiler from eliminating the
-// benchmarked calls. Sub-benchmarks run sequentially, so a single sink is safe.
-var blackhole any
+// sink keeps the compiler from eliminating the benchmarked calls. It is
+// generic and marked noinline so the result is materialized and handed over in
+// its own type; assigning it to an interface instead would box every Cell,
+// float64 and LatLng, adding an allocation and several nanoseconds to every row
+// and hiding the library's own allocation count.
+//
+//go:noinline
+func sink[T any](T) {}
 
 // compare runs cgoFn and goFn as the "impl=cgo" and "impl=go" sub-benchmarks so
 // benchstat -col /impl can report the delta between the two implementations.
