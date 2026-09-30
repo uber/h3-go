@@ -16,7 +16,10 @@
 
 package h3go
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 // TestIsValidCellBitPatterns covers the bit-pattern cases for cell validation:
 // mode, reserved bits, high bit, an out-of-range base cell, a bad digit, and a
@@ -235,5 +238,131 @@ func TestIntrospectionCorpus(t *testing.T) {
 				t.Fatalf("IndexDigit(%015x, %d) = %d out of range", uint64(c), r, digit)
 			}
 		}
+	}
+}
+
+// TestConstructCell covers the domain checks, the pentagon deleted-subsequence
+// rule, and round trips against Resolution, BaseCellNumber and IndexDigit.
+func TestConstructCell(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		giveRes      int
+		giveBaseCell int
+		giveDigits   []int
+		wantErr      error
+		wantCell     Cell
+	}{
+		"res_below_zero":                       {giveRes: -1, giveBaseCell: 0, giveDigits: nil, wantErr: ErrResolutionDomain},
+		"res_above_max":                        {giveRes: MaxResolution + 1, giveBaseCell: 0, giveDigits: make([]int, 16), wantErr: ErrResolutionDomain},
+		"base_cell_negative":                   {giveRes: 1, giveBaseCell: -1, giveDigits: []int{0}, wantErr: ErrBaseCellDomain},
+		"base_cell_at_count":                   {giveRes: 1, giveBaseCell: NumBaseCells, giveDigits: []int{0}, wantErr: ErrBaseCellDomain},
+		"digits_shorter_than_res_pads_centers": {giveRes: 3, giveBaseCell: 0, giveDigits: []int{0, 0}, wantCell: setH3Index(3, 0, 0)},
+		"digits_empty_pads_centers":            {giveRes: 2, giveBaseCell: 0, giveDigits: nil, wantCell: setH3Index(2, 0, 0)},
+		"digit_negative":                       {giveRes: 1, giveBaseCell: 0, giveDigits: []int{-1}, wantErr: ErrDigitDomain},
+		"digit_is_invalid":                     {giveRes: 1, giveBaseCell: 0, giveDigits: []int{invalidDigit}, wantErr: ErrDigitDomain},
+		"pentagon_deleted_k_axis":              {giveRes: 1, giveBaseCell: 4, giveDigits: []int{kAxesDigit}, wantErr: ErrDeletedDigit},
+		"pentagon_deleted_below_centers":       {giveRes: 3, giveBaseCell: 4, giveDigits: []int{0, 0, kAxesDigit}, wantErr: ErrDeletedDigit},
+		"res_zero_ignores_nil_digits":          {giveRes: 0, giveBaseCell: 14, giveDigits: nil, wantCell: setH3Index(0, 14, 0)},
+		"hexagon_all_center_digits":            {giveRes: 2, giveBaseCell: 0, giveDigits: []int{0, 0}, wantCell: setH3Index(2, 0, 0)},
+		"pentagon_all_center_digits":           {giveRes: 2, giveBaseCell: 4, giveDigits: []int{0, 0}, wantCell: setH3Index(2, 4, 0)},
+		"extra_digits_ignored":                 {giveRes: 1, giveBaseCell: 0, giveDigits: []int{0, 5, 5}, wantCell: setH3Index(1, 0, 0)},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := ConstructCell(tt.giveRes, tt.giveBaseCell, tt.giveDigits)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("ConstructCell(%d, %d, %v) error = %v, want %v", tt.giveRes, tt.giveBaseCell, tt.giveDigits, err, tt.wantErr)
+			}
+
+			if tt.wantErr == nil && got != tt.wantCell {
+				t.Fatalf("ConstructCell(%d, %d, %v) = %015x, want %015x", tt.giveRes, tt.giveBaseCell, tt.giveDigits, uint64(got), uint64(tt.wantCell))
+			}
+		})
+	}
+}
+
+// TestConstructCellResolvesPentagon checks that a non-center, non-k digit
+// clears the pentagon state so a later k-axis digit is accepted.
+func TestConstructCellResolvesPentagon(t *testing.T) {
+	t.Parallel()
+
+	got, err := ConstructCell(2, 4, []int{2, kAxesDigit})
+	if err != nil {
+		t.Fatalf("ConstructCell(2, 4, [2 1]): %v", err)
+	}
+
+	if got.IsPentagon() {
+		t.Fatalf("ConstructCell(2, 4, [2 1]) = %015x, want a non-pentagon cell", uint64(got))
+	}
+}
+
+// TestConstructCellRoundTripsCorpus checks every corpus cell rebuilds from its
+// own resolution, base cell and digits.
+func TestConstructCellRoundTripsCorpus(t *testing.T) {
+	t.Parallel()
+
+	for _, cell := range corpus(t) {
+		res := cell.Resolution()
+
+		digits := make([]int, res)
+		for i := range res {
+			digit, err := cell.IndexDigit(i + 1)
+			if err != nil {
+				t.Fatalf("IndexDigit(%015x, %d): %v", uint64(cell), i+1, err)
+			}
+
+			digits[i] = digit
+		}
+
+		got, err := ConstructCell(res, cell.BaseCellNumber(), digits)
+		if err != nil {
+			t.Fatalf("ConstructCell(%015x): %v", uint64(cell), err)
+		}
+
+		if got != cell {
+			t.Fatalf("ConstructCell round trip = %015x, want %015x", uint64(got), uint64(cell))
+		}
+	}
+}
+
+// TestConstructCellShortDigitsPadCenters checks that omitting trailing digits
+// is the same as passing them as center digits, for a non-zero prefix and for
+// a pentagon base cell where the padding must not disturb pentagon state.
+func TestConstructCellShortDigitsPadCenters(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		giveRes      int
+		giveBaseCell int
+		giveShort    []int
+		givePadded   []int
+	}{
+		"hexagon_prefix":  {giveRes: 5, giveBaseCell: 73, giveShort: []int{1, 2}, givePadded: []int{1, 2, 0, 0, 0}},
+		"pentagon_prefix": {giveRes: 4, giveBaseCell: 4, giveShort: []int{0, 2}, givePadded: []int{0, 2, 0, 0}},
+		"pentagon_empty":  {giveRes: 3, giveBaseCell: 4, giveShort: nil, givePadded: []int{0, 0, 0}},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			short, err := ConstructCell(tt.giveRes, tt.giveBaseCell, tt.giveShort)
+			if err != nil {
+				t.Fatalf("ConstructCell(%d, %d, %v): %v", tt.giveRes, tt.giveBaseCell, tt.giveShort, err)
+			}
+
+			padded, err := ConstructCell(tt.giveRes, tt.giveBaseCell, tt.givePadded)
+			if err != nil {
+				t.Fatalf("ConstructCell(%d, %d, %v): %v", tt.giveRes, tt.giveBaseCell, tt.givePadded, err)
+			}
+
+			if short != padded {
+				t.Fatalf("ConstructCell(%d, %d, %v) = %015x, want %015x from the padded form", tt.giveRes, tt.giveBaseCell, tt.giveShort, uint64(short), uint64(padded))
+			}
+		})
 	}
 }

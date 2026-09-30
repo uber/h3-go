@@ -354,6 +354,29 @@ func GridDisk(origin Cell, k int) ([]Cell, error) {
 	return origin.GridDisk(k)
 }
 
+// GridDiskUnsafe returns the cells within grid distance k of the origin cell,
+// the origin first and then each ring outward, using the fast spiral
+// traversal. Unlike GridDisk, which falls back to the safe traversal, it fails
+// with ErrPentagon when the spiral meets a pentagon or pentagon distortion.
+func (c Cell) GridDiskUnsafe(k int) ([]Cell, error) {
+	if k < 0 {
+		return nil, ErrDomain
+	}
+
+	out, err := c.gridDiskUnsafeInto(k, make([]Cell, 0, maxGridDiskSize(k)))
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
+
+// GridDiskUnsafe returns the cells within grid distance k of the origin cell,
+// using the fast spiral traversal.
+func GridDiskUnsafe(origin Cell, k int) ([]Cell, error) {
+	return origin.GridDiskUnsafe(k)
+}
+
 // GridDisksUnsafe returns, for each origin, the cells within grid distance k of
 // that origin. The outer slice matches the order of origins; inner ordering is
 // not significant. It fails if any disk encounters pentagon distortion. Every

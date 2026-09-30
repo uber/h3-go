@@ -288,6 +288,10 @@ func TestGridPentagonFallback(t *testing.T) {
 		t.Fatalf("GridDiskDistancesUnsafe(pentagon): got %v, want ErrPentagon", err)
 	}
 
+	if _, err := pentagon.GridDiskUnsafe(2); !errors.Is(err, ErrPentagon) {
+		t.Fatalf("GridDiskUnsafe(pentagon): got %v, want ErrPentagon", err)
+	}
+
 	if _, err := pentagon.GridRingUnsafe(2); !errors.Is(err, ErrPentagon) {
 		t.Fatalf("GridRingUnsafe(pentagon): got %v, want ErrPentagon", err)
 	}
@@ -925,4 +929,51 @@ func TestGridDiskInvalidDigit(t *testing.T) {
 	if _, err := GridDisk(Cell(0x4d4b00fe5c5c3030), 2); !errors.Is(err, ErrCellInvalid) {
 		t.Fatalf("GridDisk(invalid digit): got %v, want ErrCellInvalid", err)
 	}
+}
+
+// TestGridDiskUnsafe checks the flat unsafe disk: the negative-k domain error,
+// and agreement with the ringed unsafe variant it shares a traversal with.
+func TestGridDiskUnsafe(t *testing.T) {
+	t.Parallel()
+
+	origin := setH3Index(5, 0, 0)
+
+	t.Run("negative_k", func(t *testing.T) {
+		t.Parallel()
+
+		if _, err := GridDiskUnsafe(origin, -1); !errors.Is(err, ErrDomain) {
+			t.Fatalf("GridDiskUnsafe(-1): got %v, want ErrDomain", err)
+		}
+	})
+
+	t.Run("matches_ringed_variant", func(t *testing.T) {
+		t.Parallel()
+
+		for k := 0; k <= 3; k++ {
+			flat, err := GridDiskUnsafe(origin, k)
+			if err != nil {
+				t.Fatalf("GridDiskUnsafe(%d): %v", k, err)
+			}
+
+			rings, err := origin.GridDiskDistancesUnsafe(k)
+			if err != nil {
+				t.Fatalf("GridDiskDistancesUnsafe(%d): %v", k, err)
+			}
+
+			var want []Cell
+			for _, ring := range rings {
+				want = append(want, ring...)
+			}
+
+			if len(flat) != len(want) {
+				t.Fatalf("GridDiskUnsafe(%d) length = %d, want %d", k, len(flat), len(want))
+			}
+
+			for i := range want {
+				if flat[i] != want[i] {
+					t.Fatalf("GridDiskUnsafe(%d)[%d] = %015x, want %015x", k, i, uint64(flat[i]), uint64(want[i]))
+				}
+			}
+		}
+	})
 }
