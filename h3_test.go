@@ -1891,3 +1891,125 @@ func assertValidPath(t *testing.T, start Cell, end Cell, path []Cell) {
 		assertTrue(t, isNeighbor)
 	}
 }
+
+func TestGridDiskUnsafe(t *testing.T) {
+	t.Parallel()
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		// Rings 0 and 1 of the k=3 fixture are the k=1 disk.
+		var want []Cell
+		for _, ring := range validDiskDist3_1[:2] {
+			want = append(want, ring...)
+		}
+
+		gd, err := validCell.GridDiskUnsafe(1)
+		assertNoErr(t, err)
+		assertEqualDisks(t, want, gd)
+	})
+
+	t.Run("success/func", func(t *testing.T) {
+		t.Parallel()
+
+		gd, err := GridDiskUnsafe(validCell, 0)
+		assertNoErr(t, err)
+		assertEqualDisks(t, []Cell{validCell}, gd)
+	})
+
+	t.Run("err/pentagon", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := GridDiskUnsafe(pentagonCell, 1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrPentagon)
+	})
+
+	t.Run("err/invalid_cell", func(t *testing.T) {
+		t.Parallel()
+
+		c := Cell(-1)
+		_, err := c.GridDiskUnsafe(1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrCellInvalid)
+	})
+}
+
+func TestConstructCell(t *testing.T) {
+	t.Parallel()
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		c, err := ConstructCell(3, 73, []int{1, 2, 3})
+		assertNoErr(t, err)
+		assertEqual(t, Cell(0x839253fffffffff), c)
+	})
+
+	t.Run("success/res_zero_nil_digits", func(t *testing.T) {
+		t.Parallel()
+
+		c, err := ConstructCell(0, 0, nil)
+		assertNoErr(t, err)
+		assertEqual(t, Cell(0x8001fffffffffff), c)
+	})
+
+	t.Run("success/short_digits_pad_centers", func(t *testing.T) {
+		t.Parallel()
+
+		short, err := ConstructCell(3, 4, []int{0, 2})
+		assertNoErr(t, err)
+
+		padded, err := ConstructCell(3, 4, []int{0, 2, 0})
+		assertNoErr(t, err)
+		assertEqual(t, padded, short)
+	})
+
+	t.Run("success/extra_digits_ignored", func(t *testing.T) {
+		t.Parallel()
+
+		c, err := ConstructCell(1, 42, []int{6, 5, 5})
+		assertNoErr(t, err)
+		assertEqual(t, Cell(0x8155bffffffffff), c)
+	})
+
+	t.Run("err/resolution_below_zero", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := ConstructCell(-1, 0, nil)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrResolutionDomain)
+	})
+
+	t.Run("err/resolution_above_max", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := ConstructCell(MaxResolution+1, 0, nil)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrResolutionDomain)
+	})
+
+	t.Run("err/base_cell_domain", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := ConstructCell(0, NumBaseCells, nil)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrBaseCellDomain)
+	})
+
+	t.Run("err/digit_domain", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := ConstructCell(1, 40, []int{7})
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDigitDomain)
+	})
+
+	t.Run("err/deleted_digit", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := ConstructCell(3, 4, []int{0, 0, 1})
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDeletedDigit)
+	})
+}
