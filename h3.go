@@ -336,6 +336,37 @@ func (c Cell) GridDisk(k int) ([]Cell, error) {
 	return GridDisk(c, k)
 }
 
+// GridDiskUnsafe produces cells within grid distance k of the origin cell,
+// using the fast spiral traversal.
+//
+// k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+// all neighboring cells, and so on.
+//
+// Output is placed in an array in no particular order. Unlike GridDisk, which
+// silently falls back to a slower traversal, this reports pentagon distortion
+// as an error rather than absorbing it.
+func GridDiskUnsafe(origin Cell, k int) ([]Cell, error) {
+	out := make([]C.H3Index, maxGridDiskSize(k))
+	if err := toErr(C.gridDiskUnsafe(C.H3Index(origin), C.int(k), &out[0])); err != nil {
+		return nil, err
+	}
+
+	return cellsFromC(out, true, false), nil
+}
+
+// GridDiskUnsafe produces cells within grid distance k of the origin cell,
+// using the fast spiral traversal.
+//
+// k-ring 0 is defined as the origin cell, k-ring 1 is defined as k-ring 0 and
+// all neighboring cells, and so on.
+//
+// Output is placed in an array in no particular order. Unlike GridDisk, which
+// silently falls back to a slower traversal, this reports pentagon distortion
+// as an error rather than absorbing it.
+func (c Cell) GridDiskUnsafe(k int) ([]Cell, error) {
+	return GridDiskUnsafe(c, k)
+}
+
 // GridDisksUnsafe produces cells within grid distance k of all provided origin
 // cells.
 //
@@ -997,6 +1028,34 @@ func (c Cell) IsNeighbor(other Cell) (bool, error) {
 // [indexing digit]: https://h3geo.org/docs/library/index/cell
 func (c Cell) IndexDigit(resolution int) (int, error) {
 	return indexDigit(c, resolution)
+}
+
+// ConstructCell returns the cell with the given resolution, base cell number,
+// and child digits, each in the range 0 to 6. Digits beyond resolution are
+// ignored, and slots past the end of digits are filled with the center digit,
+// matching a zero-padded array. It constructs valid cells only, reporting
+// ErrDeletedDigit for a digit sequence that falls in a pentagon's deleted
+// subsequence.
+func ConstructCell(resolution, baseCell int, digits []int) (Cell, error) {
+	if resolution < 0 || resolution > MaxResolution {
+		return 0, ErrResolutionDomain
+	}
+
+	// C reads resolution entries, so the buffer is sized for them and left at
+	// its zero value past the end of digits: zero is the center digit, which
+	// is the padding C's own callers use. SliceData carries the empty slice at
+	// resolution 0, where C reads nothing and accepts a null pointer.
+	cDigits := make([]C.int, resolution)
+	for i := range min(len(digits), resolution) {
+		cDigits[i] = C.int(digits[i])
+	}
+
+	var out C.H3Index
+	if err := toErr(C.constructCell(C.int(resolution), C.int(baseCell), unsafe.SliceData(cDigits), &out)); err != nil {
+		return 0, err
+	}
+
+	return Cell(out), nil
 }
 
 // DirectedEdge returns a DirectedEdge from this Cell to other.

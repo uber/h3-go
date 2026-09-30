@@ -106,6 +106,23 @@ func TestGridDiskMatchesCgo(t *testing.T) {
 			if wantUnsafeErr == nil {
 				assertSameRings(t, gotUnsafe, wantUnsafe, "GridDiskDistancesUnsafe")
 			}
+
+			wantFlatUnsafe, wantFlatUnsafeErr := h3.GridDiskUnsafe(ref, k)
+			gotFlatUnsafe, gotFlatUnsafeErr := h3go.GridDiskUnsafe(goCell, k)
+
+			if !bothErr(wantFlatUnsafeErr, gotFlatUnsafeErr) {
+				t.Fatalf("GridDiskUnsafe(%015x, %d) error mismatch: cgo=%v h3go=%v", uint64(ref), k, wantFlatUnsafeErr, gotFlatUnsafeErr)
+			}
+
+			if wantFlatUnsafeErr == nil {
+				assertSameCellSet(t, dropZeros(gotFlatUnsafe), dropZeros(toGoCells(wantFlatUnsafe)), "GridDiskUnsafe")
+			}
+
+			// The flat unsafe disk must agree with the ringed one it shares a
+			// traversal with, and must fail on exactly the same cells.
+			if !bothErr(wantUnsafeErr, gotFlatUnsafeErr) {
+				t.Fatalf("GridDiskUnsafe(%015x, %d) disagrees with GridDiskDistancesUnsafe on pentagon failure: ringed=%v flat=%v", uint64(ref), k, wantUnsafeErr, gotFlatUnsafeErr)
+			}
 		}
 	}
 }

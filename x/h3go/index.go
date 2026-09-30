@@ -222,6 +222,54 @@ func (c Cell) IndexDigit(res int) (int, error) {
 	return indexDigitChecked(c, res)
 }
 
+// ConstructCell returns the cell with the given resolution, base cell number,
+// and child digits, each in the range 0 to 6. Digits beyond res are ignored,
+// and slots past the end of digits are filled with the center digit, matching
+// a zero-padded array. It constructs valid cells only, reporting
+// ErrDeletedDigit for a digit sequence that falls in a pentagon's deleted
+// subsequence.
+func ConstructCell(res, baseCell int, digits []int) (Cell, error) {
+	if res < 0 || res > MaxResolution {
+		return 0, ErrResolutionDomain
+	}
+
+	if baseCell < 0 || baseCell >= NumBaseCells {
+		return 0, ErrBaseCellDomain
+	}
+
+	cell := Cell(h3Init) | Cell(cellMode)<<modeOffset
+	cell = cell.setResolution(res).setBaseCell(baseCell)
+
+	isPentagon := isBaseCellPentagon[baseCell]
+	provided := min(len(digits), res)
+
+	for i, digit := range digits[:provided] {
+		if digit < centerDigit || digit >= invalidDigit {
+			return 0, ErrDigitDomain
+		}
+
+		// A pentagon stays a pentagon while its digits are all centers; the
+		// first non-center digit resolves it, and the k axis is the deleted one.
+		if isPentagon && digit != centerDigit {
+			if digit == kAxesDigit {
+				return 0, ErrDeletedDigit
+			}
+
+			isPentagon = false
+		}
+
+		cell = cell.setIndexDigit(i+1, digit)
+	}
+
+	// Trailing center digits cannot fail either check, so the pentagon state
+	// and the digit range need no further work.
+	for pos := provided + 1; pos <= res; pos++ {
+		cell = cell.setIndexDigit(pos, centerDigit)
+	}
+
+	return cell, nil
+}
+
 // IsValid reports whether the cell is a valid H3 cell (hexagon or pentagon). It
 // looks for bit patterns that would disqualify an index from being a valid cell,
 // exiting early.
