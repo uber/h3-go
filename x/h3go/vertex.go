@@ -388,12 +388,14 @@ func (v Vertex) String() string {
 
 // MarshalText implements the encoding.TextMarshaler interface.
 func (v Vertex) MarshalText() ([]byte, error) {
-	return []byte(v.String()), nil
+	//nolint:gosec // an H3 index is a 64-bit value; int64->uint64 is a lossless reinterpretation.
+	return appendIndexHex(uint64(v)), nil
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
 func (v *Vertex) UnmarshalText(text []byte) error {
-	*v = VertexFromString(string(text))
+	//nolint:gosec // an H3 index is a 64-bit value; uint64->int64 is a lossless reinterpretation.
+	*v = Vertex(parseIndexHex(text))
 	if !v.IsValid() {
 		return errors.New("invalid vertex index")
 	}
