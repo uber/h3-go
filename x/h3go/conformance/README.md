@@ -21,6 +21,7 @@ traversal/cells.jsonl
 edges/cells.jsonl
 vertexes/cells.jsonl
 localij/pairs.jsonl
+sets/sets.jsonl
 ```
 
 `manifest.json` is the only file a consumer opens by name. Every record file
@@ -73,10 +74,10 @@ is optional and nothing is inferred from absence.
 - **Booleans** are JSON `true` and `false`, for functions that return
   `int` used as a boolean in C.
 - **Sets** are JSON arrays whose order is not significant. Generators write
-  them in ascending order; consumers compare them as sets. Where the C API
-  returns a sparse array padded with a sentinel (`-1` for faces, `0` for
-  indexes), the padding is removed before writing and must be ignored when
-  comparing.
+  them in ascending order without duplicates; consumers compare them as
+  sets. Where the C API returns a sparse array padded with a sentinel (`-1`
+  for faces, `0` for indexes), the padding is removed before writing and
+  must be ignored when comparing.
 - **Sequences** are JSON arrays whose order is significant, for example cell
   boundary vertices or the cells of a grid path. The group definition says
   which arrays are sets and which are sequences.
@@ -253,6 +254,50 @@ Example:
 {"index":"8003fffffffffff","target":"8001fffffffffff","ij":{"i":1,"j":0},"cell":"8001fffffffffff"}
 ```
 
+### `sets`
+
+One line per **input set**, built from a subject cell in one of six kinds.
+The `id` is the kind and the cell, joined by `:`. `input` is a sequence
+because duplicates and invalid entries are part of the test; the two
+function outputs are sets.
+
+| Key | Function | Type |
+|---|---|---|
+| `id` | `<kind>:<cell>` | string |
+| `input` | the cells passed to both functions, in order | sequence of index strings |
+| `compact` | `compactCells(input)` | set of index strings, or error |
+| `uncompactRes` | the resolution passed to `uncompactCells` | integer |
+| `uncompact` | `uncompactCells(input, uncompactRes)` | set of index strings, or error |
+
+The kinds, for a subject at resolution `res`:
+
+| Kind | `input` | `uncompactRes` |
+|---|---|---|
+| `children` | `cellToChildren(cell, min(res + 2, 15))` | `min(res + 2, 15)` |
+| `disk` | `gridDisk(cell, 2)` in slot order | `res + 1` |
+| `holes` | `gridDisk(cell, 3)` in slot order with one to three slots cleared (see Sampling) | `res` |
+| `duplicate` | `cellToChildren(p, res(p) + 1)` followed by its first entry again, where `p` is the cell, or its parent when `res` is 15 | `res(p) + 1` |
+| `invalid` | `gridDisk(cell, 1)` in slot order followed by the cell with reserved bits 56-58 set to `001` | `res` |
+| `coarse` | `gridDisk(cell, 1)` in slot order | `res - 1` |
+
+Padding is removed from every input. `duplicate` fails `compactCells` with
+`E_DUPLICATE_INPUT`; `invalid` fails it with `E_CELL_INVALID` except at
+resolution 0, where the reference copies the input through unchecked;
+`coarse` fails `uncompactCells` with `E_RES_MISMATCH`, as does `disk` at
+resolution 15. Mixed-resolution input to `compactCells` is outside its
+contract and is not sampled.
+
+A consumer must also check the round trip `uncompactCells(compact, r) ==
+input` as sets, where `r` is the finest resolution in `input`, whenever
+`compact` succeeded and every entry of `input` is a valid cell.
+
+Example:
+
+```json
+{"id":"coarse:8009fffffffffff","input":["8007fffffffffff","8009fffffffffff","8019fffffffffff","8001fffffffffff","801ffffffffffff","8011fffffffffff"],"compact":["8001fffffffffff","8007fffffffffff","8009fffffffffff","8011fffffffffff","8019fffffffffff","801ffffffffffff"],"uncompactRes":-1,"uncompact":{"err":"E_RES_MISMATCH"}}
+{"id":"duplicate:81083ffffffffff","input":["820807fffffffff","820817fffffffff","82081ffffffffff","820827fffffffff","82082ffffffffff","820837fffffffff","820807fffffffff"],"compact":{"err":"E_DUPLICATE_INPUT"},"uncompactRes":2,"uncompact":["820807fffffffff","820817fffffffff","82081ffffffffff","820827fffffffff","82082ffffffffff","820837fffffffff"]}
+```
+
 ## Sampling
 
 Inputs are chosen by a deterministic procedure from `generator.seed`, so that
@@ -363,6 +408,20 @@ near target is drawn from its 3-disk, and a far target is drawn by drawing
 cells at the origin's resolution until `isValidCell` accepts one. The origin
 is written with the near target, then with the far target unless the two
 targets are the same cell.
+
+### `sets/sets.jsonl`
+
+Subjects:
+
+1. `getPentagons(res)` for `res` 0 through 15, in the order the reference
+   returns them. No draws.
+2. For `res` 0 through 15, twice: draw cells at `res` until `isValidCell`
+   accepts one, and emit it.
+
+Sorted ascending and deduplicated as above. Then for each subject, the six
+kinds are written in the order of the kinds table. Only `holes` draws: draw 3
+to get a count from 1 to 3, then that many times draw 37 and clear that slot
+of the `gridDisk(cell, 3)` array; a slot that is already zero stays zero.
 
 ## Running and regenerating
 
