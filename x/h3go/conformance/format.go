@@ -158,6 +158,35 @@ type InspectionRecord struct {
 	Construct Result[string] `json:"construct"`
 }
 
+// HierarchyRecord holds the parent and child relations of one valid cell.
+//
+//nolint:govet // field order is the JSON key order given in README.md
+type HierarchyRecord struct {
+	// Index is the subject cell.
+	Index string `json:"index"`
+	// Parents is cellToParent for every resolution from 0 to the cell's
+	// resolution minus one, in that order.
+	Parents []string `json:"parents"`
+	// CenterChild is cellToCenterChild one resolution finer.
+	CenterChild Result[string] `json:"centerChild"`
+	// Children is cellToChildren one resolution finer, as a set.
+	Children Result[[]string] `json:"children"`
+	// ChildPos is cellToChildPos against the resolution-0 ancestor.
+	ChildPos Result[int64] `json:"childPos"`
+}
+
+// subject is implemented by every record type and names the record's input,
+// which identifies the record within its file.
+type subject interface {
+	subject() string
+}
+
+// subject returns the record's index.
+func (r InspectionRecord) subject() string { return r.Index }
+
+// subject returns the record's cell.
+func (r HierarchyRecord) subject() string { return r.Index }
+
 // errorNames maps the h3go errors to the H3Error enum names used in record
 // files.
 var errorNames = map[error]string{

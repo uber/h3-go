@@ -16,6 +16,7 @@ listed at the end.
 ```
 manifest.json
 inspection/cells.jsonl
+hierarchy/cells.jsonl
 ```
 
 `manifest.json` is the only file a consumer opens by name. Every record file
@@ -137,12 +138,37 @@ Example:
 {"index":"fffffffffffffff","res":15,"baseCell":127,"validCell":false,"validIndex":false,"resClassIII":true,"pentagon":false,"faces":{"err":"E_CELL_INVALID"},"digits":[7,7,7,7,7,7,7,7,7,7,7,7,7,7,7],"construct":{"err":"E_BASE_CELL_DOMAIN"}}
 ```
 
+### `hierarchy`
+
+One line per **valid cell**. Resolution bounds are the only source of errors:
+a resolution-0 cell has no parents, and a resolution-15 cell has no children.
+
+| Key | Function | Type |
+|---|---|---|
+| `index` | the subject cell | index string |
+| `parents` | `cellToParent(index, r)` for `r` from 0 to `res - 1`, in that order | sequence of index strings |
+| `centerChild` | `cellToCenterChild(index, res + 1)` | index string, or error |
+| `children` | `cellToChildren(index, res + 1)`, with `0` padding removed | set of index strings, or error |
+| `childPos` | `cellToChildPos(index, 0)` | integer, or error |
+
+A consumer must also check the round trip `childPosToCell(childPos, parents[0],
+res) == index` (using `index` itself as the parent when `res` is 0) whenever
+`childPos` succeeded.
+
+Example:
+
+```json
+{"index":"8100bffffffffff","parents":["8001fffffffffff"],"centerChild":"820087fffffffff","children":["820087fffffffff","82008ffffffffff","820097fffffffff","82009ffffffffff","8200a7fffffffff","8200affffffffff","8200b7fffffffff"],"childPos":2}
+```
+
 ## Sampling
 
 Inputs are chosen by a deterministic procedure from `generator.seed`, so that
 a generator written against the C library directly reproduces this suite byte
 for byte, and so that a failing line can be traced to the step that produced
-it. The procedure for each group is given here in full.
+it. The procedure for each file is given here in full. Every file starts
+from a fresh generator whose state is the seed, so files can be produced
+independently and in any order.
 
 ### Pseudo-random source
 
@@ -200,6 +226,16 @@ deleted subsequence, and such draws are kept.
 
 The emitted indexes are sorted ascending as unsigned 64-bit integers and
 duplicates are removed. Each remaining index becomes one line.
+
+### `hierarchy/cells.jsonl`
+
+1. `build(1, 0, b, [])` for every base cell `b` from 0 to 121. No draws.
+2. `getPentagons(res)` for `res` 1 through 15, in the order the reference
+   returns them. No draws.
+3. For `res` 1 through 15, 32 times: draw cells at `res` until `isValidCell`
+   accepts one, and emit it.
+
+Sorted ascending and deduplicated as above.
 
 ## Running and regenerating
 

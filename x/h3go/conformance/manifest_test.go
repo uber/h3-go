@@ -17,11 +17,13 @@
 package conformance
 
 import (
+	"bytes"
 	"io/fs"
 	"iter"
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -53,6 +55,41 @@ func manifestFiles(manifest Manifest, prefix string) iter.Seq[string] {
 				return
 			}
 		}
+	}
+}
+
+// runGroup runs check on every record of every file under a group prefix, one
+// subtest per file and one per record named by its subject.
+func runGroup[T subject](t *testing.T, prefix string, check func(*testing.T, T)) {
+	t.Helper()
+
+	manifest := loadSuite(t)
+
+	names := slices.Sorted(manifestFiles(manifest, prefix))
+	if len(names) == 0 {
+		t.Fatalf("no files under %s in the manifest", prefix)
+	}
+
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			data, err := os.ReadFile(filepath.Join(suiteDir, filepath.FromSlash(name)))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for record, err := range Records[T](bytes.NewReader(data)) {
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				t.Run(record.subject(), func(t *testing.T) {
+					t.Parallel()
+					check(t, record)
+				})
+			}
+		})
 	}
 }
 

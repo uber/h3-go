@@ -13,6 +13,10 @@
     "inspection/cells.jsonl": {
       "records": 1885,
       "sha256": "e00831912dd33c6625dde15ad2d870a275e04fc3129e8f18e107f4a9dae60388"
+    },
+    "hierarchy/cells.jsonl": {
+      "records": 781,
+      "sha256": "6d3eca0087bec94f860f8d95a5da1a43d201178d1739ac7ee242395d70927e5e"
     }
   }
 }

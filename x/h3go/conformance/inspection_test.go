@@ -17,9 +17,6 @@
 package conformance
 
 import (
-	"bytes"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -31,29 +28,7 @@ import (
 func TestInspection(t *testing.T) {
 	t.Parallel()
 
-	manifest := loadSuite(t)
-
-	for _, name := range slices.Sorted(manifestFiles(manifest, "inspection/")) {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			data, err := os.ReadFile(filepath.Join(suiteDir, filepath.FromSlash(name)))
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			for record, err := range Records[InspectionRecord](bytes.NewReader(data)) {
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				t.Run(record.Index, func(t *testing.T) {
-					t.Parallel()
-					checkInspection(t, record)
-				})
-			}
-		})
-	}
+	runGroup(t, "inspection/", checkInspection)
 }
 
 // checkInspection asserts every field of one inspection record against h3go.
