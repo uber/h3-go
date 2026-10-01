@@ -224,7 +224,7 @@ One line per **valid cell**. A pentagon has no vertex number 5, so
 | `byNumber` | `cellToVertex(index, n)` for `n` from 0 to 5, in that order | sequence of six entries, each an index string or error |
 
 A consumer must also check that `isValidVertex(v)` holds for every `v` in
-`vertexes`. `vertexToCell` is not covered yet: neither Go package exposes it.
+`vertexes`. `vertexToLatLng` belongs to the floats group.
 
 Example:
 
