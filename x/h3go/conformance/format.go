@@ -265,6 +265,39 @@ type SetsRecord struct {
 	Uncompact Result[[]string] `json:"uncompact"`
 }
 
+// GeoCoord is a point as a [latitude, longitude] pair in degrees.
+type GeoCoord [2]float64
+
+// Polygon is an outer loop with zero or more holes, each a sequence of points.
+type Polygon struct {
+	Outer []GeoCoord   `json:"outer"`
+	Holes [][]GeoCoord `json:"holes"`
+}
+
+// RegionsRecord holds the polyfill outputs for one polygon at one resolution
+// and the outline of the classic fill.
+//
+//nolint:govet // field order is the JSON key order given in README.md
+type RegionsRecord struct {
+	// ID names the polygon: the cell whose boundary it is, the fill
+	// resolution, and ":hole" when the center child is cut out.
+	ID string `json:"id"`
+	// Polygon is the input.
+	Polygon Polygon `json:"polygon"`
+	// Res is the fill resolution.
+	Res int `json:"res"`
+	// Cells is polygonToCells with flags 0, as a set.
+	Cells Result[[]string] `json:"cells"`
+	// Center, Full, Overlapping and OverlappingBbox are
+	// polygonToCellsExperimental in containment modes 0 to 3, as sets.
+	Center          Result[[]string] `json:"center"`
+	Full            Result[[]string] `json:"full"`
+	Overlapping     Result[[]string] `json:"overlapping"`
+	OverlappingBbox Result[[]string] `json:"overlappingBbox"`
+	// MultiPolygon is cellsToLinkedMultiPolygon(cells), or Cells' error.
+	MultiPolygon Result[[]Polygon] `json:"multiPolygon"`
+}
+
 // subject is implemented by every record type and names the record's input,
 // which identifies the record within its file.
 type subject interface {
@@ -291,6 +324,9 @@ func (r LocalIJRecord) subject() string { return r.Index + "/" + r.Target }
 
 // subject returns the set's id.
 func (r SetsRecord) subject() string { return r.ID }
+
+// subject returns the polygon's id.
+func (r RegionsRecord) subject() string { return r.ID }
 
 // errorNames maps the h3go errors to the H3Error enum names used in record
 // files.

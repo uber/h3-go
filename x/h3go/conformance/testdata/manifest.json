@@ -37,6 +37,10 @@
     "sets/sets.jsonl": {
       "records": 1344,
       "sha256": "9e68eff694c4523e78878b8b785118c619c62c0edce931e47ea68a8d498f014d"
+    },
+    "regions/polygons.jsonl": {
+      "records": 360,
+      "sha256": "385cb5669aca18afeca70807487be48d050dca87c86800af91d738720969d910"
     }
   }
 }
