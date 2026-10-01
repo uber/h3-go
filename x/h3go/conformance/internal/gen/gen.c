@@ -67,6 +67,8 @@
 #define RANDOM_PATTERNS 256
 #define HIERARCHY_CELLS_PER_RES 32
 #define TRAVERSAL_CELLS_PER_RES 16
+#define SETS_CELLS_PER_RES 2
+#define MAX_HOLES 3
 #define MAX_DISK_K 3
 #define NUM_VERTEX_NUMBERS 6
 
@@ -268,10 +270,17 @@ static void sampleInspection(IndexList *list, Splitmix64 *rng) {
 
 /* ---- inspection group records ---- */
 
-static void printIndex(FILE *out, H3Index h) {
+/* printIndexBare prints the canonical string form without quotes. */
+static void printIndexBare(FILE *out, H3Index h) {
     char buf[MAX_INDEX_LEN];
     must(h3ToString(h, buf, sizeof buf));
-    fprintf(out, "\"%s\"", buf);
+    fputs(buf, out);
+}
+
+static void printIndex(FILE *out, H3Index h) {
+    fputc('"', out);
+    printIndexBare(out, h);
+    fputc('"', out);
 }
 
 static void printError(FILE *out, H3Error err) {
@@ -409,8 +418,9 @@ static void printIndexSequence(FILE *out, const H3Index *indexes, int64_t count)
     fputc(']', out);
 }
 
-/* printIndexSet prints the non-zero entries of indexes in ascending order,
- * compacting and sorting them in place, and returns how many were kept. */
+/* printIndexSet prints the distinct non-zero entries of indexes in ascending
+ * order, compacting and sorting them in place, and returns how many were
+ * kept. */
 static int64_t printIndexSet(FILE *out, H3Index *indexes, int64_t count) {
     int64_t kept = 0;
     for (int64_t i = 0; i < count; i++) {
@@ -419,6 +429,13 @@ static int64_t printIndexSet(FILE *out, H3Index *indexes, int64_t count) {
         }
     }
     qsort(indexes, (size_t)kept, sizeof *indexes, compareIndexes);
+    int64_t unique = 0;
+    for (int64_t i = 0; i < kept; i++) {
+        if (!unique || indexes[unique - 1] != indexes[i]) {
+            indexes[unique++] = indexes[i];
+        }
+    }
+    kept = unique;
     fputc('[', out);
     for (int64_t i = 0; i < kept; i++) {
         if (i) {
@@ -787,8 +804,154 @@ typedef void (*RecordWriter)(FILE *out, H3Index h, Splitmix64 *rng);
 
 /* A group whose subjects are single indexes. Each file starts from a fresh
  * generator seeded with the manifest seed; the sampler draws first, then the
- * writer draws for each subject in file order. A NULL writer marks the
- * localij group, whose subjects are pairs. */
+ * writer draws for each subject in file order. A writer may emit more than
+ * one line per subject. */
+/* writeLocalIJSubject writes the origin with a near target drawn from its
+ * 3-disk, then with a far target drawn at its resolution unless they match. */
+static void writeLocalIJSubject(FILE *out, H3Index origin, Splitmix64 *rng) {
+    H3Index near = drawDiskTarget(rng, origin, MAX_DISK_K);
+    H3Index far = drawValidCell(rng, getResolution(origin));
+    writeLocalIJRecord(out, origin, near);
+    if (far != near) {
+        writeLocalIJRecord(out, origin, far);
+    }
+}
+
+/* ---- sets group (README, "sets/sets.jsonl") ---- */
+
+static void sampleSets(IndexList *list, Splitmix64 *rng) {
+    for (int res = 0; res <= MAX_RES; res++) {
+        H3Index pentagons[NUM_PENTAGONS];
+        must(getPentagons(res, pentagons));
+        for (int i = 0; i < NUM_PENTAGONS; i++) {
+            push(list, pentagons[i]);
+        }
+    }
+    for (int res = 0; res <= MAX_RES; res++) {
+        for (int i = 0; i < SETS_CELLS_PER_RES; i++) {
+            push(list, drawValidCell(rng, res));
+        }
+    }
+    sortAndDedup(list);
+}
+
+/* pushChildren appends cellToChildren(h, childRes) without its padding. */
+static void pushChildren(IndexList *list, H3Index h, int childRes) {
+    int64_t count;
+    must(cellToChildrenSize(h, childRes, &count));
+    H3Index *children = calloc((size_t)count, sizeof *children);
+    if (!children) {
+        fail("out of memory");
+    }
+    must(cellToChildren(h, childRes, children));
+    for (int64_t i = 0; i < count; i++) {
+        if (children[i]) {
+            push(list, children[i]);
+        }
+    }
+    free(children);
+}
+
+/* pushDisk appends gridDisk(h, k) without its padding, keeping slot order. */
+static void pushDisk(IndexList *list, H3Index h, int k) {
+    H3Index disk[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
+    must(gridDisk(h, k, disk));
+    for (int i = 0; i < diskSize(k); i++) {
+        if (disk[i]) {
+            push(list, disk[i]);
+        }
+    }
+}
+
+/* writeSetsRecord writes one line for the input set under the given kind. */
+static void writeSetsRecord(FILE *out, const char *kind, H3Index h, const IndexList *input,
+                            int uncompactRes) {
+    fprintf(out, "{\"id\":\"%s:", kind);
+    printIndexBare(out, h);
+    fputs("\",\"input\":", out);
+    printIndexSequence(out, input->items, (int64_t)input->len);
+
+    fputs(",\"compact\":", out);
+    H3Index *compacted = calloc(input->len ? input->len : 1, sizeof *compacted);
+    if (!compacted) {
+        fail("out of memory");
+    }
+    H3Error err = compactCells(input->items, compacted, (int64_t)input->len);
+    if (err) {
+        printError(out, err);
+    } else {
+        printIndexSet(out, compacted, (int64_t)input->len);
+    }
+    free(compacted);
+
+    fprintf(out, ",\"uncompactRes\":%d,\"uncompact\":", uncompactRes);
+    int64_t count;
+    err = uncompactCellsSize(input->items, (int64_t)input->len, uncompactRes, &count);
+    if (!err) {
+        H3Index *cells = calloc(count ? (size_t)count : 1, sizeof *cells);
+        if (!cells) {
+            fail("out of memory");
+        }
+        err = uncompactCells(input->items, (int64_t)input->len, cells, count, uncompactRes);
+        if (!err) {
+            printIndexSet(out, cells, count);
+        }
+        free(cells);
+    }
+    if (err) {
+        printError(out, err);
+    }
+    fputs("}\n", out);
+}
+
+/* writeSetsSubject writes the six kinds of set built from one cell. */
+static void writeSetsSubject(FILE *out, H3Index h, Splitmix64 *rng) {
+    int res = getResolution(h);
+    int childRes = res + 2 > MAX_RES ? MAX_RES : res + 2;
+    IndexList input = {0};
+
+    pushChildren(&input, h, childRes);
+    writeSetsRecord(out, "children", h, &input, childRes);
+
+    input.len = 0;
+    pushDisk(&input, h, 2);
+    writeSetsRecord(out, "disk", h, &input, res + 1);
+
+    input.len = 0;
+    H3Index disk[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
+    must(gridDisk(h, MAX_DISK_K, disk));
+    int holes = 1 + (int)drawN(rng, MAX_HOLES);
+    for (int i = 0; i < holes; i++) {
+        disk[drawN(rng, diskSize(MAX_DISK_K))] = 0;
+    }
+    for (int i = 0; i < diskSize(MAX_DISK_K); i++) {
+        if (disk[i]) {
+            push(&input, disk[i]);
+        }
+    }
+    writeSetsRecord(out, "holes", h, &input, res);
+
+    input.len = 0;
+    H3Index siblingParent = h;
+    if (res == MAX_RES) {
+        must(cellToParent(h, res - 1, &siblingParent));
+    }
+    pushChildren(&input, siblingParent, getResolution(siblingParent) + 1);
+    push(&input, input.items[0]);
+    writeSetsRecord(out, "duplicate", h, &input, getResolution(siblingParent) + 1);
+
+    input.len = 0;
+    pushDisk(&input, h, 1);
+    push(&input, h | ((uint64_t)1 << RESERVED_OFFSET));
+    writeSetsRecord(out, "invalid", h, &input, res);
+
+    input.len = 0;
+    pushDisk(&input, h, 1);
+    writeSetsRecord(out, "coarse", h, &input, res - 1);
+
+    free(input.items);
+}
+
 typedef struct {
     FileInfo info;
     Sampler sample;
@@ -812,17 +975,7 @@ static void writeIndexGroup(const char *outDir, uint64_t seed, IndexGroup *group
     char *path = joinPath(outDir, group->info.name);
     FILE *out = createFile(path);
     for (size_t i = 0; i < list.len; i++) {
-        if (group->write) {
-            group->write(out, list.items[i], &rng);
-        } else {
-            H3Index origin = list.items[i];
-            H3Index near = drawDiskTarget(&rng, origin, MAX_DISK_K);
-            H3Index far = drawValidCell(&rng, getResolution(origin));
-            writeLocalIJRecord(out, origin, near);
-            if (far != near) {
-                writeLocalIJRecord(out, origin, far);
-            }
-        }
+        group->write(out, list.items[i], &rng);
     }
     if (fclose(out)) {
         fail("write");
@@ -900,7 +1053,8 @@ int main(int argc, char *argv[]) {
         {{"traversal/cells.jsonl", 0, ""}, sampleTraversal, writeTraversalRecord},
         {{"edges/cells.jsonl", 0, ""}, sampleTraversal, writeEdgesRecord},
         {{"vertexes/cells.jsonl", 0, ""}, sampleTraversal, writeVertexesRecord},
-        {{"localij/pairs.jsonl", 0, ""}, sampleTraversal, NULL},
+        {{"localij/pairs.jsonl", 0, ""}, sampleTraversal, writeLocalIJSubject},
+        {{"sets/sets.jsonl", 0, ""}, sampleSets, writeSetsSubject},
     };
     size_t numGroups = sizeof groups / sizeof groups[0];
     FileInfo files[sizeof groups / sizeof groups[0]];

@@ -248,6 +248,23 @@ type LocalIJRecord struct {
 	Cell Result[string] `json:"cell"`
 }
 
+// SetsRecord holds compactCells and uncompactCells for one input set.
+//
+//nolint:govet // field order is the JSON key order given in README.md
+type SetsRecord struct {
+	// ID names the set: its kind and the cell it was built from.
+	ID string `json:"id"`
+	// Input is the set passed to both functions, in order, duplicates and
+	// invalid entries included.
+	Input []string `json:"input"`
+	// Compact is compactCells(input), as a set.
+	Compact Result[[]string] `json:"compact"`
+	// UncompactRes is the resolution passed to uncompactCells.
+	UncompactRes int `json:"uncompactRes"`
+	// Uncompact is uncompactCells(input, uncompactRes), as a set.
+	Uncompact Result[[]string] `json:"uncompact"`
+}
+
 // subject is implemented by every record type and names the record's input,
 // which identifies the record within its file.
 type subject interface {
@@ -271,6 +288,9 @@ func (r VertexesRecord) subject() string { return r.Index }
 
 // subject returns the record's origin and target.
 func (r LocalIJRecord) subject() string { return r.Index + "/" + r.Target }
+
+// subject returns the set's id.
+func (r SetsRecord) subject() string { return r.ID }
 
 // errorNames maps the h3go errors to the H3Error enum names used in record
 // files.

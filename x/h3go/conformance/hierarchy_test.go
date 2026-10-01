@@ -100,6 +100,7 @@ func cellsResult(cells []h3go.Cell, err error) Result[[]string] {
 	}
 
 	slices.Sort(cells)
+	cells = slices.Compact(cells)
 
 	out := make([]string, len(cells))
 	for i, cell := range cells {

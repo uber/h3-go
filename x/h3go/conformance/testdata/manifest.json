@@ -33,6 +33,10 @@
     "localij/pairs.jsonl": {
       "records": 1084,
       "sha256": "807c5e319e26a03788c7f8164830a035865647cbe771c58241146d1e73fb084d"
+    },
+    "sets/sets.jsonl": {
+      "records": 1344,
+      "sha256": "9e68eff694c4523e78878b8b785118c619c62c0edce931e47ea68a8d498f014d"
     }
   }
 }
