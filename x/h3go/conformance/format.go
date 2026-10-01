@@ -175,6 +175,79 @@ type HierarchyRecord struct {
 	ChildPos Result[int64] `json:"childPos"`
 }
 
+// TraversalRecord holds the grid-traversal outputs of one valid cell and of
+// the cell paired with a target drawn from its 3-disk.
+//
+//nolint:govet // field order is the JSON key order given in README.md
+type TraversalRecord struct {
+	// Index is the subject cell.
+	Index string `json:"index"`
+	// Disk1, Disk2 and Disk3 are gridDisk for k 1 to 3, as sets.
+	Disk1 []string `json:"disk1"`
+	Disk2 []string `json:"disk2"`
+	Disk3 []string `json:"disk3"`
+	// Ring1, Ring2 and Ring3 are gridRing for k 1 to 3, as sets.
+	Ring1 []string `json:"ring1"`
+	Ring2 []string `json:"ring2"`
+	Ring3 []string `json:"ring3"`
+	// DiskDistances2 is gridDiskDistances for k 2, one set per distance from
+	// 0 to 2.
+	DiskDistances2 [][]string `json:"diskDistances2"`
+	// Target is the second cell of the pair.
+	Target string `json:"target"`
+	// Distance is gridDistance(index, target).
+	Distance Result[int64] `json:"distance"`
+	// Path is gridPathCells(index, target), as a sequence.
+	Path Result[[]string] `json:"path"`
+	// Neighbor is areNeighborCells(index, target).
+	Neighbor Result[bool] `json:"neighbor"`
+}
+
+// EdgesRecord holds the directed-edge outputs of one valid cell.
+//
+//nolint:govet // field order is the JSON key order given in README.md
+type EdgesRecord struct {
+	// Index is the subject cell.
+	Index string `json:"index"`
+	// Edges is originToDirectedEdges, as a set.
+	Edges []string `json:"edges"`
+	// Destinations is getDirectedEdgeDestination for each entry of Edges in
+	// its written (ascending) order.
+	Destinations []string `json:"destinations"`
+	// Target is a cell drawn from the subject's 1-disk.
+	Target string `json:"target"`
+	// Edge is cellsToDirectedEdge(index, target).
+	Edge Result[string] `json:"edge"`
+}
+
+// VertexesRecord holds the vertex outputs of one valid cell.
+type VertexesRecord struct {
+	// Index is the subject cell.
+	Index string `json:"index"`
+	// Vertexes is cellToVertexes, as a set.
+	Vertexes []string `json:"vertexes"`
+	// ByNumber is cellToVertex for vertex numbers 0 to 5, in that order.
+	ByNumber []Result[string] `json:"byNumber"`
+}
+
+// CoordIJ is a local IJ coordinate pair.
+type CoordIJ struct {
+	I int `json:"i"`
+	J int `json:"j"`
+}
+
+// LocalIJRecord holds the local IJ outputs of one origin and target pair.
+type LocalIJRecord struct {
+	// Index is the origin cell.
+	Index string `json:"index"`
+	// Target is the cell being located.
+	Target string `json:"target"`
+	// IJ is cellToLocalIj(index, target).
+	IJ Result[CoordIJ] `json:"ij"`
+	// Cell is localIjToCell(index, ij) when IJ succeeded, else IJ's error.
+	Cell Result[string] `json:"cell"`
+}
+
 // subject is implemented by every record type and names the record's input,
 // which identifies the record within its file.
 type subject interface {
@@ -186,6 +259,18 @@ func (r InspectionRecord) subject() string { return r.Index }
 
 // subject returns the record's cell.
 func (r HierarchyRecord) subject() string { return r.Index }
+
+// subject returns the record's cell.
+func (r TraversalRecord) subject() string { return r.Index }
+
+// subject returns the record's cell.
+func (r EdgesRecord) subject() string { return r.Index }
+
+// subject returns the record's cell.
+func (r VertexesRecord) subject() string { return r.Index }
+
+// subject returns the record's origin and target.
+func (r LocalIJRecord) subject() string { return r.Index + "/" + r.Target }
 
 // errorNames maps the h3go errors to the H3Error enum names used in record
 // files.

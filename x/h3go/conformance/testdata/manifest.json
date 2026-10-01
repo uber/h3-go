@@ -17,6 +17,22 @@
     "hierarchy/cells.jsonl": {
       "records": 781,
       "sha256": "6d3eca0087bec94f860f8d95a5da1a43d201178d1739ac7ee242395d70927e5e"
+    },
+    "traversal/cells.jsonl": {
+      "records": 542,
+      "sha256": "bf9062bf55f0aa8a7f0fdfd8413f6ca981feda587e46189d6bd97bc12998f38c"
+    },
+    "edges/cells.jsonl": {
+      "records": 542,
+      "sha256": "1047dac069e0baca55ce288547d5b075cfabf2c0c2358b9d9454241500dbebb1"
+    },
+    "vertexes/cells.jsonl": {
+      "records": 542,
+      "sha256": "e47cadae5f8d21e753ce6dd7f2547d098d1cca460d4a9d1929ef20c46da04c10"
+    },
+    "localij/pairs.jsonl": {
+      "records": 1084,
+      "sha256": "807c5e319e26a03788c7f8164830a035865647cbe771c58241146d1e73fb084d"
     }
   }
 }
