@@ -66,6 +66,9 @@
 #define DRAWS_PER_INDEX_BASE 2
 #define RANDOM_PATTERNS 256
 #define HIERARCHY_CELLS_PER_RES 32
+#define TRAVERSAL_CELLS_PER_RES 16
+#define MAX_DISK_K 3
+#define NUM_VERTEX_NUMBERS 6
 
 static const char *const H3_ERROR_NAMES[] = {
     "E_SUCCESS",        "E_FAILED",           "E_DOMAIN",
@@ -277,7 +280,8 @@ static void printError(FILE *out, H3Error err) {
 
 static void printBool(FILE *out, int value) { fputs(value ? "true" : "false", out); }
 
-static void writeInspectionRecord(FILE *out, H3Index h) {
+static void writeInspectionRecord(FILE *out, H3Index h, Splitmix64 *rng) {
+    (void)rng;
     int res = getResolution(h);
     int baseCell = getBaseCellNumber(h);
 
@@ -343,9 +347,11 @@ static void writeInspectionRecord(FILE *out, H3Index h) {
     fputs("}\n", out);
 }
 
-/* ---- hierarchy group (README, "hierarchy/cells.jsonl") ---- */
+/* ---- valid-cell subjects (README, "Valid-cell subjects") ---- */
 
-static void sampleHierarchy(IndexList *list, Splitmix64 *rng) {
+/* sampleCells emits every base cell, every pentagon at every resolution and
+ * perRes seeded valid cells per resolution, sorted and deduplicated. */
+static void sampleCells(IndexList *list, Splitmix64 *rng, int perRes) {
     for (int baseCell = 0; baseCell < NUM_BASE_CELLS; baseCell++) {
         push(list, buildIndex(CELL_MODE, 0, baseCell, NULL));
     }
@@ -359,7 +365,7 @@ static void sampleHierarchy(IndexList *list, Splitmix64 *rng) {
     }
 
     for (int res = 1; res <= MAX_RES; res++) {
-        for (int i = 0; i < HIERARCHY_CELLS_PER_RES; i++) {
+        for (int i = 0; i < perRes; i++) {
             push(list, drawValidCell(rng, res));
         }
     }
@@ -367,8 +373,45 @@ static void sampleHierarchy(IndexList *list, Splitmix64 *rng) {
     sortAndDedup(list);
 }
 
-/* printIndexSet prints the non-zero entries of indexes in ascending order. */
-static void printIndexSet(FILE *out, H3Index *indexes, int64_t count) {
+static void sampleHierarchy(IndexList *list, Splitmix64 *rng) {
+    sampleCells(list, rng, HIERARCHY_CELLS_PER_RES);
+}
+
+static void sampleTraversal(IndexList *list, Splitmix64 *rng) {
+    sampleCells(list, rng, TRAVERSAL_CELLS_PER_RES);
+}
+
+/* diskSize is maxGridDiskSize(k) for small k. */
+static int diskSize(int k) { return 1 + 3 * k * (k + 1); }
+
+/* drawDiskTarget draws slots of the origin's k-disk, as gridDisk fills it,
+ * until a non-zero one comes up. */
+static H3Index drawDiskTarget(Splitmix64 *rng, H3Index origin, int k) {
+    H3Index disk[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
+    must(gridDisk(origin, k, disk));
+    for (;;) {
+        H3Index target = disk[drawN(rng, diskSize(k))];
+        if (target) {
+            return target;
+        }
+    }
+}
+
+/* printIndexSequence prints indexes in the order given. */
+static void printIndexSequence(FILE *out, const H3Index *indexes, int64_t count) {
+    fputc('[', out);
+    for (int64_t i = 0; i < count; i++) {
+        if (i) {
+            fputc(',', out);
+        }
+        printIndex(out, indexes[i]);
+    }
+    fputc(']', out);
+}
+
+/* printIndexSet prints the non-zero entries of indexes in ascending order,
+ * compacting and sorting them in place, and returns how many were kept. */
+static int64_t printIndexSet(FILE *out, H3Index *indexes, int64_t count) {
     int64_t kept = 0;
     for (int64_t i = 0; i < count; i++) {
         if (indexes[i]) {
@@ -384,9 +427,11 @@ static void printIndexSet(FILE *out, H3Index *indexes, int64_t count) {
         printIndex(out, indexes[i]);
     }
     fputc(']', out);
+    return kept;
 }
 
-static void writeHierarchyRecord(FILE *out, H3Index h) {
+static void writeHierarchyRecord(FILE *out, H3Index h, Splitmix64 *rng) {
+    (void)rng;
     int res = getResolution(h);
 
     fputs("{\"index\":", out);
@@ -433,6 +478,182 @@ static void writeHierarchyRecord(FILE *out, H3Index h) {
         printError(out, err);
     } else {
         fprintf(out, "%" PRId64, childPos);
+    }
+    fputs("}\n", out);
+}
+
+/* ---- traversal group (README, "traversal/cells.jsonl") ---- */
+
+/* printDiskSet prints gridDisk or gridRing output for k as a set. */
+static void printDiskSet(FILE *out, H3Index origin, int k, H3Error (*fn)(H3Index, int, H3Index *)) {
+    H3Index cells[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
+    must(fn(origin, k, cells));
+    printIndexSet(out, cells, diskSize(k));
+}
+
+static void writeTraversalRecord(FILE *out, H3Index h, Splitmix64 *rng) {
+    fputs("{\"index\":", out);
+    printIndex(out, h);
+
+    for (int k = 1; k <= MAX_DISK_K; k++) {
+        fprintf(out, ",\"disk%d\":", k);
+        printDiskSet(out, h, k, gridDisk);
+    }
+    for (int k = 1; k <= MAX_DISK_K; k++) {
+        fprintf(out, ",\"ring%d\":", k);
+        printDiskSet(out, h, k, gridRing);
+    }
+
+    fputs(",\"diskDistances2\":[", out);
+    {
+        const int k = 2;
+        H3Index cells[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
+        int distances[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
+        H3Index ring[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)];
+        must(gridDiskDistances(h, k, cells, distances));
+        for (int d = 0; d <= k; d++) {
+            int64_t count = 0;
+            for (int i = 0; i < diskSize(k); i++) {
+                if (cells[i] && distances[i] == d) {
+                    ring[count++] = cells[i];
+                }
+            }
+            if (d) {
+                fputc(',', out);
+            }
+            printIndexSet(out, ring, count);
+        }
+    }
+    fputc(']', out);
+
+    H3Index target = drawDiskTarget(rng, h, MAX_DISK_K);
+    fputs(",\"target\":", out);
+    printIndex(out, target);
+
+    fputs(",\"distance\":", out);
+    int64_t distance;
+    H3Error err = gridDistance(h, target, &distance);
+    if (err) {
+        printError(out, err);
+    } else {
+        fprintf(out, "%" PRId64, distance);
+    }
+
+    fputs(",\"path\":", out);
+    int64_t pathSize;
+    err = gridPathCellsSize(h, target, &pathSize);
+    if (!err) {
+        H3Index *path = calloc((size_t)pathSize, sizeof *path);
+        if (!path) {
+            fail("out of memory");
+        }
+        err = gridPathCells(h, target, path);
+        if (!err) {
+            printIndexSequence(out, path, pathSize);
+        }
+        free(path);
+    }
+    if (err) {
+        printError(out, err);
+    }
+
+    fputs(",\"neighbor\":", out);
+    int neighbor;
+    err = areNeighborCells(h, target, &neighbor);
+    if (err) {
+        printError(out, err);
+    } else {
+        printBool(out, neighbor);
+    }
+    fputs("}\n", out);
+}
+
+/* ---- edges group (README, "edges/cells.jsonl") ---- */
+
+static void writeEdgesRecord(FILE *out, H3Index h, Splitmix64 *rng) {
+    fputs("{\"index\":", out);
+    printIndex(out, h);
+
+    H3Index edges[NUM_HEX_EDGES] = {0};
+    must(originToDirectedEdges(h, edges));
+    fputs(",\"edges\":", out);
+    int64_t count = printIndexSet(out, edges, NUM_HEX_EDGES);
+
+    H3Index destinations[NUM_HEX_EDGES];
+    for (int64_t i = 0; i < count; i++) {
+        must(getDirectedEdgeDestination(edges[i], &destinations[i]));
+    }
+    fputs(",\"destinations\":", out);
+    printIndexSequence(out, destinations, count);
+
+    H3Index target = drawDiskTarget(rng, h, 1);
+    fputs(",\"target\":", out);
+    printIndex(out, target);
+
+    fputs(",\"edge\":", out);
+    H3Index edge;
+    H3Error err = cellsToDirectedEdge(h, target, &edge);
+    if (err) {
+        printError(out, err);
+    } else {
+        printIndex(out, edge);
+    }
+    fputs("}\n", out);
+}
+
+/* ---- vertexes group (README, "vertexes/cells.jsonl") ---- */
+
+static void writeVertexesRecord(FILE *out, H3Index h, Splitmix64 *rng) {
+    (void)rng;
+    fputs("{\"index\":", out);
+    printIndex(out, h);
+
+    H3Index vertexes[NUM_VERTEX_NUMBERS] = {0};
+    must(cellToVertexes(h, vertexes));
+    fputs(",\"vertexes\":", out);
+    printIndexSet(out, vertexes, NUM_VERTEX_NUMBERS);
+
+    fputs(",\"byNumber\":[", out);
+    for (int n = 0; n < NUM_VERTEX_NUMBERS; n++) {
+        if (n) {
+            fputc(',', out);
+        }
+        H3Index vertex;
+        H3Error err = cellToVertex(h, n, &vertex);
+        if (err) {
+            printError(out, err);
+        } else {
+            printIndex(out, vertex);
+        }
+    }
+    fputs("]}\n", out);
+}
+
+/* ---- localij group (README, "localij/pairs.jsonl") ---- */
+
+static void writeLocalIJRecord(FILE *out, H3Index origin, H3Index target) {
+    fputs("{\"index\":", out);
+    printIndex(out, origin);
+    fputs(",\"target\":", out);
+    printIndex(out, target);
+
+    fputs(",\"ij\":", out);
+    CoordIJ ij;
+    H3Error err = cellToLocalIj(origin, target, 0, &ij);
+    if (err) {
+        printError(out, err);
+        fputs(",\"cell\":", out);
+        printError(out, err);
+    } else {
+        fprintf(out, "{\"i\":%d,\"j\":%d}", ij.i, ij.j);
+        fputs(",\"cell\":", out);
+        H3Index cell;
+        err = localIjToCell(origin, &ij, 0, &cell);
+        if (err) {
+            printError(out, err);
+        } else {
+            printIndex(out, cell);
+        }
     }
     fputs("}\n", out);
 }
@@ -562,15 +783,26 @@ static void describeFile(const char *path, FileInfo *info) {
 }
 
 typedef void (*Sampler)(IndexList *list, Splitmix64 *rng);
-typedef void (*RecordWriter)(FILE *out, H3Index h);
+typedef void (*RecordWriter)(FILE *out, H3Index h, Splitmix64 *rng);
 
-/* A group whose subjects are single indexes. Each file's sampler starts from
- * a fresh generator seeded with the manifest seed. */
+/* A group whose subjects are single indexes. Each file starts from a fresh
+ * generator seeded with the manifest seed; the sampler draws first, then the
+ * writer draws for each subject in file order. A NULL writer marks the
+ * localij group, whose subjects are pairs. */
 typedef struct {
     FileInfo info;
     Sampler sample;
     RecordWriter write;
 } IndexGroup;
+
+static FILE *createFile(const char *path) {
+    FILE *out = fopen(path, "wb");
+    if (!out) {
+        fprintf(stderr, "gen: could not create %s (does its directory exist?)\n", path);
+        exit(1);
+    }
+    return out;
+}
 
 static void writeIndexGroup(const char *outDir, uint64_t seed, IndexGroup *group) {
     Splitmix64 rng = {seed};
@@ -578,13 +810,19 @@ static void writeIndexGroup(const char *outDir, uint64_t seed, IndexGroup *group
     group->sample(&list, &rng);
 
     char *path = joinPath(outDir, group->info.name);
-    FILE *out = fopen(path, "wb");
-    if (!out) {
-        fprintf(stderr, "gen: could not create %s (does its directory exist?)\n", path);
-        exit(1);
-    }
+    FILE *out = createFile(path);
     for (size_t i = 0; i < list.len; i++) {
-        group->write(out, list.items[i]);
+        if (group->write) {
+            group->write(out, list.items[i], &rng);
+        } else {
+            H3Index origin = list.items[i];
+            H3Index near = drawDiskTarget(&rng, origin, MAX_DISK_K);
+            H3Index far = drawValidCell(&rng, getResolution(origin));
+            writeLocalIJRecord(out, origin, near);
+            if (far != near) {
+                writeLocalIJRecord(out, origin, far);
+            }
+        }
     }
     if (fclose(out)) {
         fail("write");
@@ -659,6 +897,10 @@ int main(int argc, char *argv[]) {
     IndexGroup groups[] = {
         {{"inspection/cells.jsonl", 0, ""}, sampleInspection, writeInspectionRecord},
         {{"hierarchy/cells.jsonl", 0, ""}, sampleHierarchy, writeHierarchyRecord},
+        {{"traversal/cells.jsonl", 0, ""}, sampleTraversal, writeTraversalRecord},
+        {{"edges/cells.jsonl", 0, ""}, sampleTraversal, writeEdgesRecord},
+        {{"vertexes/cells.jsonl", 0, ""}, sampleTraversal, writeVertexesRecord},
+        {{"localij/pairs.jsonl", 0, ""}, sampleTraversal, NULL},
     };
     size_t numGroups = sizeof groups / sizeof groups[0];
     FileInfo files[sizeof groups / sizeof groups[0]];

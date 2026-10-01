@@ -17,6 +17,10 @@ listed at the end.
 manifest.json
 inspection/cells.jsonl
 hierarchy/cells.jsonl
+traversal/cells.jsonl
+edges/cells.jsonl
+vertexes/cells.jsonl
+localij/pairs.jsonl
 ```
 
 `manifest.json` is the only file a consumer opens by name. Every record file
@@ -161,6 +165,94 @@ Example:
 {"index":"8100bffffffffff","parents":["8001fffffffffff"],"centerChild":"820087fffffffff","children":["820087fffffffff","82008ffffffffff","820097fffffffff","82009ffffffffff","8200a7fffffffff","8200affffffffff","8200b7fffffffff"],"childPos":2}
 ```
 
+### `traversal`
+
+One line per **valid cell**, paired with a `target` drawn from its 3-disk.
+`gridDistance` and `gridPathCells` fail with `E_FAILED` when the pair
+straddles a pentagon or is otherwise too far apart in local coordinates;
+those rows are the group's error cases.
+
+| Key | Function | Type |
+|---|---|---|
+| `index` | the subject cell | index string |
+| `disk1`, `disk2`, `disk3` | `gridDisk(index, k)` for `k` 1, 2, 3, with `0` padding removed | set of index strings |
+| `ring1`, `ring2`, `ring3` | `gridRing(index, k)` for `k` 1, 2, 3, with `0` padding removed | set of index strings |
+| `diskDistances2` | `gridDiskDistances(index, 2)`, grouped by distance 0, 1, 2 | sequence of three sets of index strings |
+| `target` | the second cell of the pair | index string |
+| `distance` | `gridDistance(index, target)` | integer, or error |
+| `path` | `gridPathCells(index, target)`, `gridPathCellsSize` entries | sequence of index strings, or error |
+| `neighbor` | `areNeighborCells(index, target)` | boolean, or error |
+
+Example:
+
+```json
+{"index":"8001fffffffffff","disk1":["8001fffffffffff","8003fffffffffff","8005fffffffffff","8007fffffffffff","8009fffffffffff","800bfffffffffff","8011fffffffffff"],"disk2":["8001fffffffffff","8003fffffffffff","8005fffffffffff","8007fffffffffff","8009fffffffffff","800bfffffffffff","800dfffffffffff","800ffffffffffff","8011fffffffffff","8013fffffffffff","8015fffffffffff","8017fffffffffff","8019fffffffffff","801bfffffffffff","801ffffffffffff","8021fffffffffff","8025fffffffffff","802dfffffffffff"],"disk3":["8001fffffffffff","8003fffffffffff","8005fffffffffff","8007fffffffffff","8009fffffffffff","800bfffffffffff","800dfffffffffff","800ffffffffffff","8011fffffffffff","8013fffffffffff","8015fffffffffff","8017fffffffffff","8019fffffffffff","801bfffffffffff","801dfffffffffff","801ffffffffffff","8021fffffffffff","8023fffffffffff","8025fffffffffff","8027fffffffffff","8029fffffffffff","802bfffffffffff","802dfffffffffff","802ffffffffffff","8031fffffffffff","8033fffffffffff","8035fffffffffff","8039fffffffffff","803bfffffffffff","803dfffffffffff","803ffffffffffff","8041fffffffffff","8043fffffffffff","8053fffffffffff"],"ring1":["8003fffffffffff","8005fffffffffff","8007fffffffffff","8009fffffffffff","800bfffffffffff","8011fffffffffff"],"ring2":["800dfffffffffff","800ffffffffffff","8013fffffffffff","8015fffffffffff","8017fffffffffff","8019fffffffffff","801bfffffffffff","801ffffffffffff","8021fffffffffff","8025fffffffffff","802dfffffffffff"],"ring3":["801dfffffffffff","8023fffffffffff","8027fffffffffff","8029fffffffffff","802bfffffffffff","802ffffffffffff","8031fffffffffff","8033fffffffffff","8035fffffffffff","8039fffffffffff","803bfffffffffff","803dfffffffffff","803ffffffffffff","8041fffffffffff","8043fffffffffff","8053fffffffffff"],"diskDistances2":[["8001fffffffffff"],["8003fffffffffff","8005fffffffffff","8007fffffffffff","8009fffffffffff","800bfffffffffff","8011fffffffffff"],["800dfffffffffff","800ffffffffffff","8013fffffffffff","8015fffffffffff","8017fffffffffff","8019fffffffffff","801bfffffffffff","801ffffffffffff","8021fffffffffff","8025fffffffffff","802dfffffffffff"]],"target":"8005fffffffffff","distance":1,"path":["8001fffffffffff","8005fffffffffff"],"neighbor":true}
+```
+
+### `edges`
+
+One line per **valid cell**, paired with a `target` drawn from its 1-disk.
+The target is the cell itself about one time in seven, which makes
+`cellsToDirectedEdge` fail with `E_NOT_NEIGHBORS`.
+
+| Key | Function | Type |
+|---|---|---|
+| `index` | the subject cell | index string |
+| `edges` | `originToDirectedEdges(index)`, with `0` padding removed | set of index strings |
+| `destinations` | `getDirectedEdgeDestination(e)` for each `e` in `edges`, in the written (ascending) order | sequence of index strings |
+| `target` | the second cell of the pair | index string |
+| `edge` | `cellsToDirectedEdge(index, target)` | index string, or error |
+
+A consumer must also check that `isValidDirectedEdge(e)` holds and
+`getDirectedEdgeOrigin(e) == index` for every `e` in `edges`.
+
+Example:
+
+```json
+{"index":"8005fffffffffff","edges":["11005fffffffffff","12005fffffffffff","13005fffffffffff","14005fffffffffff","15005fffffffffff","16005fffffffffff"],"destinations":["800dfffffffffff","8015fffffffffff","8017fffffffffff","8001fffffffffff","8003fffffffffff","800bfffffffffff"],"target":"8003fffffffffff","edge":"15005fffffffffff"}
+```
+
+### `vertexes`
+
+One line per **valid cell**. A pentagon has no vertex number 5, so
+`cellToVertex` fails with `E_DOMAIN` there.
+
+| Key | Function | Type |
+|---|---|---|
+| `index` | the subject cell | index string |
+| `vertexes` | `cellToVertexes(index)`, with `0` padding removed | set of index strings |
+| `byNumber` | `cellToVertex(index, n)` for `n` from 0 to 5, in that order | sequence of six entries, each an index string or error |
+
+A consumer must also check that `isValidVertex(v)` holds for every `v` in
+`vertexes`. `vertexToLatLng` belongs to the floats group.
+
+Example:
+
+```json
+{"index":"8009fffffffffff","vertexes":["20001fffffffffff","21009fffffffffff","22009fffffffffff","25001fffffffffff","25007fffffffffff"],"byNumber":["25007fffffffffff","21009fffffffffff","22009fffffffffff","20001fffffffffff","25001fffffffffff",{"err":"E_DOMAIN"}]}
+```
+
+### `localij`
+
+One line per **(origin, target) pair** of valid cells at the same
+resolution; the line's subject is the pair. Mode is always 0. Pairs that
+cross too many base cells fail with `E_FAILED`, and those rows are the
+group's error cases.
+
+| Key | Function | Type |
+|---|---|---|
+| `index` | the origin cell | index string |
+| `target` | the cell being located | index string |
+| `ij` | `cellToLocalIj(index, target, 0)` | `{"i": integer, "j": integer}`, or error |
+| `cell` | `localIjToCell(index, ij, 0)` when `ij` succeeded; otherwise the same error as `ij` | index string, or error |
+
+Example:
+
+```json
+{"index":"8003fffffffffff","target":"8013fffffffffff","ij":{"i":-1,"j":0},"cell":"8013fffffffffff"}
+{"index":"8003fffffffffff","target":"8001fffffffffff","ij":{"i":1,"j":0},"cell":"8001fffffffffff"}
+```
+
 ## Sampling
 
 Inputs are chosen by a deterministic procedure from `generator.seed`, so that
@@ -227,15 +319,50 @@ deleted subsequence, and such draws are kept.
 The emitted indexes are sorted ascending as unsigned 64-bit integers and
 duplicates are removed. Each remaining index becomes one line.
 
-### `hierarchy/cells.jsonl`
+### Valid-cell subjects
+
+Several files share one way of choosing subjects, parameterized by a count
+`n` per resolution:
 
 1. `build(1, 0, b, [])` for every base cell `b` from 0 to 121. No draws.
 2. `getPentagons(res)` for `res` 1 through 15, in the order the reference
    returns them. No draws.
-3. For `res` 1 through 15, 32 times: draw cells at `res` until `isValidCell`
+3. For `res` 1 through 15, `n` times: draw cells at `res` until `isValidCell`
    accepts one, and emit it.
 
-Sorted ascending and deduplicated as above.
+Sorted ascending and deduplicated as above. The draws a file's records need
+beyond this happen afterwards, for each subject in file order.
+
+"Draw from the `k`-disk of `h`" means: take the `gridDisk(h, k)` array of
+`maxGridDiskSize(k)` slots as the reference fills it, including its `0`
+padding, and draw `maxGridDiskSize(k)` repeatedly until the slot it selects
+is non-zero.
+
+### `hierarchy/cells.jsonl`
+
+Valid-cell subjects with `n` = 32. No further draws.
+
+### `traversal/cells.jsonl`
+
+Valid-cell subjects with `n` = 16. Then for each subject, `target` is drawn
+from its 3-disk.
+
+### `edges/cells.jsonl`
+
+Valid-cell subjects with `n` = 16. Then for each subject, `target` is drawn
+from its 1-disk.
+
+### `vertexes/cells.jsonl`
+
+Valid-cell subjects with `n` = 16. No further draws.
+
+### `localij/pairs.jsonl`
+
+Valid-cell subjects with `n` = 16 are the origins. Then for each origin, a
+near target is drawn from its 3-disk, and a far target is drawn by drawing
+cells at the origin's resolution until `isValidCell` accepts one. The origin
+is written with the near target, then with the far target unless the two
+targets are the same cell.
 
 ## Running and regenerating
 
