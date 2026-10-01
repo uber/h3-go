@@ -65,6 +65,7 @@
 #define INDEX_BASES_PER_RES 4
 #define DRAWS_PER_INDEX_BASE 2
 #define RANDOM_PATTERNS 256
+#define HIERARCHY_CELLS_PER_RES 32
 
 static const char *const H3_ERROR_NAMES[] = {
     "E_SUCCESS",        "E_FAILED",           "E_DOMAIN",
@@ -342,6 +343,100 @@ static void writeInspectionRecord(FILE *out, H3Index h) {
     fputs("}\n", out);
 }
 
+/* ---- hierarchy group (README, "hierarchy/cells.jsonl") ---- */
+
+static void sampleHierarchy(IndexList *list, Splitmix64 *rng) {
+    for (int baseCell = 0; baseCell < NUM_BASE_CELLS; baseCell++) {
+        push(list, buildIndex(CELL_MODE, 0, baseCell, NULL));
+    }
+
+    for (int res = 1; res <= MAX_RES; res++) {
+        H3Index pentagons[NUM_PENTAGONS];
+        must(getPentagons(res, pentagons));
+        for (int i = 0; i < NUM_PENTAGONS; i++) {
+            push(list, pentagons[i]);
+        }
+    }
+
+    for (int res = 1; res <= MAX_RES; res++) {
+        for (int i = 0; i < HIERARCHY_CELLS_PER_RES; i++) {
+            push(list, drawValidCell(rng, res));
+        }
+    }
+
+    sortAndDedup(list);
+}
+
+/* printIndexSet prints the non-zero entries of indexes in ascending order. */
+static void printIndexSet(FILE *out, H3Index *indexes, int64_t count) {
+    int64_t kept = 0;
+    for (int64_t i = 0; i < count; i++) {
+        if (indexes[i]) {
+            indexes[kept++] = indexes[i];
+        }
+    }
+    qsort(indexes, (size_t)kept, sizeof *indexes, compareIndexes);
+    fputc('[', out);
+    for (int64_t i = 0; i < kept; i++) {
+        if (i) {
+            fputc(',', out);
+        }
+        printIndex(out, indexes[i]);
+    }
+    fputc(']', out);
+}
+
+static void writeHierarchyRecord(FILE *out, H3Index h) {
+    int res = getResolution(h);
+
+    fputs("{\"index\":", out);
+    printIndex(out, h);
+
+    fputs(",\"parents\":[", out);
+    for (int r = 0; r < res; r++) {
+        H3Index parent;
+        must(cellToParent(h, r, &parent));
+        if (r) {
+            fputc(',', out);
+        }
+        printIndex(out, parent);
+    }
+    fputs("],\"centerChild\":", out);
+
+    H3Index centerChild;
+    H3Error err = cellToCenterChild(h, res + 1, &centerChild);
+    if (err) {
+        printError(out, err);
+    } else {
+        printIndex(out, centerChild);
+    }
+
+    fputs(",\"children\":", out);
+    int64_t childCount;
+    err = cellToChildrenSize(h, res + 1, &childCount);
+    if (err) {
+        printError(out, err);
+    } else {
+        H3Index *children = calloc((size_t)childCount, sizeof *children);
+        if (!children) {
+            fail("out of memory");
+        }
+        must(cellToChildren(h, res + 1, children));
+        printIndexSet(out, children, childCount);
+        free(children);
+    }
+
+    fputs(",\"childPos\":", out);
+    int64_t childPos;
+    err = cellToChildPos(h, 0, &childPos);
+    if (err) {
+        printError(out, err);
+    } else {
+        fprintf(out, "%" PRId64, childPos);
+    }
+    fputs("}\n", out);
+}
+
 /* ---- SHA-256 (FIPS 180-4) for the manifest ---- */
 
 static const uint32_t SHA256_K[64] = {
@@ -466,24 +561,37 @@ static void describeFile(const char *path, FileInfo *info) {
     free(data);
 }
 
-static void writeInspectionFile(const char *outDir, Splitmix64 *rng, FileInfo *info) {
-    IndexList list = {0};
-    sampleInspection(&list, rng);
+typedef void (*Sampler)(IndexList *list, Splitmix64 *rng);
+typedef void (*RecordWriter)(FILE *out, H3Index h);
 
-    char *path = joinPath(outDir, info->name);
+/* A group whose subjects are single indexes. Each file's sampler starts from
+ * a fresh generator seeded with the manifest seed. */
+typedef struct {
+    FileInfo info;
+    Sampler sample;
+    RecordWriter write;
+} IndexGroup;
+
+static void writeIndexGroup(const char *outDir, uint64_t seed, IndexGroup *group) {
+    Splitmix64 rng = {seed};
+    IndexList list = {0};
+    group->sample(&list, &rng);
+
+    char *path = joinPath(outDir, group->info.name);
     FILE *out = fopen(path, "wb");
     if (!out) {
-        fail("could not create inspection/cells.jsonl (does <out-dir>/inspection exist?)");
+        fprintf(stderr, "gen: could not create %s (does its directory exist?)\n", path);
+        exit(1);
     }
     for (size_t i = 0; i < list.len; i++) {
-        writeInspectionRecord(out, list.items[i]);
+        group->write(out, list.items[i]);
     }
     if (fclose(out)) {
         fail("write");
     }
     free(list.items);
 
-    describeFile(path, info);
+    describeFile(path, &group->info);
     free(path);
 }
 
@@ -548,9 +656,16 @@ int main(int argc, char *argv[]) {
         version++;
     }
 
-    Splitmix64 rng = {seed};
-    FileInfo files[] = {{"inspection/cells.jsonl", 0, ""}};
-    writeInspectionFile(outDir, &rng, &files[0]);
-    writeManifest(outDir, version, seed, files, sizeof files / sizeof files[0]);
+    IndexGroup groups[] = {
+        {{"inspection/cells.jsonl", 0, ""}, sampleInspection, writeInspectionRecord},
+        {{"hierarchy/cells.jsonl", 0, ""}, sampleHierarchy, writeHierarchyRecord},
+    };
+    size_t numGroups = sizeof groups / sizeof groups[0];
+    FileInfo files[sizeof groups / sizeof groups[0]];
+    for (size_t i = 0; i < numGroups; i++) {
+        writeIndexGroup(outDir, seed, &groups[i]);
+        files[i] = groups[i].info;
+    }
+    writeManifest(outDir, version, seed, files, numGroups);
     return 0;
 }
