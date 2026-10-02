@@ -42,6 +42,26 @@
       "records": 360,
       "sha256": "385cb5669aca18afeca70807487be48d050dca87c86800af91d738720969d910"
     },
+    "floats/cells.jsonl": {
+      "records": 542,
+      "sha256": "90033c7e5209633e6f346af6bcc1b2a785d28f476c64d4345bf691fc9c859126"
+    },
+    "floats/edges.jsonl": {
+      "records": 920,
+      "sha256": "9b4aa9cbc0573220c2b518ef44d12bc0ebc87ea6f4cb387e3a5e23421ee347e4"
+    },
+    "floats/vertexes.jsonl": {
+      "records": 924,
+      "sha256": "6258adf284c97fda48e9523b14003f28e33e12e19b74feda1d15e7f25ca54a79"
+    },
+    "floats/distances.jsonl": {
+      "records": 1083,
+      "sha256": "3c62b9467b1ab924e72238c14803478fd6b521640c4f35c904364013f0d57b19"
+    },
+    "floats/resolutions.jsonl": {
+      "records": 17,
+      "sha256": "71fa251992dff7f0e61dca2c7671e0fba95e6f0708ec48e419157b92dd27b91c"
+    },
     "digests/resolutions.jsonl": {
       "records": 7,
       "sha256": "ab18b88872c053a11b6ae005394ee92e38d0f6863ea500c7a75084b7428bd973"

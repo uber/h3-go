@@ -73,6 +73,10 @@
 #define REGIONS_PENTAGON_STEP 4
 #define REGIONS_CELLS_PER_RES 3
 #define DIGESTS_MAX_RES 6
+#define FLOATS_INTERIOR 0.5
+#define FLOATS_DRAWS_PER_CELL 2
+#define FLOATS_ANTIPODE_MARGIN 1e-3
+#define FLOATS_PI 3.14159265358979323846
 #define NUM_ICOSA_FACES 20
 #define REGIONS_SHRINK 0.8
 #define REGIONS_EXPAND 1.2
@@ -1564,6 +1568,202 @@ static void writeDigestsFiles(const char *outDir, FileInfo *resInfo, FileInfo *b
     free(basePath);
 }
 
+/* ---- floats group (README, "floats/") ---- */
+
+static FILE *createFile(const char *path);
+
+/* printDouble prints a binary64 with enough digits to round-trip. */
+static void printDouble(FILE *out, double value) { fprintf(out, "%.17g", value); }
+
+/* printDegrees prints a point already held in degrees. */
+static void printDegrees(FILE *out, double lat, double lng) {
+    fprintf(out, "[%.17g,%.17g]", lat, lng);
+}
+
+/* printMeasure prints a key and a measurement, or its error. */
+static void printMeasure(FILE *out, const char *key, H3Error err, double value) {
+    fprintf(out, ",\"%s\":", key);
+    if (err) {
+        printError(out, err);
+    } else {
+        printDouble(out, value);
+    }
+}
+
+static void writeFloatCellRecord(FILE *out, H3Index h, Splitmix64 *rng) {
+    (void)rng;
+    int res = getResolution(h);
+
+    LatLng center;
+    must(cellToLatLng(h, &center));
+    CellBoundary boundary;
+    must(cellToBoundary(h, &boundary));
+
+    fputs("{\"index\":", out);
+    printIndex(out, h);
+    fputs(",\"center\":", out);
+    printLatLng(out, center);
+    fputs(",\"boundary\":", out);
+    printLoop(out, boundary.verts, boundary.numVerts);
+
+    double area;
+    must(cellAreaRads2(h, &area));
+    printMeasure(out, "areaRads2", E_SUCCESS, area);
+    must(cellAreaKm2(h, &area));
+    printMeasure(out, "areaKm2", E_SUCCESS, area);
+    must(cellAreaM2(h, &area));
+    printMeasure(out, "areaM2", E_SUCCESS, area);
+
+    /* Interior points halfway from the center to each boundary vertex,
+     * computed in degrees so the file holds exactly what was used. */
+    int interiorRes = res + 2 > MAX_RES ? MAX_RES : res + 2;
+    double centerLat = radsToDegs(center.lat);
+    double centerLng = radsToDegs(center.lng);
+    double lats[MAX_CELL_BNDRY_VERTS];
+    double lngs[MAX_CELL_BNDRY_VERTS];
+    for (int i = 0; i < boundary.numVerts; i++) {
+        lats[i] = centerLat + FLOATS_INTERIOR * (radsToDegs(boundary.verts[i].lat) - centerLat);
+        lngs[i] = wrapDegrees(centerLng + FLOATS_INTERIOR * wrapDegrees(radsToDegs(boundary.verts[i].lng) - centerLng));
+    }
+
+    fprintf(out, ",\"interiorRes\":%d,\"interior\":[", interiorRes);
+    for (int i = 0; i < boundary.numVerts; i++) {
+        if (i) {
+            fputc(',', out);
+        }
+        printDegrees(out, lats[i], lngs[i]);
+    }
+    fputs("],\"interiorCells\":[", out);
+    for (int i = 0; i < boundary.numVerts; i++) {
+        if (i) {
+            fputc(',', out);
+        }
+        LatLng point = {degsToRads(lats[i]), degsToRads(lngs[i])};
+        H3Index cell;
+        must(latLngToCell(&point, interiorRes, &cell));
+        printIndex(out, cell);
+    }
+    fputs("]}\n", out);
+}
+
+static void writeFloatEdgeSubject(FILE *out, H3Index h, Splitmix64 *rng) {
+    H3Index edges[NUM_HEX_EDGES] = {0};
+    must(originToDirectedEdges(h, edges));
+    bool emitted[NUM_HEX_EDGES] = {false};
+    for (int draw = 0; draw < FLOATS_DRAWS_PER_CELL; draw++) {
+        int slot = (int)drawN(rng, NUM_HEX_EDGES);
+        if (!edges[slot] || emitted[slot]) {
+            continue;
+        }
+        emitted[slot] = true;
+        H3Index edge = edges[slot];
+
+        fputs("{\"index\":", out);
+        printIndex(out, edge);
+        double length;
+        must(edgeLengthRads(edge, &length));
+        printMeasure(out, "lengthRads", E_SUCCESS, length);
+        must(edgeLengthKm(edge, &length));
+        printMeasure(out, "lengthKm", E_SUCCESS, length);
+        must(edgeLengthM(edge, &length));
+        printMeasure(out, "lengthM", E_SUCCESS, length);
+        CellBoundary boundary;
+        must(directedEdgeToBoundary(edge, &boundary));
+        fputs(",\"boundary\":", out);
+        printLoop(out, boundary.verts, boundary.numVerts);
+        fputs("}\n", out);
+    }
+}
+
+static void writeFloatVertexSubject(FILE *out, H3Index h, Splitmix64 *rng) {
+    H3Index vertexes[NUM_VERTEX_NUMBERS] = {0};
+    must(cellToVertexes(h, vertexes));
+    bool emitted[NUM_VERTEX_NUMBERS] = {false};
+    for (int draw = 0; draw < FLOATS_DRAWS_PER_CELL; draw++) {
+        int slot = (int)drawN(rng, NUM_VERTEX_NUMBERS);
+        if (!vertexes[slot] || emitted[slot]) {
+            continue;
+        }
+        emitted[slot] = true;
+        LatLng point;
+        must(vertexToLatLng(vertexes[slot], &point));
+        fputs("{\"index\":", out);
+        printIndex(out, vertexes[slot]);
+        fputs(",\"latLng\":", out);
+        printLatLng(out, point);
+        fputs("}\n", out);
+    }
+}
+
+static void writeDistanceRecord(FILE *out, H3Index origin, H3Index target) {
+    LatLng a;
+    LatLng b;
+    must(cellToLatLng(origin, &a));
+    must(cellToLatLng(target, &b));
+    fputs("{\"index\":", out);
+    printIndex(out, origin);
+    fputs(",\"target\":", out);
+    printIndex(out, target);
+    fputs(",\"a\":", out);
+    printLatLng(out, a);
+    fputs(",\"b\":", out);
+    printLatLng(out, b);
+    printMeasure(out, "rads", E_SUCCESS, greatCircleDistanceRads(&a, &b));
+    printMeasure(out, "km", E_SUCCESS, greatCircleDistanceKm(&a, &b));
+    printMeasure(out, "m", E_SUCCESS, greatCircleDistanceM(&a, &b));
+    fputs("}\n", out);
+}
+
+/* nearlyAntipodal reports whether the centers of two cells are within
+ * FLOATS_ANTIPODE_MARGIN radians of being antipodal. The haversine formula
+ * is ill-conditioned there, since asin has infinite slope at 1, so a last-bit
+ * difference in the inputs moves the result by far more than the relative
+ * tolerance; such pairs are not sampled. */
+static bool nearlyAntipodal(H3Index origin, H3Index target) {
+    LatLng a;
+    LatLng b;
+    must(cellToLatLng(origin, &a));
+    must(cellToLatLng(target, &b));
+    return greatCircleDistanceRads(&a, &b) > FLOATS_PI - FLOATS_ANTIPODE_MARGIN;
+}
+
+static void writeDistanceSubject(FILE *out, H3Index origin, Splitmix64 *rng) {
+    H3Index near = drawDiskTarget(rng, origin, MAX_DISK_K);
+    H3Index far = drawValidCell(rng, getResolution(origin));
+    while (nearlyAntipodal(origin, far)) {
+        far = drawValidCell(rng, getResolution(origin));
+    }
+    writeDistanceRecord(out, origin, near);
+    if (far != near) {
+        writeDistanceRecord(out, origin, far);
+    }
+}
+
+/* writeFloatResolutionsFile writes the per-resolution averages for
+ * resolutions 0..15 and the error row for 16. */
+static void writeFloatResolutionsFile(const char *outDir, FileInfo *info) {
+    char *path = joinPath(outDir, info->name);
+    FILE *out = createFile(path);
+    for (int res = 0; res <= MAX_RES + 1; res++) {
+        fprintf(out, "{\"res\":%d", res);
+        double value = 0;
+        H3Error err = getHexagonAreaAvgKm2(res, &value);
+        printMeasure(out, "hexagonAreaKm2", err, value);
+        err = getHexagonAreaAvgM2(res, &value);
+        printMeasure(out, "hexagonAreaM2", err, value);
+        err = getHexagonEdgeLengthAvgKm(res, &value);
+        printMeasure(out, "edgeLengthKm", err, value);
+        err = getHexagonEdgeLengthAvgM(res, &value);
+        printMeasure(out, "edgeLengthM", err, value);
+        fputs("}\n", out);
+    }
+    if (fclose(out)) {
+        fail("write");
+    }
+    describeFile(path, info);
+    free(path);
+}
+
 typedef struct {
     FileInfo info;
     Sampler sample;
@@ -1668,16 +1868,22 @@ int main(int argc, char *argv[]) {
         {{"localij/pairs.jsonl", 0, ""}, sampleTraversal, writeLocalIJSubject},
         {{"sets/sets.jsonl", 0, ""}, sampleSets, writeSetsSubject},
         {{"regions/polygons.jsonl", 0, ""}, sampleRegions, writeRegionsSubject},
+        {{"floats/cells.jsonl", 0, ""}, sampleTraversal, writeFloatCellRecord},
+        {{"floats/edges.jsonl", 0, ""}, sampleTraversal, writeFloatEdgeSubject},
+        {{"floats/vertexes.jsonl", 0, ""}, sampleTraversal, writeFloatVertexSubject},
+        {{"floats/distances.jsonl", 0, ""}, sampleTraversal, writeDistanceSubject},
     };
     size_t numGroups = sizeof groups / sizeof groups[0];
-    FileInfo files[sizeof groups / sizeof groups[0] + 2];
+    FileInfo files[sizeof groups / sizeof groups[0] + 3];
     for (size_t i = 0; i < numGroups; i++) {
         writeIndexGroup(outDir, seed, &groups[i]);
         files[i] = groups[i].info;
     }
-    files[numGroups] = (FileInfo){"digests/resolutions.jsonl", 0, ""};
-    files[numGroups + 1] = (FileInfo){"digests/baseCells.jsonl", 0, ""};
-    writeDigestsFiles(outDir, &files[numGroups], &files[numGroups + 1]);
-    writeManifest(outDir, version, seed, files, numGroups + 2);
+    files[numGroups] = (FileInfo){"floats/resolutions.jsonl", 0, ""};
+    writeFloatResolutionsFile(outDir, &files[numGroups]);
+    files[numGroups + 1] = (FileInfo){"digests/resolutions.jsonl", 0, ""};
+    files[numGroups + 2] = (FileInfo){"digests/baseCells.jsonl", 0, ""};
+    writeDigestsFiles(outDir, &files[numGroups + 1], &files[numGroups + 2]);
+    writeManifest(outDir, version, seed, files, numGroups + 3);
     return 0;
 }
