@@ -41,6 +41,14 @@
     "regions/polygons.jsonl": {
       "records": 360,
       "sha256": "385cb5669aca18afeca70807487be48d050dca87c86800af91d738720969d910"
+    },
+    "digests/resolutions.jsonl": {
+      "records": 7,
+      "sha256": "ab18b88872c053a11b6ae005394ee92e38d0f6863ea500c7a75084b7428bd973"
+    },
+    "digests/baseCells.jsonl": {
+      "records": 854,
+      "sha256": "537a33a689ea403a7cacd9b1f410c5ace43cc84e2c703625b4d3a6fb8c06168e"
     }
   }
 }

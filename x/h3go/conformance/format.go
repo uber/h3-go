@@ -28,6 +28,7 @@ import (
 	"iter"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/uber/h3-go/v4/x/h3go"
 )
@@ -298,6 +299,34 @@ type RegionsRecord struct {
 	MultiPolygon Result[[]Polygon] `json:"multiPolygon"`
 }
 
+// ResolutionDigestsRecord holds the digests over every cell of one
+// resolution, keyed by stream name as README.md defines them.
+//
+//nolint:govet // field order is the JSON key order given in README.md
+type ResolutionDigestsRecord struct {
+	// Res is the resolution whose cells are enumerated.
+	Res int `json:"res"`
+	// Count is the number of cells at Res.
+	Count int64 `json:"count"`
+	// Digests maps each stream to its lowercase hex SHA-256.
+	Digests map[string]string `json:"digests"`
+}
+
+// BaseCellDigestsRecord holds the same digests restricted to the cells of
+// one base cell, so a mismatch is localised to that subtree.
+//
+//nolint:govet // field order is the JSON key order given in README.md
+type BaseCellDigestsRecord struct {
+	// Res is the resolution whose cells are enumerated.
+	Res int `json:"res"`
+	// BaseCell is the base cell whose descendants are enumerated.
+	BaseCell int `json:"baseCell"`
+	// Count is the number of cells at Res under BaseCell.
+	Count int64 `json:"count"`
+	// Digests maps each stream to its lowercase hex SHA-256.
+	Digests map[string]string `json:"digests"`
+}
+
 // subject is implemented by every record type and names the record's input,
 // which identifies the record within its file.
 type subject interface {
@@ -327,6 +356,14 @@ func (r SetsRecord) subject() string { return r.ID }
 
 // subject returns the polygon's id.
 func (r RegionsRecord) subject() string { return r.ID }
+
+// subject returns the resolution.
+func (r ResolutionDigestsRecord) subject() string { return strconv.Itoa(r.Res) }
+
+// subject returns the resolution and base cell.
+func (r BaseCellDigestsRecord) subject() string {
+	return strconv.Itoa(r.Res) + "/" + strconv.Itoa(r.BaseCell)
+}
 
 // errorNames maps the h3go errors to the H3Error enum names used in record
 // files.

@@ -6,10 +6,9 @@ building the C library. This directory holds the format specification (this
 file), the Go runner that checks `x/h3go` against it, the generator that
 produces it from the C library, and the generated files under `testdata/`.
 
-The format extends the newline-delimited JSON test files started in
-[uber/h3#1230](https://github.com/uber/h3/pull/1230); records are keyed by
-subject and use the same key names where the two overlap. The differences are
-listed at the end.
+Records are newline-delimited JSON, one per subject, with every key present
+on every line and errors spelled as `H3Error` names, so a file can be read
+by any language without a schema and a failing line can be quoted as it is.
 
 ## Layout
 
@@ -23,6 +22,8 @@ vertexes/cells.jsonl
 localij/pairs.jsonl
 sets/sets.jsonl
 regions/polygons.jsonl
+digests/resolutions.jsonl
+digests/baseCells.jsonl
 ```
 
 `manifest.json` is the only file a consumer opens by name. Every record file
@@ -111,6 +112,15 @@ it is asked to meet has to be one the reference itself meets everywhere.
   compared for equality.
 
 Discrete outputs, which is everything else, are compared exactly.
+
+- **Digests** are lowercase hex SHA-256 strings over a stream of text lines,
+  one per subject, each terminated by `\n`. They stand in for discrete
+  outputs that are too large to store, and are compared exactly. Within a
+  line, fields are separated by single spaces: indexes as index strings,
+  integers in decimal, booleans as `1` and `0`, errors as `H3Error` names,
+  sets in ascending order, and `|` between consecutive sets. Text rather
+  than binary so that a failing implementation can dump its stream and
+  `diff` it against the reference's.
 
 ## Groups
 
@@ -324,7 +334,7 @@ compared point by point with the angular tolerance, and the holes are a set
 of such loops. The `cells` fed to `cellsToLinkedMultiPolygon` are passed in
 ascending order.
 
-Scaling the boundaries matters: a polygon that is exactly a cell boundary
+Scaling the boundaries matters (see Sampling): a polygon that is exactly a cell boundary
 puts the finer cells' vertices on its edges, and whether `full` and
 `overlapping` count such a cell then depends on rounding, in the reference as
 much as in a port. The scaled polygons keep every cell vertex clear of the
@@ -335,6 +345,73 @@ Example:
 ```json
 {"id":"8009fffffffffff:1","polygon":{"outer":[[63.41604328760733,-6.2487422207291372],[57.505414797708795,6.5261570545257905],[59.661235921869135,22.173417676459856],[68.083966331138825,27.572264214363457],[71.588178973942178,2.3677280966481229]],"holes":[]},"res":1,"cells":["81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff"],"center":["81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff"],"full":["81083ffffffffff"],"overlapping":["81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff"],"overlappingBbox":["81013ffffffffff","81017ffffffffff","81073ffffffffff","81077ffffffffff","8107bffffffffff","81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff","81113ffffffffff","81117ffffffffff","81193ffffffffff","81197ffffffffff","811f3ffffffffff","811f7ffffffffff"],"multiPolygon":[{"outer":[[56.632952719050827,18.275235951757786],[58.401544870352701,25.082722326707874],[62.478113451924763,24.517172437523488],[64.873036611864293,31.517537185292614],[68.929957881939814,31.831280499087395],[70.052151519508882,20.597244293835026],[73.487456497717517,14.551845028116778],[73.310223685443972,0.32561035194322951],[69.273859191908159,-1.6665855042241828],[67.153547845205082,-10.558792289389457],[63.095054077525454,-10.444977544778338],[61.545509577880757,-2.2975260876218235],[57.689497374592854,-0.93158716351061854],[55.70676846515228,5.5236465492903095],[58.130531165851423,11.555977692900695]],"holes":[]}]}
 ```
+
+### `digests`
+
+Digests over **every cell at resolutions 0 through 6**, 16,838,852 cells
+in all, so the group checks the whole grid at those resolutions without
+storing it. Two files hold the same twelve streams at two levels:
+
+- `digests/resolutions.jsonl`: one line per resolution, `{"res", "count",
+  "digests"}`, each stream run over every cell at that resolution in
+  ascending order.
+- `digests/baseCells.jsonl`: one line per resolution and base cell,
+  `{"res", "baseCell", "count", "digests"}`, each stream run over the cells
+  of that resolution descending from that base cell, in ascending order.
+  Ascending order over all cells is base-cell order then digit order, so the
+  per-resolution stream is the concatenation of the 122 per-base-cell
+  streams. A per-resolution mismatch therefore always has a per-base-cell
+  mismatch that localises it to one subtree, which a bisecting rerun of the
+  generator resolves.
+
+`digests` is an object from stream name to hex SHA-256. Every stream has
+one line per cell, starting with the cell, and the streams are:
+
+| Stream | Fields after the cell, for a cell at resolution `r` |
+|---|---|
+| `cells` | none |
+| `parents` | `cellToParent(cell, p)` for `p` from `r - 1` down to 0 |
+| `children` | `cellToCenterChild(cell, r + 1)`, `cellToChildrenSize(cell, r + 1)`, `cellToChildPos(cell, 0)`, then `childPosToCell(thatPos, parent0, r)` where `parent0` is the resolution-0 ancestor |
+| `inspection` | `getBaseCellNumber`, `isPentagon`, `isResClassIII`, then `getIcosahedronFaces` as a set |
+| `disks` | `gridDisk(cell, 1)` as a set, `\|`, `gridDisk(cell, 2)` as a set, `\|`, `gridDisk(cell, 3)` as a set |
+| `rings` | the same with `gridRing` |
+| `distances` | `gridDistance(cell, m)` for each `m` of the 3-disk in ascending order, each an integer or an error name |
+| `edges` | for each edge of `originToDirectedEdges(cell)` in ascending order, the edge then `getDirectedEdgeDestination(edge)`; then `\|`; then `areNeighborCells(cell, m)` for each `m` of the 1-disk in ascending order, each `1`, `0` or an error name |
+| `vertexes` | `cellToVertexes(cell)` as a set |
+| `localIj` | `cellToLocalIj(origin, cell, 0)` as `i j`, or an error name, where `origin` is `cellToCenterChild(parent0, r)` (`parent0` itself at resolution 0) |
+| `compact` | `compactCells` of `cellToChildren(cell, r + 1)` sorted ascending with its last entry removed, as a set |
+| `roundTrip` | `latLngToCell(cellToLatLng(cell), r)` |
+
+Line examples, for the resolution-1 pentagon `81083ffffffffff`, in the
+`cells`, `parents`, `children`, `inspection`, `rings`, `edges`, `localIj`,
+`compact` and `roundTrip` streams:
+
+```
+81083ffffffffff
+81083ffffffffff 8009fffffffffff
+81083ffffffffff 820807fffffffff 6 0 81083ffffffffff
+81083ffffffffff 4 1 1 0 1 2 3 4
+81083ffffffffff 8108bffffffffff 8108fffffffffff 81093ffffffffff 81097ffffffffff 8109bffffffffff | 81013ffffffffff 81017ffffffffff 81073ffffffffff 81077ffffffffff 81113ffffffffff 81117ffffffffff 81193ffffffffff 81197ffffffffff 811f3ffffffffff 811f7ffffffffff | 81003ffffffffff 81007ffffffffff 8101bffffffffff 81063ffffffffff 81067ffffffffff 8107bffffffffff 81103ffffffffff 81107ffffffffff 8111bffffffffff 81183ffffffffff 81187ffffffffff 8119bffffffffff 811e3ffffffffff 811e7ffffffffff 811fbffffffffff
+81083ffffffffff 121083ffffffffff 8108bffffffffff 131083ffffffffff 8108fffffffffff 141083ffffffffff 81093ffffffffff 151083ffffffffff 81097ffffffffff 161083ffffffffff 8109bffffffffff | 0 1 1 1 1 1
+81083ffffffffff 0 0
+81083ffffffffff 820807fffffffff 820817fffffffff 82081ffffffffff 820827fffffffff 82082ffffffffff
+81083ffffffffff 81083ffffffffff
+```
+
+`roundTrip` lines repeat the cell whenever its center maps back to it, which
+is the property being checked. The `compact` stream exercises a set that
+must not merge; a full set of children compacting to the cell is covered by
+`sets`.
+
+Example record:
+
+```json
+{"res":0,"count":122,"digests":{"cells":"...","children":"...","compact":"...","disks":"...","distances":"...","edges":"...","inspection":"...","localIj":"...","parents":"...","rings":"...","roundTrip":"...","vertexes":"..."}}
+```
+
+Enumerating resolution 6 takes minutes in a port, so a runner may stop
+earlier by default and offer a way to go further; the Go runner stops at
+resolution 3 unless `H3_CONFORMANCE_DIGESTS_MAXRES` says otherwise.
 
 ## Sampling
 
@@ -488,6 +565,14 @@ For each subject `h` at resolution `res`, four lines:
    `cellToCenterChild(h, res + 1)` scaled by 1.2, filled at `res + 2`;
 4. the boundary of `h` scaled by 1.2 with no hole, filled at 16.
 
+### `digests/resolutions.jsonl` and `digests/baseCells.jsonl`
+
+One line per resolution 0 through 6, in that order, and within
+`baseCells.jsonl` one line per base cell 0 through 121 for each resolution.
+No draws; the inputs are every cell at the resolution, enumerated as
+`cellToChildren(baseCell, res)` for each base cell in order, each sorted
+ascending.
+
 ## Running and regenerating
 
 `go test ./x/h3go/conformance/...` runs the checked-in suite against `x/h3go`
@@ -516,7 +601,7 @@ held to. The manifest hash makes any change to them a visible diff.
 
 The intended home is the C library. The generator is written in C against
 the public API for that reason: `gen.c` can be added to uber/h3 as a testapp
-next to the runner from #1230 without modification, and the sampling
+without modification, and the sampling
 procedure above is specified in full so that any other generator following
 it produces byte-identical files from the same seed. That property has been
 exercised once already: the first version of this suite was produced by a Go
@@ -528,26 +613,3 @@ vendored snapshot verified by hash against the upstream manifest, and
 vendored `H3_VERSION`, and a copy of the files small enough to test offline
 stay here either way. What moves is authorship of the expected values, from
 this repository's build of the C library to upstream's own build and CI.
-
-## Relation to uber/h3#1230
-
-The upstream runner reads `tests/inputfiles/inspection/*.json` with the keys
-`index`, `res`, `baseCell`, `validCell`, `validIndex`, `resClassIII`,
-`pentagon`, `faces` or `faceError`, and `digits`. Files in this format keep
-those names and remain readable by that runner, with these changes:
-
-- `faceError: -1` is replaced by `faces: {"err": "E_..."}`. The negated
-  integer is `E_FAILED` as a magic number, and because `maxFaceCount` cannot
-  fail, the upstream runner's `faceError` branch never asserts anything: the
-  invalid rows are skipped. Here the error is whatever `getIcosahedronFaces`
-  actually returned, and it is checked.
-- `construct` is added, so `constructCell` is checked on every row including
-  its error cases, instead of only round-tripping valid cells.
-- `digits` always has fifteen entries. The upstream runner reads only the
-  first `res`, so the files stay compatible.
-- A manifest binds the files to an H3 version and their own hashes, and
-  fixes the floating-point tolerance model before the first float group
-  exists.
-- Set and sequence semantics, error naming and line termination are stated
-  in the format rather than implied by one runner's code.
-- Files use the `.jsonl` extension, since they are not JSON documents.
