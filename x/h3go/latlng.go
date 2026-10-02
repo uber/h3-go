@@ -151,10 +151,15 @@ func (c Cell) LatLng() (LatLng, error) {
 // GreatCircleDistanceRads returns the great-circle distance between two points
 // in radians, using the haversine formula. The points are given in degrees.
 func GreatCircleDistanceRads(a, b LatLng) float64 {
-	aLat := a.Lat * DegsToRads
-	aLng := a.Lng * DegsToRads
-	bLat := b.Lat * DegsToRads
-	bLng := b.Lng * DegsToRads
+	// The explicit conversions round each product before the subtraction
+	// below. Without them the compiler may fuse a product into the
+	// subtraction on architectures with fused multiply-add, leaving one side
+	// exact and the other rounded, so identical points measured a few 1e-17
+	// apart instead of exactly zero.
+	aLat := float64(a.Lat * DegsToRads)
+	aLng := float64(a.Lng * DegsToRads)
+	bLat := float64(b.Lat * DegsToRads)
+	bLng := float64(b.Lng * DegsToRads)
 
 	sinLat := math.Sin((bLat - aLat) / 2)
 	sinLng := math.Sin((bLng - aLng) / 2)
