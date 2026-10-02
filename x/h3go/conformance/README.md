@@ -22,6 +22,11 @@ vertexes/cells.jsonl
 localij/pairs.jsonl
 sets/sets.jsonl
 regions/polygons.jsonl
+floats/cells.jsonl
+floats/edges.jsonl
+floats/vertexes.jsonl
+floats/distances.jsonl
+floats/resolutions.jsonl
 digests/resolutions.jsonl
 digests/baseCells.jsonl
 ```
@@ -106,10 +111,23 @@ it is asked to meet has to be one the reference itself meets everywhere.
   differences: those are amplified by `1/cos(latitude)` near the poles, so a
   per-coordinate bound that is met at the equator is unmeetable at high
   latitudes and fine resolutions, for the reference as much as for any port.
-- **Lengths and areas** (`cellArea*`, `edgeLength*`, `greatCircleDistance*`)
-  are compared by relative error, `|actual - expected| / |expected|`, which
-  must not exceed `tolerances.relative`. An expected value of exactly zero is
-  compared for equality.
+- **Lengths and areas** (`cellArea*`, `edgeLength*`, `greatCircleDistance*`,
+  the `getHexagon*Avg*` functions) are compared by relative error,
+  `|actual - expected| / |expected|`, which must not exceed
+  `tolerances.relative`, **or** by an absolute floor derived from the angular
+  tolerance, whichever is looser. The floor exists because a fine-resolution
+  edge is the distance between two points a few times 1e-7 radians apart,
+  each carrying its own last-bit error: the difference inherits an absolute
+  error near 1e-16 radians, which is a relative error near 1e-9 that no
+  implementation, the reference included, can hold below `relative`. With
+  `A` the angular tolerance in radians and `R` the earth radius the library
+  uses, 6371.007180918475 km, the floor is `A` for a length in radians,
+  `A * R` in kilometres and `A * R * 1000` in metres; for an area it is
+  `A * sqrt(expected)` in steradians, `A * sqrt(expected) * R` in square
+  kilometres and `A * sqrt(expected) * R * 1000` in square metres, which is
+  the area swept by moving a boundary of that size by `A`. An expected value
+  of zero therefore requires the actual value to be within the floor of
+  zero.
 
 Discrete outputs, which is everything else, are compared exactly.
 
@@ -346,6 +364,61 @@ Example:
 {"id":"8009fffffffffff:1","polygon":{"outer":[[63.41604328760733,-6.2487422207291372],[57.505414797708795,6.5261570545257905],[59.661235921869135,22.173417676459856],[68.083966331138825,27.572264214363457],[71.588178973942178,2.3677280966481229]],"holes":[]},"res":1,"cells":["81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff"],"center":["81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff"],"full":["81083ffffffffff"],"overlapping":["81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff"],"overlappingBbox":["81013ffffffffff","81017ffffffffff","81073ffffffffff","81077ffffffffff","8107bffffffffff","81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff","81113ffffffffff","81117ffffffffff","81193ffffffffff","81197ffffffffff","811f3ffffffffff","811f7ffffffffff"],"multiPolygon":[{"outer":[[56.632952719050827,18.275235951757786],[58.401544870352701,25.082722326707874],[62.478113451924763,24.517172437523488],[64.873036611864293,31.517537185292614],[68.929957881939814,31.831280499087395],[70.052151519508882,20.597244293835026],[73.487456497717517,14.551845028116778],[73.310223685443972,0.32561035194322951],[69.273859191908159,-1.6665855042241828],[67.153547845205082,-10.558792289389457],[63.095054077525454,-10.444977544778338],[61.545509577880757,-2.2975260876218235],[57.689497374592854,-0.93158716351061854],[55.70676846515228,5.5236465492903095],[58.130531165851423,11.555977692900695]],"holes":[]}]}
 ```
 
+### `floats`
+
+The floating-point functions, in five files, every value compared under the
+manifest tolerances: points by angular distance, measures by relative error.
+Subjects are valid cells and the edges, vertexes and center pairs drawn
+from them (see Sampling).
+
+`floats/cells.jsonl`, one line per cell:
+
+| Key | Function | Type |
+|---|---|---|
+| `index` | the subject cell | index string |
+| `center` | `cellToLatLng(index)` | point |
+| `boundary` | `cellToBoundary(index)` | sequence of points, in the reference's order |
+| `areaRads2`, `areaKm2`, `areaM2` | `cellAreaRads2`, `cellAreaKm2`, `cellAreaM2` | number |
+| `interiorRes` | `min(res + 2, 15)` | integer |
+| `interior` | one point per boundary vertex, halfway from the center to it (see Sampling) | sequence of points |
+| `interiorCells` | `latLngToCell(point, interiorRes)` for each point of `interior`, in order | sequence of index strings |
+
+`floats/edges.jsonl`, one line per directed edge:
+
+| Key | Function | Type |
+|---|---|---|
+| `index` | the subject edge | index string |
+| `lengthRads`, `lengthKm`, `lengthM` | `edgeLengthRads`, `edgeLengthKm`, `edgeLengthM` | number |
+| `boundary` | `directedEdgeToBoundary(index)` | sequence of points, in the reference's order |
+
+`floats/vertexes.jsonl`, one line per vertex: `index` and `latLng`, which
+is `vertexToLatLng(index)`.
+
+`floats/distances.jsonl`, one line per pair of cells `index` and `target`:
+`a` and `b` are their centers as the reference computed them, and `rads`,
+`km` and `m` are `greatCircleDistanceRads`, `Km` and `M` of `a` and `b`. A
+consumer measures between the points in the file, not between centers it
+computes itself, so the test is of the distance function alone. The target
+may be the cell itself, giving an expected distance of exactly zero, but is
+never nearly antipodal to the subject.
+
+`floats/resolutions.jsonl`, one line per resolution 0 through 16:
+`hexagonAreaKm2`, `hexagonAreaM2`, `edgeLengthKm` and `edgeLengthM` are
+`getHexagonAreaAvgKm2`, `getHexagonAreaAvgM2`, `getHexagonEdgeLengthAvgKm`
+and `getHexagonEdgeLengthAvgM`, each a number or an error; the row for 16
+is the `E_RES_DOMAIN` case.
+
+Examples:
+
+```json
+{"index":"8009fffffffffff","center":[64.700000127934885,10.536199075467678],"boundary":[[63.095054077525454,-10.444977544778341],[55.706768465152265,5.5236465492903184],[58.401544870352687,25.082722326707898],[68.929957881939814,31.831280499087402],[73.310223685444001,0.32561035194323518]],"areaRads2":0.063123898710068072,"areaKm2":2562182.1629555039,"areaM2":2562182162955.5039,"interiorRes":2,"interior":[[63.897527102730166,0.045610765344669346],[60.203384296543575,8.0299228123789987],[61.55077249914379,17.809460701087787],[66.814979004937356,21.183739787277538],[69.00511190668945,5.4309047137054565]],"interiorCells":["82091ffffffffff","82098ffffffffff","8208affffffffff","8208c7fffffffff","820957fffffffff"]}
+{"index":"14001fffffffffff","lengthRads":0.19076599177033998,"lengthKm":1215.3715034438708,"lengthM":1215371.5034438707,"boundary":[[73.310223685444001,0.32561035194323518],[68.929957881939828,31.831280499087395]]}
+{"index":"23001fffffffffff","latLng":[87.364695323196472,145.55819769133689]}
+{"index":"8021fffffffffff","target":"8021fffffffffff","a":[46.041894318837713,71.527903299099236],"b":[46.041894318837713,71.527903299099236],"rads":0,"km":0,"m":0}
+{"res":0,"hexagonAreaKm2":4357449.4160783831,"hexagonAreaM2":4357449416078.3901,"edgeLengthKm":1281.2560109999999,"edgeLengthM":1281256.0109999999}
+{"res":16,"hexagonAreaKm2":{"err":"E_RES_DOMAIN"},"hexagonAreaM2":{"err":"E_RES_DOMAIN"},"edgeLengthKm":{"err":"E_RES_DOMAIN"},"edgeLengthM":{"err":"E_RES_DOMAIN"}}
+```
+
 ### `digests`
 
 Digests over **every cell at resolutions 0 through 6**, 16,838,852 cells
@@ -564,6 +637,32 @@ For each subject `h` at resolution `res`, four lines:
 3. the same outer loop with one hole, the boundary of
    `cellToCenterChild(h, res + 1)` scaled by 1.2, filled at `res + 2`;
 4. the boundary of `h` scaled by 1.2 with no hole, filled at 16.
+
+### `floats/`
+
+`cells.jsonl`: valid-cell subjects with `n` = 16. No further draws. The
+interior points are computed in degrees like scaled boundaries, with factor
+0.5: with center `(clat, clng)` and vertex `(vlat, vlng)`, the point is
+`(clat + 0.5 * (vlat - clat), wrap(clng + 0.5 * wrap(vlng - clng)))`, one
+per vertex of `cellToBoundary` in its order.
+
+`edges.jsonl`: valid-cell subjects with `n` = 16. Then for each subject,
+take its `originToDirectedEdges` array (six slots, a zero where a pentagon
+has no edge) and twice: draw 6 and emit the edge at that slot if it is
+non-zero and was not already emitted for this subject.
+
+`vertexes.jsonl`: the same with `cellToVertexes`.
+
+`distances.jsonl`: valid-cell subjects with `n` = 16. Then for each
+subject, a near target is drawn from its 3-disk and a far target is drawn by
+drawing cells at the subject's resolution until `isValidCell` accepts one
+whose center is not within 1e-3 radians of antipodal to the subject's (the
+haversine formula is ill-conditioned there, so such a pair could not be
+checked to tolerance); the subject is written with the near target, then
+with the far target unless the two are the same cell.
+
+`resolutions.jsonl`: one line per resolution 0 through 16, in that order.
+No draws.
 
 ### `digests/resolutions.jsonl` and `digests/baseCells.jsonl`
 

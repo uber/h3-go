@@ -327,6 +327,81 @@ type BaseCellDigestsRecord struct {
 	Digests map[string]string `json:"digests"`
 }
 
+// FloatCellRecord holds the coordinate and area outputs of one valid cell,
+// plus latLngToCell on points inside it.
+//
+//nolint:govet // field order is the JSON key order given in README.md
+type FloatCellRecord struct {
+	// Index is the subject cell.
+	Index string `json:"index"`
+	// Center is cellToLatLng.
+	Center GeoCoord `json:"center"`
+	// Boundary is cellToBoundary, as a sequence.
+	Boundary []GeoCoord `json:"boundary"`
+	// AreaRads2, AreaKm2 and AreaM2 are the cellArea functions.
+	AreaRads2 float64 `json:"areaRads2"`
+	AreaKm2   float64 `json:"areaKm2"`
+	AreaM2    float64 `json:"areaM2"`
+	// InteriorRes is the resolution the interior points are mapped at.
+	InteriorRes int `json:"interiorRes"`
+	// Interior holds one point halfway from the center to each boundary
+	// vertex.
+	Interior []GeoCoord `json:"interior"`
+	// InteriorCells is latLngToCell(point, interiorRes) for each point.
+	InteriorCells []string `json:"interiorCells"`
+}
+
+// FloatEdgeRecord holds the length and boundary of one directed edge.
+//
+//nolint:govet // field order is the JSON key order given in README.md
+type FloatEdgeRecord struct {
+	// Index is the subject edge.
+	Index string `json:"index"`
+	// LengthRads, LengthKm and LengthM are the edgeLength functions.
+	LengthRads float64 `json:"lengthRads"`
+	LengthKm   float64 `json:"lengthKm"`
+	LengthM    float64 `json:"lengthM"`
+	// Boundary is directedEdgeToBoundary, as a sequence.
+	Boundary []GeoCoord `json:"boundary"`
+}
+
+// FloatVertexRecord holds the position of one vertex.
+type FloatVertexRecord struct {
+	// Index is the subject vertex.
+	Index string `json:"index"`
+	// LatLng is vertexToLatLng.
+	LatLng GeoCoord `json:"latLng"`
+}
+
+// DistanceRecord holds the great-circle distance between two cell centers.
+type DistanceRecord struct {
+	// Index and Target are the cells whose centers are A and B.
+	Index  string `json:"index"`
+	Target string `json:"target"`
+	// A and B are the points the distance is measured between.
+	A GeoCoord `json:"a"`
+	B GeoCoord `json:"b"`
+	// Rads, Km and M are the greatCircleDistance functions of A and B.
+	Rads float64 `json:"rads"`
+	Km   float64 `json:"km"`
+	M    float64 `json:"m"`
+}
+
+// FloatResolutionRecord holds the average-measure functions of one
+// resolution.
+//
+//nolint:govet // field order is the JSON key order given in README.md
+type FloatResolutionRecord struct {
+	// Res is the resolution; 16 is the error row.
+	Res int `json:"res"`
+	// HexagonAreaKm2 and HexagonAreaM2 are getHexagonAreaAvg.
+	HexagonAreaKm2 Result[float64] `json:"hexagonAreaKm2"`
+	HexagonAreaM2  Result[float64] `json:"hexagonAreaM2"`
+	// EdgeLengthKm and EdgeLengthM are getHexagonEdgeLengthAvg.
+	EdgeLengthKm Result[float64] `json:"edgeLengthKm"`
+	EdgeLengthM  Result[float64] `json:"edgeLengthM"`
+}
+
 // subject is implemented by every record type and names the record's input,
 // which identifies the record within its file.
 type subject interface {
@@ -359,6 +434,21 @@ func (r RegionsRecord) subject() string { return r.ID }
 
 // subject returns the resolution.
 func (r ResolutionDigestsRecord) subject() string { return strconv.Itoa(r.Res) }
+
+// subject returns the record's cell.
+func (r FloatCellRecord) subject() string { return r.Index }
+
+// subject returns the record's edge.
+func (r FloatEdgeRecord) subject() string { return r.Index }
+
+// subject returns the record's vertex.
+func (r FloatVertexRecord) subject() string { return r.Index }
+
+// subject returns the record's origin and target.
+func (r DistanceRecord) subject() string { return r.Index + "/" + r.Target }
+
+// subject returns the resolution.
+func (r FloatResolutionRecord) subject() string { return strconv.Itoa(r.Res) }
 
 // subject returns the resolution and base cell.
 func (r BaseCellDigestsRecord) subject() string {
