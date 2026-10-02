@@ -18,5 +18,5 @@ ln -s "$root/h3_h3api.h" "$build/include/h3api.h"
 ${CC:-cc} -std=c99 -O2 -DH3_HAVE_VLA=1 -I"$root" -I"$build/include" \
     -o "$build/gen" "$here/gen.c" "$root"/h3_*.c -lm
 
-mkdir -p "$out/inspection" "$out/hierarchy" "$out/traversal" "$out/edges" "$out/vertexes" "$out/localij" "$out/sets"
+mkdir -p "$out/inspection" "$out/hierarchy" "$out/traversal" "$out/edges" "$out/vertexes" "$out/localij" "$out/sets" "$out/regions"
 "$build/gen" -o "$out" -v "$(cat "$root/H3_VERSION")" -s "${H3_CONFORMANCE_SEED:-20260929}"

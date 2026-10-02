@@ -29,6 +29,7 @@
  */
 
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -68,6 +69,11 @@
 #define HIERARCHY_CELLS_PER_RES 32
 #define TRAVERSAL_CELLS_PER_RES 16
 #define SETS_CELLS_PER_RES 2
+#define REGIONS_MAX_RES 13
+#define REGIONS_PENTAGON_STEP 4
+#define REGIONS_CELLS_PER_RES 3
+#define REGIONS_SHRINK 0.8
+#define REGIONS_EXPAND 1.2
 #define MAX_HOLES 3
 #define MAX_DISK_K 3
 #define NUM_VERTEX_NUMBERS 6
@@ -952,6 +958,215 @@ static void writeSetsSubject(FILE *out, H3Index h, Splitmix64 *rng) {
     free(input.items);
 }
 
+/* ---- regions group (README, "regions/polygons.jsonl") ---- */
+
+static void sampleRegions(IndexList *list, Splitmix64 *rng) {
+    for (int res = 0; res <= REGIONS_MAX_RES; res += REGIONS_PENTAGON_STEP) {
+        H3Index pentagons[NUM_PENTAGONS];
+        must(getPentagons(res, pentagons));
+        for (int i = 0; i < NUM_PENTAGONS; i++) {
+            push(list, pentagons[i]);
+        }
+    }
+    for (int res = 0; res <= REGIONS_MAX_RES; res++) {
+        for (int i = 0; i < REGIONS_CELLS_PER_RES; i++) {
+            push(list, drawValidCell(rng, res));
+        }
+    }
+    sortAndDedup(list);
+}
+
+/* printLatLng prints a point as a [lat, lng] pair in degrees. */
+static void printLatLng(FILE *out, LatLng point) {
+    fprintf(out, "[%.17g,%.17g]", radsToDegs(point.lat), radsToDegs(point.lng));
+}
+
+/* printLoop prints a sequence of points. */
+static void printLoop(FILE *out, const LatLng *verts, int numVerts) {
+    fputc('[', out);
+    for (int i = 0; i < numVerts; i++) {
+        if (i) {
+            fputc(',', out);
+        }
+        printLatLng(out, verts[i]);
+    }
+    fputc(']', out);
+}
+
+/* printLinkedLoop prints a linked loop as a sequence of points. */
+static void printLinkedLoop(FILE *out, const LinkedGeoLoop *loop) {
+    fputc('[', out);
+    for (const LinkedLatLng *point = loop->first; point; point = point->next) {
+        if (point != loop->first) {
+            fputc(',', out);
+        }
+        printLatLng(out, point->vertex);
+    }
+    fputc(']', out);
+}
+
+/* printFill prints the cells a polyfill function returns, or its error. */
+static void printFill(FILE *out, const GeoPolygon *polygon, int res, uint32_t flags, bool experimental) {
+    int64_t size;
+    H3Error err = experimental ? maxPolygonToCellsSizeExperimental(polygon, res, flags, &size)
+                               : maxPolygonToCellsSize(polygon, res, flags, &size);
+    if (err) {
+        printError(out, err);
+        return;
+    }
+    H3Index *cells = calloc(size ? (size_t)size : 1, sizeof *cells);
+    if (!cells) {
+        fail("out of memory");
+    }
+    err = experimental ? polygonToCellsExperimental(polygon, res, flags, size, cells)
+                       : polygonToCells(polygon, res, flags, cells);
+    if (err) {
+        printError(out, err);
+    } else {
+        printIndexSet(out, cells, size);
+    }
+    free(cells);
+}
+
+/* printMultiPolygon prints cellsToLinkedMultiPolygon of the classic fill of
+ * the polygon, or the error of whichever step failed. */
+static void printMultiPolygon(FILE *out, const GeoPolygon *polygon, int res) {
+    int64_t size;
+    H3Error err = maxPolygonToCellsSize(polygon, res, 0, &size);
+    if (err) {
+        printError(out, err);
+        return;
+    }
+    H3Index *cells = calloc(size ? (size_t)size : 1, sizeof *cells);
+    if (!cells) {
+        fail("out of memory");
+    }
+    must(polygonToCells(polygon, res, 0, cells));
+    int64_t count = 0;
+    for (int64_t i = 0; i < size; i++) {
+        if (cells[i]) {
+            cells[count++] = cells[i];
+        }
+    }
+    qsort(cells, (size_t)count, sizeof *cells, compareIndexes);
+
+    LinkedGeoPolygon multi = {0};
+    err = cellsToLinkedMultiPolygon(cells, (int)count, &multi);
+    free(cells);
+    if (err) {
+        printError(out, err);
+        return;
+    }
+    fputc('[', out);
+    for (const LinkedGeoPolygon *poly = &multi; poly; poly = poly->next) {
+        if (poly != &multi) {
+            fputc(',', out);
+        }
+        if (!poly->first) {
+            fputs("{\"outer\":[],\"holes\":[]}", out);
+            continue;
+        }
+        fputs("{\"outer\":", out);
+        printLinkedLoop(out, poly->first);
+        fputs(",\"holes\":[", out);
+        for (const LinkedGeoLoop *loop = poly->first->next; loop; loop = loop->next) {
+            if (loop != poly->first->next) {
+                fputc(',', out);
+            }
+            printLinkedLoop(out, loop);
+        }
+        fputs("]}", out);
+    }
+    fputc(']', out);
+    destroyLinkedMultiPolygon(&multi);
+}
+
+/* writeRegionsRecord writes one line for the polygon filled at res. */
+static void writeRegionsRecord(FILE *out, H3Index h, const GeoPolygon *polygon, int res) {
+    fputs("{\"id\":\"", out);
+    printIndexBare(out, h);
+    fprintf(out, ":%d%s\",\"polygon\":{\"outer\":", res, polygon->numHoles ? ":hole" : "");
+    printLoop(out, polygon->geoloop.verts, polygon->geoloop.numVerts);
+    fputs(",\"holes\":[", out);
+    for (int i = 0; i < polygon->numHoles; i++) {
+        if (i) {
+            fputc(',', out);
+        }
+        printLoop(out, polygon->holes[i].verts, polygon->holes[i].numVerts);
+    }
+    fprintf(out, "]},\"res\":%d", res);
+
+    fputs(",\"cells\":", out);
+    printFill(out, polygon, res, 0, false);
+    static const char *const MODE_KEYS[] = {"center", "full", "overlapping", "overlappingBbox"};
+    for (uint32_t mode = 0; mode < 4; mode++) {
+        fprintf(out, ",\"%s\":", MODE_KEYS[mode]);
+        printFill(out, polygon, res, mode, true);
+    }
+    fputs(",\"multiPolygon\":", out);
+    printMultiPolygon(out, polygon, res);
+    fputs("}\n", out);
+}
+
+/* wrapDegrees brings a longitude difference or value into [-180, 180]. */
+static double wrapDegrees(double lng) {
+    if (lng > 180.0) {
+        return lng - 360.0;
+    }
+    if (lng < -180.0) {
+        return lng + 360.0;
+    }
+    return lng;
+}
+
+/* scaledBoundary fills loop with the cell's boundary scaled about its center
+ * by factor, computed in degrees so that a consumer parsing the written
+ * degrees starts from the same values, then converted back to radians for
+ * the reference. */
+static void scaledBoundary(H3Index h, double factor, CellBoundary *loop) {
+    LatLng center;
+    must(cellToLatLng(h, &center));
+    double centerLat = radsToDegs(center.lat);
+    double centerLng = radsToDegs(center.lng);
+
+    must(cellToBoundary(h, loop));
+    for (int i = 0; i < loop->numVerts; i++) {
+        double lat = centerLat + factor * (radsToDegs(loop->verts[i].lat) - centerLat);
+        double lng = wrapDegrees(centerLng + factor * wrapDegrees(radsToDegs(loop->verts[i].lng) - centerLng));
+        loop->verts[i].lat = degsToRads(lat);
+        loop->verts[i].lng = degsToRads(lng);
+    }
+}
+
+/* writeRegionsSubject writes the cell's boundary shrunk and filled one
+ * resolution finer, expanded and filled two finer, the same with the expanded
+ * center child cut out, then expanded at an invalid resolution. */
+static void writeRegionsSubject(FILE *out, H3Index h, Splitmix64 *rng) {
+    (void)rng;
+    int res = getResolution(h);
+
+    CellBoundary outer;
+    scaledBoundary(h, REGIONS_SHRINK, &outer);
+    GeoPolygon polygon = {{outer.numVerts, outer.verts}, 0, NULL};
+    writeRegionsRecord(out, h, &polygon, res + 1);
+
+    scaledBoundary(h, REGIONS_EXPAND, &outer);
+    writeRegionsRecord(out, h, &polygon, res + 2);
+
+    H3Index center;
+    must(cellToCenterChild(h, res + 1, &center));
+    CellBoundary inner;
+    scaledBoundary(center, REGIONS_EXPAND, &inner);
+    GeoLoop hole = {inner.numVerts, inner.verts};
+    polygon.numHoles = 1;
+    polygon.holes = &hole;
+    writeRegionsRecord(out, h, &polygon, res + 2);
+
+    polygon.numHoles = 0;
+    polygon.holes = NULL;
+    writeRegionsRecord(out, h, &polygon, MAX_RES + 1);
+}
+
 typedef struct {
     FileInfo info;
     Sampler sample;
@@ -1055,6 +1270,7 @@ int main(int argc, char *argv[]) {
         {{"vertexes/cells.jsonl", 0, ""}, sampleTraversal, writeVertexesRecord},
         {{"localij/pairs.jsonl", 0, ""}, sampleTraversal, writeLocalIJSubject},
         {{"sets/sets.jsonl", 0, ""}, sampleSets, writeSetsSubject},
+        {{"regions/polygons.jsonl", 0, ""}, sampleRegions, writeRegionsSubject},
     };
     size_t numGroups = sizeof groups / sizeof groups[0];
     FileInfo files[sizeof groups / sizeof groups[0]];

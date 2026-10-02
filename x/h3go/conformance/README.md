@@ -22,6 +22,7 @@ edges/cells.jsonl
 vertexes/cells.jsonl
 localij/pairs.jsonl
 sets/sets.jsonl
+regions/polygons.jsonl
 ```
 
 `manifest.json` is the only file a consumer opens by name. Every record file
@@ -84,6 +85,8 @@ is optional and nothing is inferred from absence.
 - **Floating-point** values are JSON numbers with enough digits to round-trip
   a binary64. They are compared using the manifest's tolerances, never for
   equality.
+- **Points** are `[latitude, longitude]` pairs in degrees, both as inputs and
+  as outputs. A consumer converts to whatever its implementation takes.
 
 ### Tolerances
 
@@ -298,6 +301,41 @@ Example:
 {"id":"duplicate:81083ffffffffff","input":["820807fffffffff","820817fffffffff","82081ffffffffff","820827fffffffff","82082ffffffffff","820837fffffffff","820807fffffffff"],"compact":{"err":"E_DUPLICATE_INPUT"},"uncompactRes":2,"uncompact":["820807fffffffff","820817fffffffff","82081ffffffffff","820827fffffffff","82082ffffffffff","820837fffffffff"]}
 ```
 
+### `regions`
+
+One line per **polygon and fill resolution**. Polygons are scaled cell
+boundaries (see Sampling), so each has five to ten vertices and may have one
+hole; the `id` is the source cell, the fill resolution, and `:hole` when
+present. A fill resolution of 16 gives the `E_RES_DOMAIN` rows.
+
+| Key | Function | Type |
+|---|---|---|
+| `id` | `<cell>:<res>` or `<cell>:<res>:hole` | string |
+| `polygon` | the input: `{"outer": loop, "holes": [loop, ...]}`, each loop a sequence of points | object |
+| `res` | the fill resolution | integer |
+| `cells` | `polygonToCells(polygon, res, 0)`, with `0` padding removed | set of index strings, or error |
+| `center`, `full`, `overlapping`, `overlappingBbox` | `polygonToCellsExperimental(polygon, res, mode)` for containment modes 0 to 3, with `0` padding removed | set of index strings, or error |
+| `multiPolygon` | `cellsToLinkedMultiPolygon(cells)` when `cells` succeeded, otherwise the same error | sequence of `{"outer": loop, "holes": [loop, ...]}`, or error |
+
+`multiPolygon` is compared by structure and by points. The polygons are a
+sequence, in the reference's order of decreasing outer-loop area. Within a
+polygon the outer loop is a sequence of points that may start at any vertex,
+compared point by point with the angular tolerance, and the holes are a set
+of such loops. The `cells` fed to `cellsToLinkedMultiPolygon` are passed in
+ascending order.
+
+Scaling the boundaries matters: a polygon that is exactly a cell boundary
+puts the finer cells' vertices on its edges, and whether `full` and
+`overlapping` count such a cell then depends on rounding, in the reference as
+much as in a port. The scaled polygons keep every cell vertex clear of the
+polygon edges.
+
+Example:
+
+```json
+{"id":"8009fffffffffff:1","polygon":{"outer":[[63.41604328760733,-6.2487422207291372],[57.505414797708795,6.5261570545257905],[59.661235921869135,22.173417676459856],[68.083966331138825,27.572264214363457],[71.588178973942178,2.3677280966481229]],"holes":[]},"res":1,"cells":["81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff"],"center":["81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff"],"full":["81083ffffffffff"],"overlapping":["81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff"],"overlappingBbox":["81013ffffffffff","81017ffffffffff","81073ffffffffff","81077ffffffffff","8107bffffffffff","81083ffffffffff","8108bffffffffff","8108fffffffffff","81093ffffffffff","81097ffffffffff","8109bffffffffff","81113ffffffffff","81117ffffffffff","81193ffffffffff","81197ffffffffff","811f3ffffffffff","811f7ffffffffff"],"multiPolygon":[{"outer":[[56.632952719050827,18.275235951757786],[58.401544870352701,25.082722326707874],[62.478113451924763,24.517172437523488],[64.873036611864293,31.517537185292614],[68.929957881939814,31.831280499087395],[70.052151519508882,20.597244293835026],[73.487456497717517,14.551845028116778],[73.310223685443972,0.32561035194322951],[69.273859191908159,-1.6665855042241828],[67.153547845205082,-10.558792289389457],[63.095054077525454,-10.444977544778338],[61.545509577880757,-2.2975260876218235],[57.689497374592854,-0.93158716351061854],[55.70676846515228,5.5236465492903095],[58.130531165851423,11.555977692900695]],"holes":[]}]}
+```
+
 ## Sampling
 
 Inputs are chosen by a deterministic procedure from `generator.seed`, so that
@@ -422,6 +460,33 @@ Sorted ascending and deduplicated as above. Then for each subject, the six
 kinds are written in the order of the kinds table. Only `holes` draws: draw 3
 to get a count from 1 to 3, then that many times draw 37 and clear that slot
 of the `gridDisk(cell, 3)` array; a slot that is already zero stays zero.
+
+### `regions/polygons.jsonl`
+
+Subjects:
+
+1. `getPentagons(res)` for `res` 0, 4, 8 and 12, in the order the reference
+   returns them. No draws.
+2. For `res` 0 through 13, three times: draw cells at `res` until
+   `isValidCell` accepts one, and emit it.
+
+Sorted ascending and deduplicated as above. No further draws.
+
+"The boundary of `h` scaled by `f`" is `cellToBoundary(h)` with every vertex
+moved away from `cellToLatLng(h)` by the factor `f`, computed in degrees:
+with center `(clat, clng)` and vertex `(vlat, vlng)`, the new vertex is
+`(clat + f * (vlat - clat), wrap(clng + f * wrap(vlng - clng)))`, where
+`wrap` adds or subtracts 360 to bring a value into [-180, 180]. Vertex order
+is kept. Degrees are what the file holds, so a generator converts the scaled
+degrees to its implementation's units rather than scaling in radians.
+
+For each subject `h` at resolution `res`, four lines:
+
+1. the boundary of `h` scaled by 0.8, filled at `res + 1`;
+2. the boundary of `h` scaled by 1.2, filled at `res + 2`;
+3. the same outer loop with one hole, the boundary of
+   `cellToCenterChild(h, res + 1)` scaled by 1.2, filled at `res + 2`;
+4. the boundary of `h` scaled by 1.2 with no hole, filled at 16.
 
 ## Running and regenerating
 
