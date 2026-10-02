@@ -72,6 +72,8 @@
 #define REGIONS_MAX_RES 13
 #define REGIONS_PENTAGON_STEP 4
 #define REGIONS_CELLS_PER_RES 3
+#define DIGESTS_MAX_RES 6
+#define NUM_ICOSA_FACES 20
 #define REGIONS_SHRINK 0.8
 #define REGIONS_EXPAND 1.2
 #define MAX_HOLES 3
@@ -187,6 +189,12 @@ static void push(IndexList *list, uint64_t index) {
 static int compareIndexes(const void *a, const void *b) {
     uint64_t x = *(const uint64_t *)a, y = *(const uint64_t *)b;
     return x < y ? -1 : x > y;
+}
+
+static int compareInts(const void *a, const void *b) {
+    int left = *(const int *)a;
+    int right = *(const int *)b;
+    return (left > right) - (left < right);
 }
 
 static void sortAndDedup(IndexList *list) {
@@ -733,29 +741,66 @@ static void sha256Block(uint32_t state[8], const uint8_t block[64]) {
 }
 
 /* sha256Hex writes the lowercase hex digest of data into hex (65 bytes). */
-static void sha256Hex(const uint8_t *data, size_t len, char hex[65]) {
-    uint32_t state[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                         0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
-    size_t offset = 0;
-    for (; offset + 64 <= len; offset += 64) {
-        sha256Block(state, data + offset);
-    }
-    uint8_t tail[128] = {0};
-    size_t rest = len - offset;
-    memcpy(tail, data + offset, rest);
-    tail[rest] = 0x80;
-    size_t tailLen = rest + 1 + 8 <= 64 ? 64 : 128;
-    uint64_t bitLen = (uint64_t)len * 8;
-    for (size_t i = 0; i < 8; i++) {
-        tail[tailLen - 1 - i] = (uint8_t)(bitLen >> (8 * i));
-    }
-    for (size_t i = 0; i < tailLen; i += 64) {
-        sha256Block(state, tail + i);
-    }
-    for (int i = 0; i < 8; i++) {
-        sprintf(hex + 8 * i, "%08" PRIx32, state[i]);
+/* Sha256 is a streaming SHA-256 state: the chaining value, the bytes not yet
+ * forming a block, and the total length. */
+typedef struct {
+    uint32_t state[8];
+    uint8_t buffer[64];
+    size_t buffered;
+    uint64_t total;
+} Sha256;
+
+static void sha256Init(Sha256 *ctx) {
+    static const uint32_t INITIAL[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                                        0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
+    memcpy(ctx->state, INITIAL, sizeof INITIAL);
+    ctx->buffered = 0;
+    ctx->total = 0;
+}
+
+static void sha256Update(Sha256 *ctx, const uint8_t *data, size_t len) {
+    ctx->total += len;
+    while (len) {
+        size_t take = 64 - ctx->buffered;
+        if (take > len) {
+            take = len;
+        }
+        memcpy(ctx->buffer + ctx->buffered, data, take);
+        ctx->buffered += take;
+        data += take;
+        len -= take;
+        if (ctx->buffered == 64) {
+            sha256Block(ctx->state, ctx->buffer);
+            ctx->buffered = 0;
+        }
     }
 }
+
+static void sha256Final(Sha256 *ctx, char hex[65]) {
+    uint64_t bitLen = ctx->total * 8;
+    uint8_t pad = 0x80;
+    sha256Update(ctx, &pad, 1);
+    uint8_t zero = 0;
+    while (ctx->buffered != 56) {
+        sha256Update(ctx, &zero, 1);
+    }
+    uint8_t length[8];
+    for (size_t i = 0; i < 8; i++) {
+        length[7 - i] = (uint8_t)(bitLen >> (8 * i));
+    }
+    sha256Update(ctx, length, 8);
+    for (int i = 0; i < 8; i++) {
+        sprintf(hex + 8 * i, "%08" PRIx32, ctx->state[i]);
+    }
+}
+
+static void sha256Hex(const uint8_t *data, size_t len, char hex[65]) {
+    Sha256 ctx;
+    sha256Init(&ctx);
+    sha256Update(&ctx, data, len);
+    sha256Final(&ctx, hex);
+}
+
 
 /* ---- files and manifest ---- */
 
@@ -1167,6 +1212,358 @@ static void writeRegionsSubject(FILE *out, H3Index h, Splitmix64 *rng) {
     writeRegionsRecord(out, h, &polygon, MAX_RES + 1);
 }
 
+/* ---- digests group (README, "digests/") ---- */
+
+static FILE *createFile(const char *path);
+
+/* Line is one text line of a digest stream, built field by field. */
+typedef struct {
+    char *buf;
+    size_t len;
+    size_t cap;
+} Line;
+
+static void lineAppend(Line *line, const char *text) {
+    size_t n = strlen(text);
+    if (line->len + n + 1 > line->cap) {
+        size_t cap = line->cap ? line->cap : 256;
+        while (line->len + n + 1 > cap) {
+            cap *= 2;
+        }
+        char *buf = realloc(line->buf, cap);
+        if (!buf) {
+            fail("out of memory");
+        }
+        line->buf = buf;
+        line->cap = cap;
+    }
+    memcpy(line->buf + line->len, text, n + 1);
+    line->len += n;
+}
+
+/* lineStart begins a line with the subject cell. */
+static void lineStart(Line *line, H3Index h) {
+    char buf[MAX_INDEX_LEN];
+    must(h3ToString(h, buf, sizeof buf));
+    line->len = 0;
+    lineAppend(line, buf);
+}
+
+static void lineIndex(Line *line, H3Index h) {
+    char buf[MAX_INDEX_LEN];
+    must(h3ToString(h, buf, sizeof buf));
+    lineAppend(line, " ");
+    lineAppend(line, buf);
+}
+
+static void lineInt(Line *line, int64_t value) {
+    char buf[32];
+    snprintf(buf, sizeof buf, " %" PRId64, value);
+    lineAppend(line, buf);
+}
+
+static void lineError(Line *line, H3Error err) {
+    lineAppend(line, " ");
+    lineAppend(line, H3_ERROR_NAMES[err]);
+}
+
+/* lineIndexSet appends the distinct non-zero entries in ascending order,
+ * sorting and compacting the array in place, and returns how many. */
+static int64_t lineIndexSet(Line *line, H3Index *indexes, int64_t count) {
+    int64_t kept = 0;
+    for (int64_t i = 0; i < count; i++) {
+        if (indexes[i]) {
+            indexes[kept++] = indexes[i];
+        }
+    }
+    qsort(indexes, (size_t)kept, sizeof *indexes, compareIndexes);
+    int64_t unique = 0;
+    for (int64_t i = 0; i < kept; i++) {
+        if (!unique || indexes[unique - 1] != indexes[i]) {
+            indexes[unique++] = indexes[i];
+        }
+    }
+    for (int64_t i = 0; i < unique; i++) {
+        lineIndex(line, indexes[i]);
+    }
+    return unique;
+}
+
+/* The digest streams, in the order their keys are written. */
+enum {
+    S_CELLS,
+    S_CHILDREN,
+    S_COMPACT,
+    S_DISKS,
+    S_DISTANCES,
+    S_EDGES,
+    S_INSPECTION,
+    S_LOCAL_IJ,
+    S_PARENTS,
+    S_RINGS,
+    S_ROUND_TRIP,
+    S_VERTEXES,
+    NUM_STREAMS
+};
+
+static const char *const STREAM_KEYS[NUM_STREAMS] = {
+    "cells",      "children", "compact", "disks", "distances", "edges",
+    "inspection", "localIj",  "parents", "rings", "roundTrip", "vertexes",
+};
+
+/* absorb terminates the line and feeds it to the resolution and base-cell
+ * digests of one stream. */
+static void absorb(Sha256 *perRes, Sha256 *perBase, int stream, Line *line) {
+    lineAppend(line, "\n");
+    sha256Update(&perRes[stream], (const uint8_t *)line->buf, line->len);
+    sha256Update(&perBase[stream], (const uint8_t *)line->buf, line->len);
+}
+
+/* digestCell appends one cell's line to every stream. */
+static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, int res) {
+    lineStart(line, h);
+    absorb(perRes, perBase, S_CELLS, line);
+
+    H3Index parent0;
+    must(cellToParent(h, 0, &parent0));
+
+    lineStart(line, h);
+    for (int parentRes = res - 1; parentRes >= 0; parentRes--) {
+        H3Index parent;
+        must(cellToParent(h, parentRes, &parent));
+        lineIndex(line, parent);
+    }
+    absorb(perRes, perBase, S_PARENTS, line);
+
+    lineStart(line, h);
+    {
+        H3Index center;
+        must(cellToCenterChild(h, res + 1, &center));
+        lineIndex(line, center);
+        int64_t size;
+        must(cellToChildrenSize(h, res + 1, &size));
+        lineInt(line, size);
+        int64_t pos;
+        must(cellToChildPos(h, 0, &pos));
+        lineInt(line, pos);
+        H3Index back;
+        must(childPosToCell(pos, parent0, res, &back));
+        lineIndex(line, back);
+    }
+    absorb(perRes, perBase, S_CHILDREN, line);
+
+    lineStart(line, h);
+    {
+        lineInt(line, getBaseCellNumber(h));
+        lineInt(line, isPentagon(h));
+        lineInt(line, isResClassIII(h));
+        int faceCount;
+        must(maxFaceCount(h, &faceCount));
+        int faces[NUM_ICOSA_FACES];
+        for (int i = 0; i < NUM_ICOSA_FACES; i++) {
+            faces[i] = -1;
+        }
+        must(getIcosahedronFaces(h, faces));
+        qsort(faces, (size_t)faceCount, sizeof faces[0], compareInts);
+        for (int i = 0; i < faceCount; i++) {
+            if (faces[i] >= 0) {
+                lineInt(line, faces[i]);
+            }
+        }
+    }
+    absorb(perRes, perBase, S_INSPECTION, line);
+
+    H3Index disk3[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
+    int64_t disk3Count = 0;
+    lineStart(line, h);
+    for (int k = 1; k <= MAX_DISK_K; k++) {
+        H3Index disk[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
+        must(gridDisk(h, k, disk));
+        if (k > 1) {
+            lineAppend(line, " |");
+        }
+        int64_t kept = lineIndexSet(line, disk, diskSize(k));
+        if (k == MAX_DISK_K) {
+            memcpy(disk3, disk, sizeof disk3);
+            disk3Count = kept;
+        }
+    }
+    absorb(perRes, perBase, S_DISKS, line);
+
+    lineStart(line, h);
+    for (int k = 1; k <= MAX_DISK_K; k++) {
+        H3Index ring[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
+        must(gridRing(h, k, ring));
+        if (k > 1) {
+            lineAppend(line, " |");
+        }
+        lineIndexSet(line, ring, diskSize(k));
+    }
+    absorb(perRes, perBase, S_RINGS, line);
+
+    lineStart(line, h);
+    for (int64_t i = 0; i < disk3Count; i++) {
+        int64_t distance;
+        H3Error err = gridDistance(h, disk3[i], &distance);
+        if (err) {
+            lineError(line, err);
+        } else {
+            lineInt(line, distance);
+        }
+    }
+    absorb(perRes, perBase, S_DISTANCES, line);
+
+    lineStart(line, h);
+    {
+        H3Index edges[NUM_HEX_EDGES] = {0};
+        must(originToDirectedEdges(h, edges));
+        int64_t edgeCount = lineIndexSet(line, edges, NUM_HEX_EDGES);
+        line->len = 0; /* rebuild: edges interleaved with destinations */
+        lineStart(line, h);
+        for (int64_t i = 0; i < edgeCount; i++) {
+            H3Index destination;
+            must(getDirectedEdgeDestination(edges[i], &destination));
+            lineIndex(line, edges[i]);
+            lineIndex(line, destination);
+        }
+        lineAppend(line, " |");
+        H3Index disk1[7] = {0};
+        must(gridDisk(h, 1, disk1));
+        Line scratch = {0};
+        int64_t diskCount = lineIndexSet(&scratch, disk1, 7);
+        free(scratch.buf);
+        for (int64_t i = 0; i < diskCount; i++) {
+            int neighbor;
+            H3Error err = areNeighborCells(h, disk1[i], &neighbor);
+            if (err) {
+                lineError(line, err);
+            } else {
+                lineInt(line, neighbor);
+            }
+        }
+    }
+    absorb(perRes, perBase, S_EDGES, line);
+
+    lineStart(line, h);
+    {
+        H3Index vertexes[NUM_VERTEX_NUMBERS] = {0};
+        must(cellToVertexes(h, vertexes));
+        lineIndexSet(line, vertexes, NUM_VERTEX_NUMBERS);
+    }
+    absorb(perRes, perBase, S_VERTEXES, line);
+
+    lineStart(line, h);
+    {
+        H3Index origin = parent0;
+        if (res > 0) {
+            must(cellToCenterChild(parent0, res, &origin));
+        }
+        CoordIJ ij;
+        H3Error err = cellToLocalIj(origin, h, 0, &ij);
+        if (err) {
+            lineError(line, err);
+        } else {
+            lineInt(line, ij.i);
+            lineInt(line, ij.j);
+        }
+    }
+    absorb(perRes, perBase, S_LOCAL_IJ, line);
+
+    lineStart(line, h);
+    {
+        int64_t size;
+        must(cellToChildrenSize(h, res + 1, &size));
+        H3Index *children = calloc((size_t)size, sizeof *children);
+        H3Index *compacted = calloc((size_t)size, sizeof *compacted);
+        if (!children || !compacted) {
+            fail("out of memory");
+        }
+        must(cellToChildren(h, res + 1, children));
+        qsort(children, (size_t)size, sizeof *children, compareIndexes);
+        must(compactCells(children, compacted, size - 1));
+        lineIndexSet(line, compacted, size - 1);
+        free(children);
+        free(compacted);
+    }
+    absorb(perRes, perBase, S_COMPACT, line);
+
+    lineStart(line, h);
+    {
+        LatLng center;
+        must(cellToLatLng(h, &center));
+        H3Index back;
+        must(latLngToCell(&center, res, &back));
+        lineIndex(line, back);
+    }
+    absorb(perRes, perBase, S_ROUND_TRIP, line);
+}
+
+/* printDigests prints the "digests" object and finalizes the streams. */
+static void printDigests(FILE *out, Sha256 *streams) {
+    fputs(",\"digests\":{", out);
+    for (int i = 0; i < NUM_STREAMS; i++) {
+        char hex[65];
+        sha256Final(&streams[i], hex);
+        fprintf(out, "%s\"%s\":\"%s\"", i ? "," : "", STREAM_KEYS[i], hex);
+    }
+    fputs("}}\n", out);
+}
+
+/* writeDigestsFiles writes, for every resolution 0..DIGESTS_MAX_RES, one
+ * line of per-resolution digests and 122 lines of per-base-cell digests. */
+static void writeDigestsFiles(const char *outDir, FileInfo *resInfo, FileInfo *baseInfo) {
+    char *resPath = joinPath(outDir, resInfo->name);
+    char *basePath = joinPath(outDir, baseInfo->name);
+    FILE *resOut = createFile(resPath);
+    FILE *baseOut = createFile(basePath);
+    Line line = {0};
+
+    for (int res = 0; res <= DIGESTS_MAX_RES; res++) {
+        Sha256 perRes[NUM_STREAMS];
+        for (int i = 0; i < NUM_STREAMS; i++) {
+            sha256Init(&perRes[i]);
+        }
+        int64_t total = 0;
+
+        for (int baseCell = 0; baseCell < NUM_BASE_CELLS; baseCell++) {
+            H3Index base = buildIndex(CELL_MODE, 0, baseCell, NULL);
+            int64_t count;
+            must(cellToChildrenSize(base, res, &count));
+            H3Index *cells = calloc((size_t)count, sizeof *cells);
+            if (!cells) {
+                fail("out of memory");
+            }
+            must(cellToChildren(base, res, cells));
+            qsort(cells, (size_t)count, sizeof *cells, compareIndexes);
+
+            Sha256 perBase[NUM_STREAMS];
+            for (int i = 0; i < NUM_STREAMS; i++) {
+                sha256Init(&perBase[i]);
+            }
+            for (int64_t i = 0; i < count; i++) {
+                digestCell(perRes, perBase, &line, cells[i], res);
+            }
+            free(cells);
+            total += count;
+
+            fprintf(baseOut, "{\"res\":%d,\"baseCell\":%d,\"count\":%" PRId64, res, baseCell, count);
+            printDigests(baseOut, perBase);
+        }
+
+        fprintf(resOut, "{\"res\":%d,\"count\":%" PRId64, res, total);
+        printDigests(resOut, perRes);
+    }
+
+    free(line.buf);
+    if (fclose(resOut) || fclose(baseOut)) {
+        fail("write");
+    }
+    describeFile(resPath, resInfo);
+    describeFile(basePath, baseInfo);
+    free(resPath);
+    free(basePath);
+}
+
 typedef struct {
     FileInfo info;
     Sampler sample;
@@ -1273,11 +1670,14 @@ int main(int argc, char *argv[]) {
         {{"regions/polygons.jsonl", 0, ""}, sampleRegions, writeRegionsSubject},
     };
     size_t numGroups = sizeof groups / sizeof groups[0];
-    FileInfo files[sizeof groups / sizeof groups[0]];
+    FileInfo files[sizeof groups / sizeof groups[0] + 2];
     for (size_t i = 0; i < numGroups; i++) {
         writeIndexGroup(outDir, seed, &groups[i]);
         files[i] = groups[i].info;
     }
-    writeManifest(outDir, version, seed, files, numGroups);
+    files[numGroups] = (FileInfo){"digests/resolutions.jsonl", 0, ""};
+    files[numGroups + 1] = (FileInfo){"digests/baseCells.jsonl", 0, ""};
+    writeDigestsFiles(outDir, &files[numGroups], &files[numGroups + 1]);
+    writeManifest(outDir, version, seed, files, numGroups + 2);
     return 0;
 }
