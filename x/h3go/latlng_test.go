@@ -240,8 +240,13 @@ func TestGreatCircleDistance(t *testing.T) {
 	t.Run("zero_distance", func(t *testing.T) {
 		t.Parallel()
 
-		if got := GreatCircleDistanceRads(sf, sf); math.Abs(got) > 1e-12 {
-			t.Fatalf("GreatCircleDistanceRads(sf, sf) = %v, want ~0", got)
+		// Exactly zero, not merely close: a fused multiply-add of the
+		// degree-to-radian products would give a few 1e-17 here.
+		points := []LatLng{sf, ny, {Lat: 8.9155206161000837, Lng: 20.334099918741646}}
+		for _, point := range points {
+			if got := GreatCircleDistanceRads(point, point); got != 0 {
+				t.Fatalf("GreatCircleDistanceRads(%v, same) = %v, want 0", point, got)
+			}
 		}
 	})
 
