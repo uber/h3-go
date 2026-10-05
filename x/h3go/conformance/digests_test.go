@@ -39,6 +39,24 @@ const digestsMaxResEnv = "H3_CONFORMANCE_DIGESTS_MAXRES"
 // environment variable.
 const defaultDigestsMaxRes = 3
 
+// polygonsMaxRes is the finest resolution that has the polygons stream, and
+// polygonsFillStep is how many resolutions finer each polygon is filled, as
+// README.md fixes them.
+const (
+	polygonsMaxRes   = 2
+	polygonsFillStep = 2
+)
+
+// polygonFactors scale a cell boundary about its center for the polygons
+// stream, and containmentModes are the fills taken of each, in line order.
+var (
+	polygonFactors   = []float64{0.8, 1.2}     //nolint:gochecknoglobals // fixed by the format
+	containmentModes = []h3go.ContainmentMode{ //nolint:gochecknoglobals // fixed by the format
+		h3go.ContainmentCenter, h3go.ContainmentFull,
+		h3go.ContainmentOverlapping, h3go.ContainmentOverlappingBbox,
+	}
+)
+
 // digestsMaxRes returns the finest resolution to enumerate.
 func digestsMaxRes(t *testing.T) int {
 	t.Helper()
@@ -136,10 +154,20 @@ func checkDigests(t *testing.T, cells []h3go.Cell, res int, count int64, want ma
 	}
 }
 
-// streams lists the digest streams in key order.
+// streams lists the digest streams in key order; polygons exists only up
+// to polygonsMaxRes.
 var streams = []string{ //nolint:gochecknoglobals // fixed by the format
 	"cells", "children", "compact", "disks", "distances", "edges",
-	"inspection", "localIj", "parents", "rings", "roundTrip", "vertexes",
+	"inspection", "localIj", "parents", "polygons", "rings", "roundTrip", "vertexes",
+}
+
+// streamsAt returns the stream names that exist at a resolution.
+func streamsAt(res int) []string {
+	if res <= polygonsMaxRes {
+		return streams
+	}
+
+	return slices.DeleteFunc(slices.Clone(streams), func(name string) bool { return name == "polygons" })
 }
 
 // lineWriter builds one text line and feeds it to a stream's hash.
@@ -204,8 +232,10 @@ func (w *lineWriter) finish(stream string) {
 func digestStreams(t *testing.T, cells []h3go.Cell, res int) map[string]string {
 	t.Helper()
 
+	names := streamsAt(res)
+
 	writer := &lineWriter{hashes: map[string]hash.Hash{}}
-	for _, name := range streams {
+	for _, name := range names {
 		writer.hashes[name] = sha256.New()
 	}
 
@@ -219,7 +249,7 @@ func digestStreams(t *testing.T, cells []h3go.Cell, res int) map[string]string {
 		digestCell(writer, cell, res)
 	}
 
-	out := make(map[string]string, len(streams))
+	out := make(map[string]string, len(names))
 	for name, h := range writer.hashes {
 		out[name] = hex.EncodeToString(h.Sum(nil))
 	}
@@ -361,6 +391,53 @@ func digestCell(w *lineWriter, cell h3go.Cell, res int) {
 	w.start(cell)
 	w.index(must(h3go.LatLngToCell(must(cell.LatLng()), res)))
 	w.finish("roundTrip")
+
+	if res <= polygonsMaxRes {
+		w.start(cell)
+
+		for factorIndex, factor := range polygonFactors {
+			polygon := scaledPolygon(cell, factor)
+
+			for modeIndex, mode := range containmentModes {
+				if factorIndex > 0 || modeIndex > 0 {
+					w.field("|")
+				}
+
+				w.cellSet(must(h3go.PolygonToCellsExperimental(polygon, res+polygonsFillStep, mode)))
+			}
+		}
+
+		w.finish("polygons")
+	}
+}
+
+// scaledPolygon returns the cell's boundary scaled about its center by
+// factor, computed in degrees as README.md "regions/polygons.jsonl" states.
+func scaledPolygon(cell h3go.Cell, factor float64) h3go.GeoPolygon {
+	center := must(cell.LatLng())
+	boundary := must(cell.Boundary())
+	loop := make(h3go.GeoLoop, len(boundary))
+
+	for i, vertex := range boundary {
+		loop[i] = h3go.LatLng{
+			Lat: center.Lat + factor*(vertex.Lat-center.Lat),
+			Lng: wrapDegrees(center.Lng + factor*wrapDegrees(vertex.Lng-center.Lng)),
+		}
+	}
+
+	return h3go.GeoPolygon{GeoLoop: loop}
+}
+
+// wrapDegrees brings a longitude difference back into [-180, 180].
+func wrapDegrees(lng float64) float64 {
+	switch {
+	case lng > 180:
+		return lng - 360
+	case lng < -180:
+		return lng + 360
+	default:
+		return lng
+	}
 }
 
 // must panics on an error from a call that the stream definition does not

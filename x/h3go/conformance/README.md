@@ -29,6 +29,7 @@ floats/distances.jsonl
 floats/resolutions.jsonl
 digests/resolutions.jsonl
 digests/baseCells.jsonl
+digests/patterns.jsonl
 ```
 
 `manifest.json` is the only file a consumer opens by name. Every record file
@@ -423,7 +424,9 @@ Examples:
 
 Digests over **every cell at resolutions 0 through 6**, 16,838,852 cells
 in all, so the group checks the whole grid at those resolutions without
-storing it. Two files hold the same twelve streams at two levels:
+storing it, plus a digest over a stream of arbitrary 64-bit words for the
+validity functions. Two files hold the same thirteen per-cell streams at
+two levels:
 
 - `digests/resolutions.jsonl`: one line per resolution, `{"res", "count",
   "digests"}`, each stream run over every cell at that resolution in
@@ -438,7 +441,9 @@ storing it. Two files hold the same twelve streams at two levels:
   generator resolves.
 
 `digests` is an object from stream name to hex SHA-256. Every stream has
-one line per cell, starting with the cell, and the streams are:
+one line per cell, starting with the cell. The `polygons` stream exists
+only for resolutions 0 through 2, so those rows have thirteen keys and
+finer rows twelve. The streams are:
 
 | Stream | Fields after the cell, for a cell at resolution `r` |
 |---|---|
@@ -454,6 +459,7 @@ one line per cell, starting with the cell, and the streams are:
 | `localIj` | `cellToLocalIj(origin, cell, 0)` as `i j`, or an error name, where `origin` is `cellToCenterChild(parent0, r)` (`parent0` itself at resolution 0) |
 | `compact` | `compactCells` of `cellToChildren(cell, r + 1)` sorted ascending with its last entry removed, as a set |
 | `roundTrip` | `latLngToCell(cellToLatLng(cell), r)` |
+| `polygons` (`r` ≤ 2 only) | the cell's boundary scaled about its center by 0.8, exactly as `regions/polygons.jsonl` scales it, filled at resolution `r + 2` by `polygonToCellsExperimental` in the `center`, `full`, `overlapping` and `overlappingBbox` modes, each as a set, then the same for the boundary scaled by 1.2; the eight sets separated by `\|` |
 
 Line examples, for the resolution-1 pentagon `81083ffffffffff`, in the
 `cells`, `parents`, `children`, `inspection`, `rings`, `edges`, `localIj`,
@@ -485,6 +491,32 @@ Example record:
 Enumerating resolution 6 takes minutes in a port, so a runner may stop
 earlier by default and offer a way to go further; the Go runner stops at
 resolution 3 unless `H3_CONFORMANCE_DIGESTS_MAXRES` says otherwise.
+
+`digests/patterns.jsonl` covers the validity functions on inputs that are
+not cells: one line per tier, `{"count", "digests"}`, where `count` is
+100000, 1000000 or 10000000 and `digests` has the single stream
+`validity`. The stream is one line per 64-bit pattern, drawn as the
+Sampling section describes, and the three digests are over the first
+`count` lines of the **same** stream, so a runner computes all three in one
+pass. Each line is the pattern in lowercase hex without leading zeros, then
+`isValidCell`, `isValidIndex`, `isValidDirectedEdge` and `isValidVertex`
+as `1` or `0`:
+
+The first four lines of the stream, the first of which is a cell whose
+mode was set to 2 and so is a valid directed edge:
+
+```
+14936b6b3283ffff 0 1 1 0
+88458d11ffffffff 0 0 0 0
+ce26cf46aa5f563 0 0 0 0
+8462c443fffffff 0 0 0 0
+```
+
+Uniform random words are almost always invalid on the mode bits alone, so
+most patterns are a valid cell with one field disturbed, which is where
+validators that only check the mode and resolution are caught out. The Go
+runner stops at the one-million tier unless
+`H3_CONFORMANCE_PATTERNS_MAXCOUNT` says otherwise.
 
 ## Sampling
 
@@ -671,6 +703,26 @@ One line per resolution 0 through 6, in that order, and within
 No draws; the inputs are every cell at the resolution, enumerated as
 `cellToChildren(baseCell, res)` for each base cell in order, each sorted
 ascending.
+
+### `digests/patterns.jsonl`
+
+Ten million patterns from one generator, each drawn as follows. Draw 8 for
+the kind. Kind 0: one draw is the pattern. Otherwise draw 16 for a
+resolution, then draw a valid cell at it (draw cells at that resolution
+until `isValidCell` accepts one), then:
+
+| Kind | Mutation of the valid cell |
+|---|---|
+| 1 | draw 16, store it in the mode bits 59-62 |
+| 2 | draw 8, store it in the reserved bits 56-58 |
+| 3 | draw 16, store it in the resolution bits 52-55 |
+| 4 | draw 128, store it in the base cell bits 45-51 |
+| 5 | draw 15 and add 1 for a digit position `p` from 1 to 15, then draw 8 and store it in digit slot `p` (bits `3*(15-p)` to `3*(15-p)+2`) |
+| 6 | set bit 63 |
+| 7 | draw 2: on 1 store `4` (vertex) in the mode bits, otherwise `2` (directed edge); then draw 8 and store it in the reserved bits |
+
+A digest is recorded after the 100,000th, the 1,000,000th and the
+10,000,000th pattern.
 
 ## Running and regenerating
 
