@@ -327,6 +327,20 @@ type BaseCellDigestsRecord struct {
 	Digests map[string]string `json:"digests"`
 }
 
+// PatternsDigestsRecord holds the validity digest over the first Count
+// patterns of the bit-pattern stream.
+//
+//nolint:govet // field order is the JSON key order given in README.md
+type PatternsDigestsRecord struct {
+	// Count is how many patterns the digest covers.
+	Count int64 `json:"count"`
+	// Digests maps the single stream, "validity", to its lowercase hex SHA-256.
+	Digests map[string]string `json:"digests"`
+}
+
+// subject names the record by its pattern count.
+func (r PatternsDigestsRecord) subject() string { return strconv.FormatInt(r.Count, 10) }
+
 // FloatCellRecord holds the coordinate and area outputs of one valid cell,
 // plus latLngToCell on points inside it.
 //

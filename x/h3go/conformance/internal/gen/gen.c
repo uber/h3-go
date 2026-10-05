@@ -73,6 +73,11 @@
 #define REGIONS_PENTAGON_STEP 4
 #define REGIONS_CELLS_PER_RES 3
 #define DIGESTS_MAX_RES 6
+#define POLYGONS_MAX_RES 2
+#define POLYGONS_FILL_STEP 2
+#define NUM_CONTAINMENT_MODES 4
+#define PATTERN_KINDS 8
+#define PATTERN_TIERS 3
 #define FLOATS_INTERIOR 0.5
 #define FLOATS_DRAWS_PER_CELL 2
 #define FLOATS_ANTIPODE_MARGIN 1e-3
@@ -1304,6 +1309,7 @@ enum {
     S_INSPECTION,
     S_LOCAL_IJ,
     S_PARENTS,
+    S_POLYGONS,
     S_RINGS,
     S_ROUND_TRIP,
     S_VERTEXES,
@@ -1311,9 +1317,28 @@ enum {
 };
 
 static const char *const STREAM_KEYS[NUM_STREAMS] = {
-    "cells",      "children", "compact", "disks", "distances", "edges",
-    "inspection", "localIj",  "parents", "rings", "roundTrip", "vertexes",
+    "cells",      "children", "compact", "disks",    "distances", "edges",     "inspection",
+    "localIj",    "parents",  "polygons", "rings",   "roundTrip", "vertexes",
 };
+
+/* The pattern counts at which digests/patterns.jsonl records a digest. */
+static const int64_t PATTERN_COUNTS[PATTERN_TIERS] = {100000, 1000000, 10000000};
+
+/* hasPolygons reports whether the polygons stream exists at a resolution. */
+static bool hasPolygons(int res) { return res <= POLYGONS_MAX_RES; }
+
+/* lineFill appends polygonToCellsExperimental of the polygon as a set. */
+static void lineFill(Line *line, const GeoPolygon *polygon, int res, uint32_t flags) {
+    int64_t size;
+    must(maxPolygonToCellsSizeExperimental(polygon, res, flags, &size));
+    H3Index *cells = calloc(size ? (size_t)size : 1, sizeof *cells);
+    if (!cells) {
+        fail("out of memory");
+    }
+    must(polygonToCellsExperimental(polygon, res, flags, size, cells));
+    lineIndexSet(line, cells, size);
+    free(cells);
+}
 
 /* absorb terminates the line and feeds it to the resolution and base-cell
  * digests of one stream. */
@@ -1500,17 +1525,110 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
         lineIndex(line, back);
     }
     absorb(perRes, perBase, S_ROUND_TRIP, line);
+
+    if (hasPolygons(res)) {
+        lineStart(line, h);
+        const double factors[] = {REGIONS_SHRINK, REGIONS_EXPAND};
+        for (int f = 0; f < 2; f++) {
+            CellBoundary loop;
+            scaledBoundary(h, factors[f], &loop);
+            GeoPolygon polygon = {{loop.numVerts, loop.verts}, 0, NULL};
+            for (uint32_t flags = 0; flags < NUM_CONTAINMENT_MODES; flags++) {
+                if (f || flags) {
+                    lineAppend(line, " |");
+                }
+                lineFill(line, &polygon, res + POLYGONS_FILL_STEP, flags);
+            }
+        }
+        absorb(perRes, perBase, S_POLYGONS, line);
+    }
 }
 
 /* printDigests prints the "digests" object and finalizes the streams. */
-static void printDigests(FILE *out, Sha256 *streams) {
+static void printDigests(FILE *out, Sha256 *streams, int res) {
     fputs(",\"digests\":{", out);
     for (int i = 0; i < NUM_STREAMS; i++) {
+        if (i == S_POLYGONS && !hasPolygons(res)) {
+            continue;
+        }
         char hex[65];
         sha256Final(&streams[i], hex);
         fprintf(out, "%s\"%s\":\"%s\"", i ? "," : "", STREAM_KEYS[i], hex);
     }
     fputs("}}\n", out);
+}
+
+/* drawPattern draws one 64-bit word for the validity stream (README,
+ * "digests/patterns.jsonl"): uniform, or a valid cell with one field
+ * mutated. */
+static uint64_t drawPattern(Splitmix64 *rng) {
+    int kind = drawN(rng, PATTERN_KINDS);
+    if (kind == 0) {
+        return draw(rng);
+    }
+    uint64_t cell = drawValidCell(rng, drawN(rng, MAX_RES + 1));
+    switch (kind) {
+        case 1:
+            return setField(cell, MODE_OFFSET, 4, (uint64_t)drawN(rng, NUM_MODES));
+        case 2:
+            return setField(cell, RESERVED_OFFSET, 3, (uint64_t)drawN(rng, 8));
+        case 3:
+            return setField(cell, RES_OFFSET, 4, (uint64_t)drawN(rng, MAX_RES + 1));
+        case 4:
+            return setField(cell, BASE_CELL_OFFSET, 7, (uint64_t)drawN(rng, 128));
+        case 5: {
+            int position = 1 + drawN(rng, MAX_RES);
+            return setField(cell, digitShift(position), DIGIT_BITS, (uint64_t)drawN(rng, NUM_DIGITS + 1));
+        }
+        case 6:
+            return cell | HIGH_BIT;
+        default: {
+            uint64_t mode = drawN(rng, 2) ? 4 : 2;
+            cell = setField(cell, MODE_OFFSET, 4, mode);
+            return setField(cell, RESERVED_OFFSET, 3, (uint64_t)drawN(rng, 8));
+        }
+    }
+}
+
+/* writePatternsFile writes digests/patterns.jsonl: one validity digest per
+ * tier, each over the first PATTERN_COUNTS[tier] patterns of one stream. */
+static void writePatternsFile(const char *outDir, uint64_t seed, FileInfo *info) {
+    char *path = joinPath(outDir, info->name);
+    FILE *out = createFile(path);
+    Splitmix64 rng = {seed};
+    Sha256 digest;
+    sha256Init(&digest);
+    Line line = {0};
+    int tier = 0;
+
+    for (int64_t n = 1; n <= PATTERN_COUNTS[PATTERN_TIERS - 1]; n++) {
+        uint64_t word = drawPattern(&rng);
+        char buf[32];
+        snprintf(buf, sizeof buf, "%" PRIx64, word);
+        line.len = 0;
+        lineAppend(&line, buf);
+        lineInt(&line, isValidCell(word));
+        lineInt(&line, isValidIndex(word));
+        lineInt(&line, isValidDirectedEdge(word));
+        lineInt(&line, isValidVertex(word));
+        lineAppend(&line, "\n");
+        sha256Update(&digest, (const uint8_t *)line.buf, line.len);
+
+        if (n == PATTERN_COUNTS[tier]) {
+            Sha256 snapshot = digest;
+            char hex[65];
+            sha256Final(&snapshot, hex);
+            fprintf(out, "{\"count\":%" PRId64 ",\"digests\":{\"validity\":\"%s\"}}\n", n, hex);
+            tier++;
+        }
+    }
+
+    free(line.buf);
+    if (fclose(out)) {
+        fail("write");
+    }
+    describeFile(path, info);
+    free(path);
 }
 
 /* writeDigestsFiles writes, for every resolution 0..DIGESTS_MAX_RES, one
@@ -1551,11 +1669,11 @@ static void writeDigestsFiles(const char *outDir, FileInfo *resInfo, FileInfo *b
             total += count;
 
             fprintf(baseOut, "{\"res\":%d,\"baseCell\":%d,\"count\":%" PRId64, res, baseCell, count);
-            printDigests(baseOut, perBase);
+            printDigests(baseOut, perBase, res);
         }
 
         fprintf(resOut, "{\"res\":%d,\"count\":%" PRId64, res, total);
-        printDigests(resOut, perRes);
+        printDigests(resOut, perRes, res);
     }
 
     free(line.buf);
@@ -1874,7 +1992,7 @@ int main(int argc, char *argv[]) {
         {{"floats/distances.jsonl", 0, ""}, sampleTraversal, writeDistanceSubject},
     };
     size_t numGroups = sizeof groups / sizeof groups[0];
-    FileInfo files[sizeof groups / sizeof groups[0] + 3];
+    FileInfo files[sizeof groups / sizeof groups[0] + 4];
     for (size_t i = 0; i < numGroups; i++) {
         writeIndexGroup(outDir, seed, &groups[i]);
         files[i] = groups[i].info;
@@ -1884,6 +2002,8 @@ int main(int argc, char *argv[]) {
     files[numGroups + 1] = (FileInfo){"digests/resolutions.jsonl", 0, ""};
     files[numGroups + 2] = (FileInfo){"digests/baseCells.jsonl", 0, ""};
     writeDigestsFiles(outDir, &files[numGroups + 1], &files[numGroups + 2]);
-    writeManifest(outDir, version, seed, files, numGroups + 3);
+    files[numGroups + 3] = (FileInfo){"digests/patterns.jsonl", 0, ""};
+    writePatternsFile(outDir, seed, &files[numGroups + 3]);
+    writeManifest(outDir, version, seed, files, numGroups + 4);
     return 0;
 }
