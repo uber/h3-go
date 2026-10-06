@@ -428,8 +428,8 @@ func (r InspectionRecord) subject() string { return r.Index }
 // subject returns the record's cell.
 func (r HierarchyRecord) subject() string { return r.Index }
 
-// subject returns the record's cell.
-func (r TraversalRecord) subject() string { return r.Index }
+// subject returns the record's cell and target.
+func (r TraversalRecord) subject() string { return r.Index + "/" + r.Target }
 
 // subject returns the record's cell.
 func (r EdgesRecord) subject() string { return r.Index }
