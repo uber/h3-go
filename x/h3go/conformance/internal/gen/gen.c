@@ -531,7 +531,17 @@ static void printDiskSet(FILE *out, H3Index origin, int k, H3Error (*fn)(H3Index
     printIndexSet(out, cells, diskSize(k));
 }
 
+static void writeTraversalPair(FILE *out, H3Index h, H3Index target);
+
+/* writeTraversalRecord draws the target from the subject's 3-disk and writes
+ * the pair. */
 static void writeTraversalRecord(FILE *out, H3Index h, Splitmix64 *rng) {
+    writeTraversalPair(out, h, drawDiskTarget(rng, h, MAX_DISK_K));
+}
+
+/* writeTraversalPair writes the subject's disks and rings, then its distance,
+ * path and neighbour relation to the target. */
+static void writeTraversalPair(FILE *out, H3Index h, H3Index target) {
     fputs("{\"index\":", out);
     printIndex(out, h);
 
@@ -566,7 +576,6 @@ static void writeTraversalRecord(FILE *out, H3Index h, Splitmix64 *rng) {
     }
     fputc(']', out);
 
-    H3Index target = drawDiskTarget(rng, h, MAX_DISK_K);
     fputs(",\"target\":", out);
     printIndex(out, target);
 
@@ -923,12 +932,9 @@ static void pushDisk(IndexList *list, H3Index h, int k) {
     }
 }
 
-/* writeSetsRecord writes one line for the input set under the given kind. */
-static void writeSetsRecord(FILE *out, const char *kind, H3Index h, const IndexList *input,
-                            int uncompactRes) {
-    fprintf(out, "{\"id\":\"%s:", kind);
-    printIndexBare(out, h);
-    fputs("\",\"input\":", out);
+/* writeSetsRecordNamed writes one line for the input set under the given id. */
+static void writeSetsRecordNamed(FILE *out, const char *id, const IndexList *input, int uncompactRes) {
+    fprintf(out, "{\"id\":\"%s\",\"input\":", id);
     printIndexSequence(out, input->items, (int64_t)input->len);
 
     fputs(",\"compact\":", out);
@@ -962,6 +968,16 @@ static void writeSetsRecord(FILE *out, const char *kind, H3Index h, const IndexL
         printError(out, err);
     }
     fputs("}\n", out);
+}
+
+/* writeSetsRecord writes one line for the input set under the id kind:cell. */
+static void writeSetsRecord(FILE *out, const char *kind, H3Index h, const IndexList *input,
+                            int uncompactRes) {
+    char cell[MAX_INDEX_LEN];
+    must(h3ToString(h, cell, sizeof cell));
+    char id[64];
+    snprintf(id, sizeof id, "%s:%s", kind, cell);
+    writeSetsRecordNamed(out, id, input, uncompactRes);
 }
 
 /* writeSetsSubject writes the six kinds of set built from one cell. */
@@ -1095,7 +1111,12 @@ static void printMultiPolygon(FILE *out, const GeoPolygon *polygon, int res) {
     if (!cells) {
         fail("out of memory");
     }
-    must(polygonToCells(polygon, res, 0, cells));
+    err = polygonToCells(polygon, res, 0, cells);
+    if (err) {
+        free(cells);
+        printError(out, err);
+        return;
+    }
     int64_t count = 0;
     for (int64_t i = 0; i < size; i++) {
         if (cells[i]) {
@@ -1103,6 +1124,13 @@ static void printMultiPolygon(FILE *out, const GeoPolygon *polygon, int res) {
         }
     }
     qsort(cells, (size_t)count, sizeof *cells, compareIndexes);
+    if (count == 0) {
+        /* The reference still returns one polygon structure with no loops;
+         * the record's sequence of polygons is empty. */
+        free(cells);
+        fputs("[]", out);
+        return;
+    }
 
     LinkedGeoPolygon multi = {0};
     err = cellsToLinkedMultiPolygon(cells, (int)count, &multi);
@@ -1135,11 +1163,10 @@ static void printMultiPolygon(FILE *out, const GeoPolygon *polygon, int res) {
     destroyLinkedMultiPolygon(&multi);
 }
 
-/* writeRegionsRecord writes one line for the polygon filled at res. */
-static void writeRegionsRecord(FILE *out, H3Index h, const GeoPolygon *polygon, int res) {
-    fputs("{\"id\":\"", out);
-    printIndexBare(out, h);
-    fprintf(out, ":%d%s\",\"polygon\":{\"outer\":", res, polygon->numHoles ? ":hole" : "");
+/* writeRegionsRecordNamed writes one line for the polygon filled at res under
+ * the given id. */
+static void writeRegionsRecordNamed(FILE *out, const char *id, const GeoPolygon *polygon, int res) {
+    fprintf(out, "{\"id\":\"%s\",\"polygon\":{\"outer\":", id);
     printLoop(out, polygon->geoloop.verts, polygon->geoloop.numVerts);
     fputs(",\"holes\":[", out);
     for (int i = 0; i < polygon->numHoles; i++) {
@@ -1160,6 +1187,16 @@ static void writeRegionsRecord(FILE *out, H3Index h, const GeoPolygon *polygon, 
     fputs(",\"multiPolygon\":", out);
     printMultiPolygon(out, polygon, res);
     fputs("}\n", out);
+}
+
+/* writeRegionsRecord writes one line for the polygon filled at res under the
+ * id cell:res, with :hole appended when the polygon has a hole. */
+static void writeRegionsRecord(FILE *out, H3Index h, const GeoPolygon *polygon, int res) {
+    char cell[MAX_INDEX_LEN];
+    must(h3ToString(h, cell, sizeof cell));
+    char id[64];
+    snprintf(id, sizeof id, "%s:%d%s", cell, res, polygon->numHoles ? ":hole" : "");
+    writeRegionsRecordNamed(out, id, polygon, res);
 }
 
 /* wrapDegrees brings a longitude difference or value into [-180, 180]. */
@@ -1952,6 +1989,338 @@ static void writeManifest(const char *outDir, const char *version, uint64_t seed
     free(path);
 }
 
+/* ---- curated files (README, "Curated files") ---- */
+
+#define COUNT(array) (sizeof(array) / sizeof((array)[0]))
+#define NUM_CURATED_FILES 6
+#define MAX_CURATED_VERTS 16
+
+/* Indexes from the reference's own tests and command-line fixtures, plus
+ * hand-built traps, in the order README.md lists them. */
+static const uint64_t CURATED_INSPECTION[] = {
+    UINT64_C(0x85283473fffffff), UINT64_C(0x85283473ffff),     UINT64_C(0x115283473fffffff),
+    UINT64_C(0x22528340bfffffff), UINT64_C(0x8f754e64992d6d6), UINT64_C(0x81743ffffffffff),
+    UINT64_C(0x8928342e20fffff), UINT64_C(0x5),                UINT64_C(0x200f202020202020),
+    UINT64_C(0x80c3fffffffffff),  UINT64_C(0x8f283080dcb0ae2), UINT64_C(0x88283080ddfffff),
+    UINT64_C(0x81083ffffffffff),  UINT64_C(0x81087ffffffffff), UINT64_C(0x82080ffffffffff),
+    UINT64_C(0x8029fffffffffff),  UINT64_C(0x85283472fffffff),
+};
+
+static const uint64_t CURATED_HIERARCHY[] = {
+    UINT64_C(0x88283080ddfffff), UINT64_C(0x8f283080dcb0ae2), UINT64_C(0x81083ffffffffff),
+    UINT64_C(0x820807fffffffff), UINT64_C(0x85283473fffffff), UINT64_C(0x80c3fffffffffff),
+    UINT64_C(0x8928342e20fffff), UINT64_C(0x8029fffffffffff),
+};
+
+typedef struct {
+    uint64_t origin;
+    uint64_t target;
+} CuratedPair;
+
+static const CuratedPair CURATED_TRAVERSAL[] = {
+    {UINT64_C(0x85283473fffffff), UINT64_C(0x8528342bfffffff)},
+    {UINT64_C(0x85283473fffffff), UINT64_C(0x85291ac7fffffff)},
+    {UINT64_C(0x85283473fffffff), UINT64_C(0x85283477fffffff)},
+    {UINT64_C(0x85283473fffffff), UINT64_C(0x85283472fffffff)},
+    {UINT64_C(0x85285aa7fffffff), UINT64_C(0x851d9b1bfffffff)},
+    {UINT64_C(0x820807fffffffff), UINT64_C(0x8208e7fffffffff)},
+    {UINT64_C(0x8411b61ffffffff), UINT64_C(0x84016d3ffffffff)},
+    {UINT64_C(0x820c4ffffffffff), UINT64_C(0x821ce7fffffffff)},
+    {UINT64_C(0x832830fffffffff), UINT64_C(0x822837fffffffff)},
+    {UINT64_C(0x832830fffffffff), UINT64_C(0x832834fffffffff)},
+    {UINT64_C(0x8029fffffffffff), UINT64_C(0x8051fffffffffff)},
+    {UINT64_C(0x80c3fffffffffff), UINT64_C(0x80c3fffffffffff)},
+    {UINT64_C(0x81083ffffffffff), UINT64_C(0x8108bffffffffff)},
+    {UINT64_C(0x8f283080dcb0ae2), UINT64_C(0x8f283080dcb0ae2)},
+};
+
+static const CuratedPair CURATED_LOCALIJ[] = {
+    {UINT64_C(0x85283473fffffff), UINT64_C(0x8528342bfffffff)},
+    {UINT64_C(0x8029fffffffffff), UINT64_C(0x8029fffffffffff)},
+    {UINT64_C(0x8029fffffffffff), UINT64_C(0x8051fffffffffff)},
+    {UINT64_C(0x820897fffffffff), UINT64_C(0x821f67fffffffff)},
+    {UINT64_C(0x85283473fffffff), UINT64_C(0x85291ac7fffffff)},
+    {UINT64_C(0x832830fffffffff), UINT64_C(0x832834fffffffff)},
+    {UINT64_C(0x820807fffffffff), UINT64_C(0x8208e7fffffffff)},
+    {UINT64_C(0x80c3fffffffffff), UINT64_C(0x80c3fffffffffff)},
+    {UINT64_C(0x81083ffffffffff), UINT64_C(0x8108bffffffffff)},
+    {UINT64_C(0x85285aa7fffffff), UINT64_C(0x851d9b1bfffffff)},
+    {UINT64_C(0x85283473fffffff), UINT64_C(0x85283472fffffff)},
+    {UINT64_C(0x200f202020202020), UINT64_C(0x85283473fffffff)},
+};
+
+typedef struct {
+    const char *name;
+    int uncompactRes;
+    /* Space-separated lowercase hex, or NULL for every resolution 0 cell. */
+    const char *cells;
+} CuratedSet;
+
+static const CuratedSet CURATED_SETS[] = {
+    {"compact_test1", 6,
+     "85283473fffffff 85283447fffffff 8528347bfffffff 85283463fffffff 85283477fffffff "
+     "8528340ffffffff 8528340bfffffff 85283457fffffff 85283443fffffff 8528344ffffffff "
+     "852836b7fffffff 8528346bfffffff 8528346ffffffff 85283467fffffff 8528342bfffffff "
+     "8528343bfffffff 85283407fffffff 85283403fffffff 8528341bfffffff"},
+    {"multipolygon_test3", 6,
+     "8528340bfffffff 85283447fffffff 8528347bfffffff 85283463fffffff 85283477fffffff "
+     "8528340ffffffff"},
+    {"multipolygon_test4", 6,
+     "8528340bfffffff 85283447fffffff 8528347bfffffff 85283463fffffff 85283477fffffff "
+     "8528340ffffffff 8528840ffffffff"},
+    {"multipolygon_test5", 6,
+     "85283473fffffff 85283447fffffff 8528347bfffffff 85283463fffffff 85283477fffffff "
+     "8528340ffffffff 8528340bfffffff 85283457fffffff 85283443fffffff 8528344ffffffff "
+     "852836b7fffffff 8528346bfffffff 8528346ffffffff 85283467fffffff 8528342bfffffff "
+     "8528343bfffffff 85283407fffffff 85283403fffffff 8528341bfffffff 852834cffffffff "
+     "85283453fffffff 8528345bfffffff 8528344bfffffff 852836b3fffffff 852836a3fffffff "
+     "852836a7fffffff 852830d3fffffff 852830d7fffffff 8528309bfffffff 85283093fffffff "
+     "8528342ffffffff 85283423fffffff 85283433fffffff 852834abfffffff 85283417fffffff "
+     "85283413fffffff 852834c7fffffff 852834c3fffffff 852834cbfffffff 8529a927fffffff "
+     "8529a92ffffffff 85283697fffffff 85283687fffffff 852836bbfffffff 852836abfffffff "
+     "852836affffffff 852830dbfffffff 852830c3fffffff 852830c7fffffff 8528308bfffffff "
+     "85283083fffffff 85283097fffffff 8528355bfffffff 85283427fffffff 85283437fffffff "
+     "852834affffffff 852834a3fffffff 852834bbfffffff 8528348ffffffff 8528348bfffffff "
+     "852834d7fffffff 852834d3fffffff 852834dbfffffff 8529a937fffffff 8529a923fffffff "
+     "8529a92bfffffff 85283693fffffff 85283683fffffff 8528368ffffffff 85283617fffffff "
+     "85283607fffffff 85283633fffffff 85283637fffffff 852830cbfffffff 852830cffffffff "
+     "8528301bfffffff 85283013fffffff 8528308ffffffff 85283087fffffff 8528354bfffffff "
+     "85283543fffffff 85283553fffffff 852835cbfffffff 852835dbfffffff 852834a7fffffff "
+     "852834b7fffffff 852834b3fffffff 85283487fffffff 85283483fffffff 8528349bfffffff "
+     "85291a6ffffffff 85291a6bfffffff 8529a9a7fffffff 8529a9affffffff 8529a933fffffff "
+     "8529a93bfffffff 8529a977fffffff 8529a967fffffff 8528369bfffffff 8528368bfffffff "
+     "85283613fffffff 85283603fffffff 8528360ffffffff 8528363bfffffff 85283623fffffff "
+     "85283627fffffff 85283053fffffff 85283057fffffff 8528300bfffffff 85283003fffffff "
+     "85283017fffffff 852830bbfffffff 852830b3fffffff 8528354ffffffff 85283547fffffff "
+     "85283557fffffff 852835cffffffff 852835c3fffffff 852835d3fffffff 85291b6bfffffff "
+     "85291b7bfffffff 85291b4ffffffff 85291b4bfffffff 85283497fffffff 85283493fffffff "
+     "85291a67fffffff 85291a63fffffff"},
+    {"pentagon_children", 3,
+     "820807fffffffff 820817fffffffff 82081ffffffffff 820827fffffffff 82082ffffffffff "
+     "820837fffffffff"},
+    {"res0", 1, NULL},
+};
+
+/* Polygon vertices as lat, lng pairs in degrees. Fixtures the reference
+ * holds in radians were converted once with %.17g. */
+static const double SF_VERTS[] = {
+    37.813318999889439, -122.40898669969356, 37.786630199906988, -122.38054369969613,
+    37.719806199904276, -122.35447369969584, 37.707613199904031, -122.51234369969448,
+    37.783587199903444, -122.52471869969825, 37.815157199906039, -122.47987669969707,
+};
+static const double SF_HOLE_VERTS[] = {
+    37.786980199908015, -122.44711969969569, 37.766410199904307, -122.45907769969834,
+    37.771068199906722, -122.41370969969519,
+};
+static const double EMPTY_VERTS[] = {
+    37.813318999889439, -122.40898669968212, 37.813318999946738, -122.40898669968784,
+    37.813319000004029, -122.40898669969356,
+};
+static const double PRIME_MERIDIAN_VERTS[] = {
+    0.57295779513082323,  0.57295779513082323,  0.57295779513082323,  -0.57295779513082323,
+    -0.57295779513082323, -0.57295779513082323, -0.57295779513082323, 0.57295779513082323,
+};
+static const double TRANSMERIDIAN_VERTS[] = {
+    0.57295779513082323,  -179.4270422048692, 0.57295779513082323,  179.4270422048692,
+    -0.57295779513082323, 179.4270422048692,  -0.57295779513082323, -179.4270422048692,
+};
+static const double TRANSMERIDIAN_HOLE_VERTS[] = {
+    0.28647889756541162,  -179.71352110243458, 0.28647889756541162,  179.71352110243458,
+    -0.28647889756541162, 179.71352110243458,  -0.28647889756541162, -179.71352110243458,
+};
+static const double TRANSMERIDIAN_COMPLEX_VERTS[] = {
+    5.729577951308233,  -179.99942704220487, 5.729577951308233,  179.99942704220487,
+    2.8647889756541165, 168.54084409738351,  -5.729577951308233, 179.99942704220487,
+    -5.729577951308233, -179.99942704220487, -2.8647889756541165, -168.54084409738351,
+};
+static const double H3_136_VERTS[] = {
+    5.7691065215330903, 51.112259557918499, 5.7484366798711299, 51.084428587095701,
+    5.7486856571813103, 51.084115610613701, 5.7693966192324702, 51.112087787177096,
+};
+static const double H3_595_VERTS[] = {
+    37.345793375368473, -121.53625488281249, 37.616407055779923, -121.9317626953125,
+    37.330856613297144, -122.29980468749999, 37.050793129806571, -121.904296875,
+};
+static const double H3JS_67_VERTS[] = {
+    -33.13755119234615, -56.25,    -34.30714385628804, -56.25,
+    -34.30714385628804, -57.65625, -33.13755119234615, -57.65625,
+};
+static const double H3JS_67_SECOND_VERTS[] = {
+    -34.30714385628804, -57.65625, -35.4606699514953,  -57.65625,
+    -35.4606699514953,  -59.0625,  -34.30714385628804, -59.0625,
+};
+static const double WEST_HEMISPHERE_VERTS[] = {-90, -180, 90, -180, 90, 0, -90, 0};
+static const double EAST_HEMISPHERE_VERTS[] = {-90, 0, 90, 0, 90, 180, -90, 180};
+static const double POINT_VERTS[] = {0, 0};
+static const double LINE_VERTS[] = {0, 0, 57.295779513082323, 0};
+static const double CLI_TRIANGLE_VERTS[] = {
+    37.813318999983238, -122.4089866999972145, 37.7198061999978478, -122.3544736999993603,
+    37.8151571999998453, -122.4798767000009008,
+};
+static const double CLI_DECAGON_VERTS[] = {
+    37.784046, -122.427089, 37.772267, -122.434586, 37.761736, -122.425769, 37.762982, -122.409455,
+    37.752446, -122.400640, 37.753689, -122.384324, 37.765468, -122.376819, 37.776004, -122.385635,
+    37.774761, -122.401954, 37.785293, -122.410771,
+};
+
+typedef struct {
+    const char *name;
+    int res;
+    int numVerts;
+    const double *verts;
+    int numHoleVerts;
+    const double *holeVerts;
+} CuratedPolygon;
+
+static const CuratedPolygon CURATED_POLYGONS[] = {
+    {"sf", 9, 6, SF_VERTS, 0, NULL},
+    {"sf", 9, 6, SF_VERTS, 3, SF_HOLE_VERTS},
+    {"empty", 9, 3, EMPTY_VERTS, 0, NULL},
+    {"primeMeridian", 7, 4, PRIME_MERIDIAN_VERTS, 0, NULL},
+    {"transmeridian", 7, 4, TRANSMERIDIAN_VERTS, 0, NULL},
+    {"transmeridian", 7, 4, TRANSMERIDIAN_VERTS, 4, TRANSMERIDIAN_HOLE_VERTS},
+    {"transmeridianInner", 7, 4, TRANSMERIDIAN_HOLE_VERTS, 0, NULL},
+    {"transmeridianComplex", 4, 6, TRANSMERIDIAN_COMPLEX_VERTS, 0, NULL},
+    {"h3_136", 13, 4, H3_136_VERTS, 0, NULL},
+    {"h3_595", 5, 4, H3_595_VERTS, 0, NULL},
+    {"h3js_67", 7, 4, H3JS_67_VERTS, 0, NULL},
+    {"h3js_67_second", 7, 4, H3JS_67_SECOND_VERTS, 0, NULL},
+    {"westHemisphere", 0, 4, WEST_HEMISPHERE_VERTS, 0, NULL},
+    {"westHemisphere", 1, 4, WEST_HEMISPHERE_VERTS, 0, NULL},
+    {"westHemisphere", 2, 4, WEST_HEMISPHERE_VERTS, 0, NULL},
+    {"eastHemisphere", 0, 4, EAST_HEMISPHERE_VERTS, 0, NULL},
+    {"eastHemisphere", 1, 4, EAST_HEMISPHERE_VERTS, 0, NULL},
+    {"eastHemisphere", 2, 4, EAST_HEMISPHERE_VERTS, 0, NULL},
+    {"point", 5, 1, POINT_VERTS, 0, NULL},
+    {"line", 5, 2, LINE_VERTS, 0, NULL},
+    {"cliTriangle", 7, 3, CLI_TRIANGLE_VERTS, 0, NULL},
+    {"cliDecagon", 7, 10, CLI_DECAGON_VERTS, 0, NULL},
+};
+
+/* finishFile closes a record file and fills in its manifest entry. */
+static void finishFile(FILE *out, char *path, FileInfo *info) {
+    if (fclose(out)) {
+        fail("write");
+    }
+    describeFile(path, info);
+    free(path);
+}
+
+/* writeCuratedIndexes writes one record per index with a group's writer. The
+ * generator is fresh and the writers used here draw nothing. */
+static void writeCuratedIndexes(const char *outDir, uint64_t seed, FileInfo *info,
+                                const uint64_t *indexes, size_t count, RecordWriter write) {
+    Splitmix64 rng = {seed};
+    char *path = joinPath(outDir, info->name);
+    FILE *out = createFile(path);
+    for (size_t i = 0; i < count; i++) {
+        write(out, indexes[i], &rng);
+    }
+    finishFile(out, path, info);
+}
+
+typedef void (*PairWriter)(FILE *out, H3Index origin, H3Index target);
+
+/* writeCuratedPairs writes one record per origin and target pair. */
+static void writeCuratedPairs(const char *outDir, FileInfo *info, const CuratedPair *pairs,
+                              size_t count, PairWriter write) {
+    char *path = joinPath(outDir, info->name);
+    FILE *out = createFile(path);
+    for (size_t i = 0; i < count; i++) {
+        write(out, pairs[i].origin, pairs[i].target);
+    }
+    finishFile(out, path, info);
+}
+
+/* parseCells appends the space-separated hex indexes in text. */
+static void parseCells(const char *text, IndexList *list) {
+    while (*text) {
+        char *end;
+        uint64_t index = strtoull(text, &end, 16);
+        if (end == text) {
+            fail("malformed curated cell list");
+        }
+        push(list, index);
+        text = end;
+        while (*text == ' ') {
+            text++;
+        }
+    }
+}
+
+/* writeCuratedSets writes each named input set under the id curated:name. */
+static void writeCuratedSets(const char *outDir, FileInfo *info) {
+    char *path = joinPath(outDir, info->name);
+    FILE *out = createFile(path);
+    for (size_t i = 0; i < COUNT(CURATED_SETS); i++) {
+        IndexList input = {0};
+        if (CURATED_SETS[i].cells) {
+            parseCells(CURATED_SETS[i].cells, &input);
+        } else {
+            H3Index res0[NUM_BASE_CELLS];
+            must(getRes0Cells(res0));
+            for (int j = 0; j < NUM_BASE_CELLS; j++) {
+                push(&input, res0[j]);
+            }
+        }
+        char id[64];
+        snprintf(id, sizeof id, "curated:%s", CURATED_SETS[i].name);
+        writeSetsRecordNamed(out, id, &input, CURATED_SETS[i].uncompactRes);
+        free(input.items);
+    }
+    finishFile(out, path, info);
+}
+
+/* curatedLoop converts a degree table into a loop in radians. */
+static void curatedLoop(const double *verts, int numVerts, LatLng *loop) {
+    for (int i = 0; i < numVerts; i++) {
+        loop[i].lat = degsToRads(verts[2 * i]);
+        loop[i].lng = degsToRads(verts[2 * i + 1]);
+    }
+}
+
+/* writeCuratedPolygons writes each named polygon under the id name:res, with
+ * :hole appended when it has one. */
+static void writeCuratedPolygons(const char *outDir, FileInfo *info) {
+    char *path = joinPath(outDir, info->name);
+    FILE *out = createFile(path);
+    for (size_t i = 0; i < COUNT(CURATED_POLYGONS); i++) {
+        const CuratedPolygon *entry = &CURATED_POLYGONS[i];
+        LatLng outer[MAX_CURATED_VERTS];
+        LatLng inner[MAX_CURATED_VERTS];
+        curatedLoop(entry->verts, entry->numVerts, outer);
+        GeoLoop hole = {entry->numHoleVerts, inner};
+        GeoPolygon polygon = {{entry->numVerts, outer}, 0, NULL};
+        if (entry->numHoleVerts) {
+            curatedLoop(entry->holeVerts, entry->numHoleVerts, inner);
+            polygon.numHoles = 1;
+            polygon.holes = &hole;
+        }
+        char id[64];
+        snprintf(id, sizeof id, "%s:%d%s", entry->name, entry->res, entry->numHoleVerts ? ":hole" : "");
+        writeRegionsRecordNamed(out, id, &polygon, entry->res);
+    }
+    finishFile(out, path, info);
+}
+
+/* writeCuratedFiles writes the six curated files and their manifest entries. */
+static void writeCuratedFiles(const char *outDir, uint64_t seed, FileInfo *files) {
+    files[0] = (FileInfo){"inspection/curated.jsonl", 0, ""};
+    writeCuratedIndexes(outDir, seed, &files[0], CURATED_INSPECTION, COUNT(CURATED_INSPECTION),
+                        writeInspectionRecord);
+    files[1] = (FileInfo){"hierarchy/curated.jsonl", 0, ""};
+    writeCuratedIndexes(outDir, seed, &files[1], CURATED_HIERARCHY, COUNT(CURATED_HIERARCHY),
+                        writeHierarchyRecord);
+    files[2] = (FileInfo){"traversal/curated.jsonl", 0, ""};
+    writeCuratedPairs(outDir, &files[2], CURATED_TRAVERSAL, COUNT(CURATED_TRAVERSAL), writeTraversalPair);
+    files[3] = (FileInfo){"localij/curated.jsonl", 0, ""};
+    writeCuratedPairs(outDir, &files[3], CURATED_LOCALIJ, COUNT(CURATED_LOCALIJ), writeLocalIJRecord);
+    files[4] = (FileInfo){"sets/curated.jsonl", 0, ""};
+    writeCuratedSets(outDir, &files[4]);
+    files[5] = (FileInfo){"regions/curated.jsonl", 0, ""};
+    writeCuratedPolygons(outDir, &files[5]);
+}
+
 int main(int argc, char *argv[]) {
     const char *outDir = NULL;
     const char *version = NULL;
@@ -1992,7 +2361,7 @@ int main(int argc, char *argv[]) {
         {{"floats/distances.jsonl", 0, ""}, sampleTraversal, writeDistanceSubject},
     };
     size_t numGroups = sizeof groups / sizeof groups[0];
-    FileInfo files[sizeof groups / sizeof groups[0] + 4];
+    FileInfo files[sizeof groups / sizeof groups[0] + 4 + NUM_CURATED_FILES];
     for (size_t i = 0; i < numGroups; i++) {
         writeIndexGroup(outDir, seed, &groups[i]);
         files[i] = groups[i].info;
@@ -2004,6 +2373,7 @@ int main(int argc, char *argv[]) {
     writeDigestsFiles(outDir, &files[numGroups + 1], &files[numGroups + 2]);
     files[numGroups + 3] = (FileInfo){"digests/patterns.jsonl", 0, ""};
     writePatternsFile(outDir, seed, &files[numGroups + 3]);
-    writeManifest(outDir, version, seed, files, numGroups + 4);
+    writeCuratedFiles(outDir, seed, &files[numGroups + 4]);
+    writeManifest(outDir, version, seed, files, numGroups + 4 + NUM_CURATED_FILES);
     return 0;
 }

@@ -15,13 +15,19 @@ by any language without a schema and a failing line can be quoted as it is.
 ```
 manifest.json
 inspection/cells.jsonl
+inspection/curated.jsonl
 hierarchy/cells.jsonl
+hierarchy/curated.jsonl
 traversal/cells.jsonl
+traversal/curated.jsonl
 edges/cells.jsonl
 vertexes/cells.jsonl
 localij/pairs.jsonl
+localij/curated.jsonl
 sets/sets.jsonl
+sets/curated.jsonl
 regions/polygons.jsonl
+regions/curated.jsonl
 floats/cells.jsonl
 floats/edges.jsonl
 floats/vertexes.jsonl
@@ -35,7 +41,9 @@ digests/patterns.jsonl
 `manifest.json` is the only file a consumer opens by name. Every record file
 is listed in it with its line count and SHA-256, and a consumer must refuse a
 file whose hash does not match. Record files are grouped in one directory per
-function family; a group directory may hold several files.
+function family; a group directory may hold several files. A `curated.jsonl`
+holds hand-chosen subjects in its group's record type (see Curated files);
+a consumer runs every file of a group the same way.
 
 ### Manifest
 
@@ -200,7 +208,9 @@ Example:
 
 ### `traversal`
 
-One line per **valid cell**, paired with a `target` drawn from its 3-disk.
+One line per **valid cell and target**. The sampled file draws the target
+from the cell's 3-disk; the curated file pairs cells by hand, so a target
+there may be far away or not a valid cell.
 `gridDistance` and `gridPathCells` fail with `E_FAILED` when the pair
 straddles a pentagon or is otherwise too far apart in local coordinates;
 those rows are the group's error cases.
@@ -351,13 +361,21 @@ sequence, in the reference's order of decreasing outer-loop area. Within a
 polygon the outer loop is a sequence of points that may start at any vertex,
 compared point by point with the angular tolerance, and the holes are a set
 of such loops. The `cells` fed to `cellsToLinkedMultiPolygon` are passed in
-ascending order.
+ascending order. When `cells` is empty, `multiPolygon` is the empty
+sequence; the reference's output structure then holds no loops.
 
 Scaling the boundaries matters (see Sampling): a polygon that is exactly a cell boundary
 puts the finer cells' vertices on its edges, and whether `full` and
 `overlapping` count such a cell then depends on rounding, in the reference as
 much as in a port. The scaled polygons keep every cell vertex clear of the
 polygon edges.
+
+One reference behaviour is deliberately absent. The classic
+`polygonToCells` fails with `E_FAILED` when `maxPolygonToCellsSize`
+underestimates the fill, which its own tests show for a band from 85 to
+89.9 degrees north spanning 179 degrees of longitude. An implementation
+without a fixed output buffer returns the cells instead, and that is the
+better answer, so no such polygon is in the suite.
 
 Example:
 
@@ -517,6 +535,129 @@ most patterns are a valid cell with one field disturbed, which is where
 validators that only check the mode and resolution are caught out. The Go
 runner stops at the one-million tier unless
 `H3_CONFORMANCE_PATTERNS_MAXCOUNT` says otherwise.
+
+## Curated files
+
+Seeded sampling gives coverage density but is blind to the particular inputs
+that have broken implementations. Six files hold such inputs by hand:
+`inspection/curated.jsonl`, `hierarchy/curated.jsonl`,
+`traversal/curated.jsonl`, `localij/curated.jsonl`, `sets/curated.jsonl` and
+`regions/curated.jsonl`. Each has exactly the record type of its group, so a
+consumer runs it with the group's checks and nothing else. The expected
+values are the reference's answers, produced by the same generator as every
+other file; only the subjects are chosen. The tables below are the
+specification: subjects are written in the order given, never sorted or
+deduplicated, and the generator draws nothing for them.
+
+Sources: *cli* is the reference's command-line test suite
+(`tests/cli/*.txt`), *tests* its C test applications
+(`src/apps/testapps/*.c`), *inputfiles* its test input directory
+(`tests/inputfiles/`), and *hand* a choice made here.
+
+### `inspection/curated.jsonl`
+
+| Index | Source | Why |
+|---|---|---|
+| `85283473fffffff` | cli | the cell every command-line example uses |
+| `85283473ffff` | cli | the `isValidCell` false example, a truncated string |
+| `115283473fffffff` | cli | a directed edge of that cell |
+| `22528340bfffffff` | cli | a vertex of a neighbour |
+| `8f754e64992d6d6` | cli | the `getIndexDigit` example at res 15 |
+| `81743ffffffffff` | cli | the `getIcosahedronFaces` example |
+| `8928342e20fffff` | cli | the res 9 example |
+| `5` | cli | the invalid index in every error example |
+| `200f202020202020` | tests | an invalid `cellToLocalIj` origin |
+| `80c3fffffffffff` | tests | a res 0 pentagon |
+| `8f283080dcb0ae2` | tests | a res 15 cell |
+| `88283080ddfffff` | tests | the `cellToChildren` fixture |
+| `81083ffffffffff` | tests | a res 1 pentagon |
+| `81087ffffffffff` | hand | that pentagon with digit 1 set to `1`, a deleted subsequence |
+| `82080ffffffffff` | hand | its res 2 center child with digit 2 set to `1` |
+| `8029fffffffffff` | tests | the res 0 `gridDisk` fixture |
+| `85283472fffffff` | cli | an `areNeighborCells` target whose digit 6 is not `7` |
+
+### `hierarchy/curated.jsonl`
+
+`88283080ddfffff`, `8f283080dcb0ae2`, `81083ffffffffff`, `820807fffffffff`,
+`85283473fffffff`, `80c3fffffffffff`, `8928342e20fffff`, `8029fffffffffff`:
+the `cellToChildren` fixtures, a res 15 cell, a res 1 pentagon and its
+res 2 center child, the command-line cells, and res 0 cells.
+
+### `traversal/curated.jsonl`
+
+| Origin | Target | Source | Why |
+|---|---|---|---|
+| `85283473fffffff` | `8528342bfffffff` | cli | the `gridDistance` and `gridPathCells` example |
+| `85283473fffffff` | `85291ac7fffffff` | cli | the far `gridDistance` example |
+| `85283473fffffff` | `85283477fffffff` | cli | the `areNeighborCells` true example |
+| `85283473fffffff` | `85283472fffffff` | cli | an invalid target |
+| `85285aa7fffffff` | `851d9b1bfffffff` | tests | a `gridPathCells` fixture across faces |
+| `820807fffffffff` | `8208e7fffffffff` | tests | a `gridPathCells` fixture from a pentagon |
+| `8411b61ffffffff` | `84016d3ffffffff` | tests | a `gridPathCells` fixture |
+| `820c4ffffffffff` | `821ce7fffffffff` | tests | a `gridDistance` fixture |
+| `832830fffffffff` | `822837fffffffff` | tests | a resolution mismatch |
+| `832830fffffffff` | `832834fffffffff` | tests | a `gridDistance` fixture |
+| `8029fffffffffff` | `8051fffffffffff` | tests | res 0 cells on different faces |
+| `80c3fffffffffff` | `80c3fffffffffff` | hand | a pentagon to itself |
+| `81083ffffffffff` | `8108bffffffffff` | hand | a res 1 pentagon to its neighbour |
+| `8f283080dcb0ae2` | `8f283080dcb0ae2` | hand | a res 15 cell to itself |
+
+### `localij/curated.jsonl`
+
+| Origin | Target | Source | Why |
+|---|---|---|---|
+| `85283473fffffff` | `8528342bfffffff` | cli | the `cellToLocalIj` example, `[25, 13]` |
+| `8029fffffffffff` | `8029fffffffffff` | tests | a res 0 origin to itself |
+| `8029fffffffffff` | `8051fffffffffff` | tests | res 0 cells on different faces |
+| `820897fffffffff` | `821f67fffffffff` | tests | a `cellToLocalIj` fixture near a pentagon |
+| `85283473fffffff` | `85291ac7fffffff` | cli | the far pair |
+| `832830fffffffff` | `832834fffffffff` | tests | a `gridDistance` fixture |
+| `820807fffffffff` | `8208e7fffffffff` | tests | a pentagon origin |
+| `80c3fffffffffff` | `80c3fffffffffff` | hand | a pentagon to itself |
+| `81083ffffffffff` | `8108bffffffffff` | hand | a res 1 pentagon to its neighbour |
+| `85285aa7fffffff` | `851d9b1bfffffff` | tests | a pair across faces |
+| `85283473fffffff` | `85283472fffffff` | cli | an invalid target |
+| `200f202020202020` | `85283473fffffff` | tests | an invalid origin |
+
+### `sets/curated.jsonl`
+
+The `id` is `curated:<name>`; the `input` is in the record, in this order.
+
+| Name | `input` | `uncompactRes` | Source |
+|---|---|---|---|
+| `compact_test1` | the 19 res 5 cells of `compact_test1.txt`, which include all seven children of `8428347ffffffff` | 6 | inputfiles |
+| `multipolygon_test3` | the 6 res 5 cells of `multipolygon_test3.txt`, a ring without its center | 6 | inputfiles |
+| `multipolygon_test4` | the 7 cells of `multipolygon_test4.txt`, that ring and a distant cell | 6 | inputfiles |
+| `multipolygon_test5` | the 128 res 5 cells of `multipolygon_test5.txt` | 6 | inputfiles |
+| `pentagon_children` | the six children of the res 1 pentagon `81083ffffffffff` | 3 | hand |
+| `res0` | `getRes0Cells` in the reference's order | 1 | hand |
+
+### `regions/curated.jsonl`
+
+The `id` is `<name>:<res>`, with `:hole` appended when the polygon has a
+hole. The polygon is in the record, in degrees; fixtures the reference holds
+in radians were converted once with `%.17g`, and a generator starts from the
+degrees as it does for the sampled polygons.
+
+| Name | Polygon | Source |
+|---|---|---|
+| `sf:9` | the six-vertex San Francisco fixture `sfVerts` | tests |
+| `sf:9:hole` | the same with the three-vertex `holeVerts` hole | tests |
+| `empty:9` | `emptyVerts`, three points within 1e-9 of each other | tests |
+| `primeMeridian:7` | `primeMeridianVerts`, a square on the prime meridian | tests |
+| `transmeridian:7` | `transMeridianVerts`, the same square on the antimeridian | tests |
+| `transmeridian:7:hole` | with the `transMeridianHoleVerts` hole | tests |
+| `transmeridianInner:7` | that hole as a polygon of its own | tests |
+| `transmeridianComplex:4` | the six-vertex antimeridian polygon | tests |
+| `h3_136:13` | the four-vertex polygon of reference issue 136 | tests |
+| `h3_595:5` | the polygon of reference issue 595, whose first vertex has exactly the latitude of the center of `85283473fffffff` | tests |
+| `h3js_67:7`, `h3js_67_second:7` | the two rectangles of h3-js issue 67 | tests |
+| `westHemisphere:0`, `:1`, `:2` | longitudes -180 to 0, latitudes -90 to 90 | tests |
+| `eastHemisphere:0`, `:1`, `:2` | longitudes 0 to 180; with the west, every cell | tests |
+| `point:5` | one vertex at the origin | tests |
+| `line:5` | two vertices, the origin and one radian north | tests |
+| `cliTriangle:7` | `polygon_test1.txt`, three vertices in San Francisco | inputfiles |
+| `cliDecagon:7` | `polygon_test2.txt`, ten vertices in San Francisco | inputfiles |
 
 ## Sampling
 
@@ -723,6 +864,11 @@ until `isValidCell` accepts one), then:
 
 A digest is recorded after the 100,000th, the 1,000,000th and the
 10,000,000th pattern.
+
+### Curated files
+
+No draws. The subjects are the tables under Curated files, written in the
+order given.
 
 ## Running and regenerating
 

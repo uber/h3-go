@@ -73,6 +73,30 @@
     "digests/patterns.jsonl": {
       "records": 3,
       "sha256": "4cf33f69cb3f0c75d7f88509d328812db8395ab746cda3a57bb1b9c2bf9c64dd"
+    },
+    "inspection/curated.jsonl": {
+      "records": 17,
+      "sha256": "f4dc78a7588498b2a96c782f60957ab55ebd56cc90d7dd5bf5d18fddd9c25d8c"
+    },
+    "hierarchy/curated.jsonl": {
+      "records": 8,
+      "sha256": "7104df57020c398fae2032965487cf32d461c2640ce7cd3d5603e8713a3439f3"
+    },
+    "traversal/curated.jsonl": {
+      "records": 14,
+      "sha256": "eaa90880f83d11b12eb2b771c14ab462015bafdf85912c062356f77eead8e651"
+    },
+    "localij/curated.jsonl": {
+      "records": 12,
+      "sha256": "b0af9d2044ee639e525fb2f3a33ee215bd35de4266c8f5bc250e517be2ebdc64"
+    },
+    "sets/curated.jsonl": {
+      "records": 6,
+      "sha256": "e8e193cd2f710bc1833407b71ec5ba7a012c6b11346e0d67d67adcdbb4b993c9"
+    },
+    "regions/curated.jsonl": {
+      "records": 22,
+      "sha256": "b8ca897369ebbc71ec3788c55ac151c640dd37eb7f0124a1d965902bae4e976d"
     }
   }
 }
