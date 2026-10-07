@@ -339,6 +339,19 @@ func assertEdgeBoundaryMatches(t *testing.T, edge h3.DirectedEdge, goEdge h3go.D
 	}
 }
 
+// edgeLengthToleranceRads bounds the difference between the two
+// implementations' edge lengths. An edge length is the distance between
+// two boundary vertices, each placed with a last-bit error that depends on
+// the platform's floating-point contraction, so the bound is absolute and
+// angular, not relative: at resolution 14 and 15 it is a few parts per
+// million of the length. The kilometre and metre bounds are the same angle
+// scaled by the earth radius, so the three units agree on what passes.
+const (
+	edgeLengthToleranceRads = 1e-12
+	earthRadiusKm           = 6371.007180918475
+	metersPerKm             = 1000
+)
+
 // assertEdgeLengthMatches checks the three edge length units against the cgo
 // reference.
 func assertEdgeLengthMatches(t *testing.T, edge h3.DirectedEdge, goEdge h3go.DirectedEdge) {
@@ -347,21 +360,21 @@ func assertEdgeLengthMatches(t *testing.T, edge h3.DirectedEdge, goEdge h3go.Dir
 	wantRads, _ := h3.EdgeLengthRads(edge)
 
 	gotRads, err := h3go.EdgeLengthRads(goEdge)
-	if err != nil || math.Abs(gotRads-wantRads) > 1e-12 {
+	if err != nil || math.Abs(gotRads-wantRads) > edgeLengthToleranceRads {
 		t.Fatalf("EdgeLengthRads(%015x): got %v (%v), want %v", uint64(edge), gotRads, err, wantRads)
 	}
 
 	wantKm, _ := h3.EdgeLengthKm(edge)
 
 	gotKm, _ := h3go.EdgeLengthKm(goEdge)
-	if math.Abs(gotKm-wantKm) > 1e-9 {
+	if math.Abs(gotKm-wantKm) > edgeLengthToleranceRads*earthRadiusKm {
 		t.Fatalf("EdgeLengthKm(%015x): got %v, want %v", uint64(edge), gotKm, wantKm)
 	}
 
 	wantM, _ := h3.EdgeLengthM(edge)
 
 	gotM, _ := h3go.EdgeLengthM(goEdge)
-	if math.Abs(gotM-wantM) > 1e-6 {
+	if math.Abs(gotM-wantM) > edgeLengthToleranceRads*earthRadiusKm*metersPerKm {
 		t.Fatalf("EdgeLengthM(%015x): got %v, want %v", uint64(edge), gotM, wantM)
 	}
 }
