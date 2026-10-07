@@ -440,23 +440,26 @@ Examples:
 
 ### `digests`
 
-Digests over **every cell at resolutions 0 through 6**, 16,838,852 cells
+Digests over **every cell at resolutions 0 through 7**, 115,664,014 cells
 in all, so the group checks the whole grid at those resolutions without
 storing it, plus a digest over a stream of arbitrary 64-bit words for the
 validity functions. Two files hold the same thirteen per-cell streams at
 two levels:
 
-- `digests/resolutions.jsonl`: one line per resolution, `{"res", "count",
-  "digests"}`, each stream run over every cell at that resolution in
-  ascending order.
 - `digests/baseCells.jsonl`: one line per resolution and base cell,
   `{"res", "baseCell", "count", "digests"}`, each stream run over the cells
   of that resolution descending from that base cell, in ascending order.
-  Ascending order over all cells is base-cell order then digit order, so the
-  per-resolution stream is the concatenation of the 122 per-base-cell
-  streams. A per-resolution mismatch therefore always has a per-base-cell
-  mismatch that localises it to one subtree, which a bisecting rerun of the
-  generator resolves.
+  This is the primary digest: a mismatch localises to one subtree, which a
+  bisecting rerun of the generator resolves.
+- `digests/resolutions.jsonl`: one line per resolution, `{"res", "count",
+  "digests"}`, where `count` is the sum of the 122 base-cell counts and each
+  stream's digest is the SHA-256 of the 122 per-base-cell hex digests of that
+  stream, as 64-character lowercase ASCII strings concatenated in base-cell
+  order with nothing between them. Ascending order over all cells is
+  base-cell order then digit order, so this fixes every line of the
+  resolution in sequence while letting the 122 subtrees be computed in any
+  order or in parallel; resolution 7 is 98.8 million cells and takes about
+  an hour on one core.
 
 `digests` is an object from stream name to hex SHA-256. Every stream has
 one line per cell, starting with the cell. The `polygons` stream exists
@@ -506,9 +509,11 @@ Example record:
 {"res":0,"count":122,"digests":{"cells":"...","children":"...","compact":"...","disks":"...","distances":"...","edges":"...","inspection":"...","localIj":"...","parents":"...","rings":"...","roundTrip":"...","vertexes":"..."}}
 ```
 
-Enumerating resolution 6 takes minutes in a port, so a runner may stop
-earlier by default and offer a way to go further; the Go runner stops at
-resolution 3 unless `H3_CONFORMANCE_DIGESTS_MAXRES` says otherwise.
+Enumerating resolution 6 takes minutes in a port and resolution 7 half an
+hour on one core, so a runner may stop earlier by default and offer a way to
+go further; the Go runner stops at resolution 3 unless
+`H3_CONFORMANCE_DIGESTS_MAXRES` says otherwise, and computes the base cells
+of a resolution in parallel.
 
 `digests/patterns.jsonl` covers the validity functions on inputs that are
 not cells: one line per tier, `{"count", "digests"}`, where `count` is
@@ -839,11 +844,12 @@ No draws.
 
 ### `digests/resolutions.jsonl` and `digests/baseCells.jsonl`
 
-One line per resolution 0 through 6, in that order, and within
+One line per resolution 0 through 7, in that order, and within
 `baseCells.jsonl` one line per base cell 0 through 121 for each resolution.
 No draws; the inputs are every cell at the resolution, enumerated as
 `cellToChildren(baseCell, res)` for each base cell in order, each sorted
-ascending.
+ascending. The resolution line is derived from the base-cell lines as the
+`digests` group states.
 
 ### `digests/patterns.jsonl`
 
@@ -888,6 +894,17 @@ behaviour changed.
 ```
 gen -o <out-dir> -v <h3-version> [-s <seed>]
 ```
+
+`generate.sh` writes digests for resolutions 0 through 6 in one process,
+about ten minutes. Resolution 7 is produced separately by
+`internal/gen/digests.sh 7 testdata`, which runs one generator process per
+base cell (`gen --digests <res> <first> <last>` prints base-cell rows to
+standard output), concatenates the rows in base-cell order, derives the
+resolution row from them (`gen --resolution-row <res>` reads base-cell rows
+on standard input), replaces that resolution's rows in the two digest files
+and rewrites the manifest (`gen --manifest`). On twelve cores it takes a few
+minutes. Run it again after `generate.sh`, which does not keep the
+resolution 7 rows.
 
 ## Where the files should live
 
