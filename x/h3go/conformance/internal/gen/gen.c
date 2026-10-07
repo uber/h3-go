@@ -73,6 +73,7 @@
 #define REGIONS_PENTAGON_STEP 4
 #define REGIONS_CELLS_PER_RES 3
 #define DIGESTS_MAX_RES 6
+#define DIGESTS_SLICE_MAX_RES 7
 #define POLYGONS_MAX_RES 2
 #define POLYGONS_FILL_STEP 2
 #define NUM_CONTAINMENT_MODES 4
@@ -1377,18 +1378,16 @@ static void lineFill(Line *line, const GeoPolygon *polygon, int res, uint32_t fl
     free(cells);
 }
 
-/* absorb terminates the line and feeds it to the resolution and base-cell
- * digests of one stream. */
-static void absorb(Sha256 *perRes, Sha256 *perBase, int stream, Line *line) {
+/* absorb terminates the line and feeds it to one stream's digest. */
+static void absorb(Sha256 *streams, int stream, Line *line) {
     lineAppend(line, "\n");
-    sha256Update(&perRes[stream], (const uint8_t *)line->buf, line->len);
-    sha256Update(&perBase[stream], (const uint8_t *)line->buf, line->len);
+    sha256Update(&streams[stream], (const uint8_t *)line->buf, line->len);
 }
 
 /* digestCell appends one cell's line to every stream. */
-static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, int res) {
+static void digestCell(Sha256 *streams, Line *line, H3Index h, int res) {
     lineStart(line, h);
-    absorb(perRes, perBase, S_CELLS, line);
+    absorb(streams, S_CELLS, line);
 
     H3Index parent0;
     must(cellToParent(h, 0, &parent0));
@@ -1399,7 +1398,7 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
         must(cellToParent(h, parentRes, &parent));
         lineIndex(line, parent);
     }
-    absorb(perRes, perBase, S_PARENTS, line);
+    absorb(streams, S_PARENTS, line);
 
     lineStart(line, h);
     {
@@ -1416,7 +1415,7 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
         must(childPosToCell(pos, parent0, res, &back));
         lineIndex(line, back);
     }
-    absorb(perRes, perBase, S_CHILDREN, line);
+    absorb(streams, S_CHILDREN, line);
 
     lineStart(line, h);
     {
@@ -1437,7 +1436,7 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
             }
         }
     }
-    absorb(perRes, perBase, S_INSPECTION, line);
+    absorb(streams, S_INSPECTION, line);
 
     H3Index disk3[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
     int64_t disk3Count = 0;
@@ -1454,7 +1453,7 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
             disk3Count = kept;
         }
     }
-    absorb(perRes, perBase, S_DISKS, line);
+    absorb(streams, S_DISKS, line);
 
     lineStart(line, h);
     for (int k = 1; k <= MAX_DISK_K; k++) {
@@ -1465,7 +1464,7 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
         }
         lineIndexSet(line, ring, diskSize(k));
     }
-    absorb(perRes, perBase, S_RINGS, line);
+    absorb(streams, S_RINGS, line);
 
     lineStart(line, h);
     for (int64_t i = 0; i < disk3Count; i++) {
@@ -1477,7 +1476,7 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
             lineInt(line, distance);
         }
     }
-    absorb(perRes, perBase, S_DISTANCES, line);
+    absorb(streams, S_DISTANCES, line);
 
     lineStart(line, h);
     {
@@ -1508,7 +1507,7 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
             }
         }
     }
-    absorb(perRes, perBase, S_EDGES, line);
+    absorb(streams, S_EDGES, line);
 
     lineStart(line, h);
     {
@@ -1516,7 +1515,7 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
         must(cellToVertexes(h, vertexes));
         lineIndexSet(line, vertexes, NUM_VERTEX_NUMBERS);
     }
-    absorb(perRes, perBase, S_VERTEXES, line);
+    absorb(streams, S_VERTEXES, line);
 
     lineStart(line, h);
     {
@@ -1533,7 +1532,7 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
             lineInt(line, ij.j);
         }
     }
-    absorb(perRes, perBase, S_LOCAL_IJ, line);
+    absorb(streams, S_LOCAL_IJ, line);
 
     lineStart(line, h);
     {
@@ -1551,7 +1550,7 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
         free(children);
         free(compacted);
     }
-    absorb(perRes, perBase, S_COMPACT, line);
+    absorb(streams, S_COMPACT, line);
 
     lineStart(line, h);
     {
@@ -1561,7 +1560,7 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
         must(latLngToCell(&center, res, &back));
         lineIndex(line, back);
     }
-    absorb(perRes, perBase, S_ROUND_TRIP, line);
+    absorb(streams, S_ROUND_TRIP, line);
 
     if (hasPolygons(res)) {
         lineStart(line, h);
@@ -1577,22 +1576,166 @@ static void digestCell(Sha256 *perRes, Sha256 *perBase, Line *line, H3Index h, i
                 lineFill(line, &polygon, res + POLYGONS_FILL_STEP, flags);
             }
         }
-        absorb(perRes, perBase, S_POLYGONS, line);
+        absorb(streams, S_POLYGONS, line);
     }
 }
 
-/* printDigests prints the "digests" object and finalizes the streams. */
-static void printDigests(FILE *out, Sha256 *streams, int res) {
+/* finalizeStreams writes each stream's hex digest. */
+static void finalizeStreams(Sha256 *streams, char hex[NUM_STREAMS][65]) {
+    for (int i = 0; i < NUM_STREAMS; i++) {
+        sha256Final(&streams[i], hex[i]);
+    }
+}
+
+/* printDigests prints the "digests" object from hex digests and closes the
+ * row. */
+static void printDigests(FILE *out, char hex[NUM_STREAMS][65], int res) {
     fputs(",\"digests\":{", out);
     for (int i = 0; i < NUM_STREAMS; i++) {
         if (i == S_POLYGONS && !hasPolygons(res)) {
             continue;
         }
-        char hex[65];
-        sha256Final(&streams[i], hex);
-        fprintf(out, "%s\"%s\":\"%s\"", i ? "," : "", STREAM_KEYS[i], hex);
+        fprintf(out, "%s\"%s\":\"%s\"", i ? "," : "", STREAM_KEYS[i], hex[i]);
     }
     fputs("}}\n", out);
+}
+
+/* digestBaseCell runs every stream over the cells of res descending from
+ * baseCell, in ascending order, and returns their count. */
+static int64_t digestBaseCell(int res, int baseCell, Line *line, char hex[NUM_STREAMS][65]) {
+    H3Index base = buildIndex(CELL_MODE, 0, baseCell, NULL);
+    int64_t count;
+    must(cellToChildrenSize(base, res, &count));
+    H3Index *cells = calloc((size_t)count, sizeof *cells);
+    if (!cells) {
+        fail("out of memory");
+    }
+    must(cellToChildren(base, res, cells));
+    qsort(cells, (size_t)count, sizeof *cells, compareIndexes);
+
+    Sha256 streams[NUM_STREAMS];
+    for (int i = 0; i < NUM_STREAMS; i++) {
+        sha256Init(&streams[i]);
+    }
+    for (int64_t i = 0; i < count; i++) {
+        digestCell(streams, line, cells[i], res);
+    }
+    free(cells);
+    finalizeStreams(streams, hex);
+    return count;
+}
+
+/* printBaseCellRow prints one digests/baseCells.jsonl line. */
+static void printBaseCellRow(FILE *out, int res, int baseCell, int64_t count, char hex[NUM_STREAMS][65]) {
+    fprintf(out, "{\"res\":%d,\"baseCell\":%d,\"count\":%" PRId64, res, baseCell, count);
+    printDigests(out, hex, res);
+}
+
+/* ResolutionDigest accumulates one digests/resolutions.jsonl line: per
+ * stream, the SHA-256 over the 122 per-base-cell hex digests of that stream
+ * in base-cell order (README.md, "digests"). */
+typedef struct {
+    Sha256 streams[NUM_STREAMS];
+    int64_t count;
+    int next;
+} ResolutionDigest;
+
+static void resolutionInit(ResolutionDigest *digest) {
+    for (int i = 0; i < NUM_STREAMS; i++) {
+        sha256Init(&digest->streams[i]);
+    }
+    digest->count = 0;
+    digest->next = 0;
+}
+
+/* resolutionAdd absorbs one base cell's digests, which must arrive in
+ * base-cell order. */
+static void resolutionAdd(ResolutionDigest *digest, int res, int baseCell, int64_t count,
+                          char hex[NUM_STREAMS][65]) {
+    if (baseCell != digest->next) {
+        fail("base-cell rows out of order");
+    }
+    digest->next++;
+    digest->count += count;
+    for (int i = 0; i < NUM_STREAMS; i++) {
+        if (i == S_POLYGONS && !hasPolygons(res)) {
+            continue;
+        }
+        sha256Update(&digest->streams[i], (const uint8_t *)hex[i], 64);
+    }
+}
+
+/* printResolutionRow prints the accumulated line once every base cell has
+ * been added. */
+static void printResolutionRow(FILE *out, int res, ResolutionDigest *digest) {
+    if (digest->next != NUM_BASE_CELLS) {
+        fail("resolution row needs all 122 base cells");
+    }
+    char hex[NUM_STREAMS][65];
+    finalizeStreams(digest->streams, hex);
+    fprintf(out, "{\"res\":%d,\"count\":%" PRId64, res, digest->count);
+    printDigests(out, hex, res);
+}
+
+/* writeDigestSlice prints the base-cell rows of one resolution for base
+ * cells first..last to stdout, so that a resolution can be produced by
+ * several processes and the rows concatenated in base-cell order. */
+static void writeDigestSlice(int res, int first, int last) {
+    Line line = {0};
+    for (int baseCell = first; baseCell <= last; baseCell++) {
+        char hex[NUM_STREAMS][65];
+        int64_t count = digestBaseCell(res, baseCell, &line, hex);
+        printBaseCellRow(stdout, res, baseCell, count, hex);
+    }
+    free(line.buf);
+}
+
+/* parseBaseCellRow reads the fields of one digests/baseCells.jsonl line as
+ * this program writes them. */
+static bool parseBaseCellRow(const char *row, int *res, int *baseCell, int64_t *count,
+                             char hex[NUM_STREAMS][65]) {
+    if (sscanf(row, "{\"res\":%d,\"baseCell\":%d,\"count\":%" SCNd64, res, baseCell, count) != 3) {
+        return false;
+    }
+    for (int i = 0; i < NUM_STREAMS; i++) {
+        char key[32];
+        snprintf(key, sizeof key, "\"%s\":\"", STREAM_KEYS[i]);
+        const char *value = strstr(row, key);
+        if (!value) {
+            if (i == S_POLYGONS && !hasPolygons(*res)) {
+                hex[i][0] = '\0';
+                continue;
+            }
+            return false;
+        }
+        value += strlen(key);
+        if (strlen(value) < 64) {
+            return false;
+        }
+        memcpy(hex[i], value, 64);
+        hex[i][64] = '\0';
+    }
+    return true;
+}
+
+/* writeResolutionRow reads base-cell rows from stdin and prints the
+ * resolution row they combine to. */
+static void writeResolutionRow(int res) {
+    ResolutionDigest digest;
+    resolutionInit(&digest);
+    char row[8192];
+    while (fgets(row, sizeof row, stdin)) {
+        int rowRes, baseCell;
+        int64_t count;
+        char hex[NUM_STREAMS][65];
+        if (!parseBaseCellRow(row, &rowRes, &baseCell, &count, hex)) {
+            fail("malformed base-cell row");
+        }
+        if (rowRes == res) {
+            resolutionAdd(&digest, res, baseCell, count, hex);
+        }
+    }
+    printResolutionRow(stdout, res, &digest);
 }
 
 /* drawPattern draws one 64-bit word for the validity stream (README,
@@ -1678,39 +1821,15 @@ static void writeDigestsFiles(const char *outDir, FileInfo *resInfo, FileInfo *b
     Line line = {0};
 
     for (int res = 0; res <= DIGESTS_MAX_RES; res++) {
-        Sha256 perRes[NUM_STREAMS];
-        for (int i = 0; i < NUM_STREAMS; i++) {
-            sha256Init(&perRes[i]);
-        }
-        int64_t total = 0;
-
+        ResolutionDigest resolution;
+        resolutionInit(&resolution);
         for (int baseCell = 0; baseCell < NUM_BASE_CELLS; baseCell++) {
-            H3Index base = buildIndex(CELL_MODE, 0, baseCell, NULL);
-            int64_t count;
-            must(cellToChildrenSize(base, res, &count));
-            H3Index *cells = calloc((size_t)count, sizeof *cells);
-            if (!cells) {
-                fail("out of memory");
-            }
-            must(cellToChildren(base, res, cells));
-            qsort(cells, (size_t)count, sizeof *cells, compareIndexes);
-
-            Sha256 perBase[NUM_STREAMS];
-            for (int i = 0; i < NUM_STREAMS; i++) {
-                sha256Init(&perBase[i]);
-            }
-            for (int64_t i = 0; i < count; i++) {
-                digestCell(perRes, perBase, &line, cells[i], res);
-            }
-            free(cells);
-            total += count;
-
-            fprintf(baseOut, "{\"res\":%d,\"baseCell\":%d,\"count\":%" PRId64, res, baseCell, count);
-            printDigests(baseOut, perBase, res);
+            char hex[NUM_STREAMS][65];
+            int64_t count = digestBaseCell(res, baseCell, &line, hex);
+            printBaseCellRow(baseOut, res, baseCell, count, hex);
+            resolutionAdd(&resolution, res, baseCell, count, hex);
         }
-
-        fprintf(resOut, "{\"res\":%d,\"count\":%" PRId64, res, total);
-        printDigests(resOut, perRes, res);
+        printResolutionRow(resOut, res, &resolution);
     }
 
     free(line.buf);
@@ -2321,10 +2440,49 @@ static void writeCuratedFiles(const char *outDir, uint64_t seed, FileInfo *files
     writeCuratedPolygons(outDir, &files[5]);
 }
 
+/* Every record file of the suite, in manifest order. */
+static const char *const SUITE_FILES[] = {
+    "inspection/cells.jsonl",  "hierarchy/cells.jsonl",     "traversal/cells.jsonl",
+    "edges/cells.jsonl",       "vertexes/cells.jsonl",      "localij/pairs.jsonl",
+    "sets/sets.jsonl",         "regions/polygons.jsonl",    "floats/cells.jsonl",
+    "floats/edges.jsonl",      "floats/vertexes.jsonl",     "floats/distances.jsonl",
+    "floats/resolutions.jsonl", "digests/resolutions.jsonl", "digests/baseCells.jsonl",
+    "digests/patterns.jsonl",  "inspection/curated.jsonl",  "hierarchy/curated.jsonl",
+    "traversal/curated.jsonl", "localij/curated.jsonl",     "sets/curated.jsonl",
+    "regions/curated.jsonl",
+};
+
+/* writeManifestFromDisk describes every suite file as it is on disk and
+ * writes the manifest, so that files produced by several runs (digests.sh)
+ * are covered. */
+static void writeManifestFromDisk(const char *outDir, const char *version, uint64_t seed) {
+    FileInfo files[COUNT(SUITE_FILES)];
+    for (size_t i = 0; i < COUNT(SUITE_FILES); i++) {
+        files[i] = (FileInfo){SUITE_FILES[i], 0, ""};
+        char *path = joinPath(outDir, SUITE_FILES[i]);
+        describeFile(path, &files[i]);
+        free(path);
+    }
+    writeManifest(outDir, version, seed, files, COUNT(SUITE_FILES));
+}
+
+enum { MODE_SUITE, MODE_SLICE, MODE_ROW, MODE_MANIFEST };
+
+static void usage(const char *program) {
+    fprintf(stderr,
+            "usage: %s -o <out-dir> -v <h3-version> [-s <seed>] [--manifest]\n"
+            "       %s --digests <res> <first-base-cell> <last-base-cell>\n"
+            "       %s --resolution-row <res> < base-cell-rows\n",
+            program, program, program);
+    exit(1);
+}
+
 int main(int argc, char *argv[]) {
     const char *outDir = NULL;
     const char *version = NULL;
     uint64_t seed = DEFAULT_SEED;
+    int mode = MODE_SUITE;
+    int res = 0, first = 0, last = 0;
 
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-o") && i + 1 < argc) {
@@ -2333,17 +2491,40 @@ int main(int argc, char *argv[]) {
             version = argv[++i];
         } else if (!strcmp(argv[i], "-s") && i + 1 < argc) {
             seed = strtoull(argv[++i], NULL, 10);
+        } else if (!strcmp(argv[i], "--manifest")) {
+            mode = MODE_MANIFEST;
+        } else if (!strcmp(argv[i], "--digests") && i + 3 < argc) {
+            mode = MODE_SLICE;
+            res = atoi(argv[++i]);
+            first = atoi(argv[++i]);
+            last = atoi(argv[++i]);
+        } else if (!strcmp(argv[i], "--resolution-row") && i + 1 < argc) {
+            mode = MODE_ROW;
+            res = atoi(argv[++i]);
         } else {
-            outDir = NULL;
-            break;
+            usage(argv[0]);
         }
     }
+    if (res < 0 || res > DIGESTS_SLICE_MAX_RES || first < 0 || last < first || last >= NUM_BASE_CELLS) {
+        usage(argv[0]);
+    }
+    if (mode == MODE_SLICE) {
+        writeDigestSlice(res, first, last);
+        return 0;
+    }
+    if (mode == MODE_ROW) {
+        writeResolutionRow(res);
+        return 0;
+    }
     if (!outDir || !version) {
-        fprintf(stderr, "usage: %s -o <out-dir> -v <h3-version> [-s <seed>]\n", argv[0]);
-        return 1;
+        usage(argv[0]);
     }
     if (version[0] == 'v') {
         version++;
+    }
+    if (mode == MODE_MANIFEST) {
+        writeManifestFromDisk(outDir, version, seed);
+        return 0;
     }
 
     IndexGroup groups[] = {
@@ -2374,6 +2555,9 @@ int main(int argc, char *argv[]) {
     files[numGroups + 3] = (FileInfo){"digests/patterns.jsonl", 0, ""};
     writePatternsFile(outDir, seed, &files[numGroups + 3]);
     writeCuratedFiles(outDir, seed, &files[numGroups + 4]);
-    writeManifest(outDir, version, seed, files, numGroups + 4 + NUM_CURATED_FILES);
+    if (numGroups + 4 + NUM_CURATED_FILES != COUNT(SUITE_FILES)) {
+        fail("SUITE_FILES is out of step with the writers");
+    }
+    writeManifestFromDisk(outDir, version, seed);
     return 0;
 }

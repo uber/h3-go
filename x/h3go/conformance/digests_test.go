@@ -19,20 +19,23 @@ package conformance
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"hash"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/uber/h3-go/v4/x/h3go"
 )
 
 // digestsMaxResEnv names the environment variable that raises the finest
-// resolution the digest tests enumerate. The files go to resolution 6, which
-// takes minutes, so the default stops where a race-detector run still takes
-// seconds.
+// resolution the digest tests enumerate. The files go to resolution 7, which
+// takes tens of minutes, so the default stops where a race-detector run
+// still takes seconds.
 const digestsMaxResEnv = "H3_CONFORMANCE_DIGESTS_MAXRES"
 
 // defaultDigestsMaxRes is the finest resolution checked without the
@@ -74,8 +77,33 @@ func digestsMaxRes(t *testing.T) int {
 	return res
 }
 
-// TestResolutionDigests enumerates every cell at each resolution up to the
-// limit and compares every stream digest.
+// baseCellDigests is one base cell's share of a resolution: its cell count
+// and its stream digests.
+type baseCellDigests struct {
+	count   int64
+	digests map[string]string
+}
+
+// digestBaseCell enumerates the cells of res under base, sorted, and runs
+// every stream over them.
+func digestBaseCell(base h3go.Cell, res int) (baseCellDigests, error) {
+	cells, err := base.Children(res)
+	if err != nil {
+		return baseCellDigests{}, fmt.Errorf("Children(%s, %d): %w", base, res, err)
+	}
+
+	slices.Sort(cells)
+
+	digests, err := digestStreams(cells, res)
+	if err != nil {
+		return baseCellDigests{}, err
+	}
+
+	return baseCellDigests{count: int64(len(cells)), digests: digests}, nil
+}
+
+// TestResolutionDigests derives each resolution's digests from its 122 base
+// cells, computed in parallel, and compares them with the record.
 func TestResolutionDigests(t *testing.T) {
 	t.Parallel()
 
@@ -93,13 +121,63 @@ func TestResolutionDigests(t *testing.T) {
 			t.Fatalf("Res0Cells(): %v", err)
 		}
 
-		cells, err := h3go.UncompactCells(res0, record.Res)
-		if err != nil {
-			t.Fatalf("UncompactCells(%d): %v", record.Res, err)
+		parts := make([]baseCellDigests, len(res0))
+		errs := make([]error, len(res0))
+		slots := make(chan struct{}, runtime.GOMAXPROCS(0))
+
+		var wait sync.WaitGroup
+
+		for i, base := range res0 {
+			wait.Add(1)
+
+			go func() {
+				defer wait.Done()
+
+				slots <- struct{}{}
+				defer func() { <-slots }()
+
+				parts[i], errs[i] = digestBaseCell(base, record.Res)
+			}()
 		}
 
-		checkDigests(t, cells, record.Res, record.Count, record.Digests)
+		wait.Wait()
+
+		for i, err := range errs {
+			if err != nil {
+				t.Fatalf("base cell %d: %v", i, err)
+			}
+		}
+
+		count, got := combineBaseCells(parts, record.Res)
+		compareDigests(t, count, got, record.Count, record.Digests)
 	})
+}
+
+// combineBaseCells derives a resolution's count and digests from its base
+// cells in order: per stream, the SHA-256 of the 122 hex digests
+// concatenated.
+func combineBaseCells(parts []baseCellDigests, res int) (int64, map[string]string) {
+	var count int64
+
+	hashes := map[string]hash.Hash{}
+	for _, name := range streamsAt(res) {
+		hashes[name] = sha256.New()
+	}
+
+	for _, part := range parts {
+		count += part.count
+
+		for name, h := range hashes {
+			h.Write([]byte(part.digests[name]))
+		}
+	}
+
+	out := make(map[string]string, len(hashes))
+	for name, h := range hashes {
+		out[name] = hex.EncodeToString(h.Sum(nil))
+	}
+
+	return count, out
 }
 
 // TestBaseCellDigests enumerates the cells under each base cell at each
@@ -121,27 +199,22 @@ func TestBaseCellDigests(t *testing.T) {
 			t.Fatalf("ConstructCell(0, %d): %v", record.BaseCell, err)
 		}
 
-		cells, err := base.Children(record.Res)
+		part, err := digestBaseCell(base, record.Res)
 		if err != nil {
-			t.Fatalf("Children(%s, %d): %v", base, record.Res, err)
+			t.Fatal(err)
 		}
 
-		checkDigests(t, cells, record.Res, record.Count, record.Digests)
+		compareDigests(t, part.count, part.digests, record.Count, record.Digests)
 	})
 }
 
-// checkDigests sorts the cells, runs every stream over them, and compares the
-// count and each digest with the record.
-func checkDigests(t *testing.T, cells []h3go.Cell, res int, count int64, want map[string]string) {
+// compareDigests compares a computed count and digests with a record's.
+func compareDigests(t *testing.T, count int64, got map[string]string, wantCount int64, want map[string]string) {
 	t.Helper()
 
-	slices.Sort(cells)
-
-	if int64(len(cells)) != count {
-		t.Errorf("enumerated %d cells, want %d", len(cells), count)
+	if count != wantCount {
+		t.Errorf("enumerated %d cells, want %d", count, wantCount)
 	}
-
-	got := digestStreams(t, cells, res)
 
 	if len(got) != len(want) {
 		t.Errorf("record has %d streams, runner computes %d", len(want), len(got))
@@ -228,10 +301,9 @@ func (w *lineWriter) finish(stream string) {
 }
 
 // digestStreams runs every stream over the sorted cells and returns the hex
-// digests by stream name.
-func digestStreams(t *testing.T, cells []h3go.Cell, res int) map[string]string {
-	t.Helper()
-
+// digests by stream name. A call the stream definition does not allow to
+// fail is reported as an error rather than a panic.
+func digestStreams(cells []h3go.Cell, res int) (digests map[string]string, err error) {
 	names := streamsAt(res)
 
 	writer := &lineWriter{hashes: map[string]hash.Hash{}}
@@ -241,7 +313,7 @@ func digestStreams(t *testing.T, cells []h3go.Cell, res int) map[string]string {
 
 	defer func() {
 		if failure := recover(); failure != nil {
-			t.Fatalf("stream computation failed: %v", failure)
+			digests, err = nil, fmt.Errorf("stream computation failed: %v", failure)
 		}
 	}()
 
@@ -254,7 +326,7 @@ func digestStreams(t *testing.T, cells []h3go.Cell, res int) map[string]string {
 		out[name] = hex.EncodeToString(h.Sum(nil))
 	}
 
-	return out
+	return out, nil
 }
 
 // digestCell appends one cell's line to every stream.
@@ -441,7 +513,7 @@ func wrapDegrees(lng float64) float64 {
 }
 
 // must panics on an error from a call that the stream definition does not
-// allow to fail; digestStreams turns the panic into a test failure.
+// allow to fail; digestStreams turns the panic into an error.
 func must[T any](value T, err error) T {
 	if err != nil {
 		panic(err)
