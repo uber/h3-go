@@ -1118,6 +1118,27 @@ func TestPointDistM(t *testing.T) {
 	assertEqualEps(t, float64(4329830.5521834465), distance)
 }
 
+func TestPointDistSamePoint(t *testing.T) {
+	t.Parallel()
+	// Exactly zero, not merely close: a fused multiply-add of the
+	// degree-to-radian products gives a few 1e-17 here on arm64.
+	points := []LatLng{
+		validLatLng1,
+		validLatLng2,
+		{Lat: 37.7749, Lng: -122.4194},
+		{Lat: 67.1509, Lng: -168.3908},
+		{Lat: -45, Lng: 170},
+		{Lat: 89.9, Lng: 0},
+		{Lat: -89.9, Lng: 179.9},
+		{Lat: 11.7, Lng: 13.4},
+	}
+	for _, point := range points {
+		if distance := GreatCircleDistanceRads(point, point); distance != 0 {
+			t.Errorf("GreatCircleDistanceRads(%v, same) = %v, want 0", point, distance)
+		}
+	}
+}
+
 func TestCellAreaRads2(t *testing.T) {
 	t.Parallel()
 	area, err := CellAreaRads2(validCell)
