@@ -1,0 +1,77 @@
+name: Nightly
+
+# Runs the whole module once a day at the depths that are too slow for every
+# push: conformance digests through resolution 7, the exhaustive invariants
+# through resolution 3, the exact projection check through resolution 4 and
+# the ten-million validity patterns, on linux-amd64, linux-arm64 and macOS,
+# so that the pure-Go port and the cgo binding are both exercised on every
+# platform the C library is built for. No race detector: it costs several
+# times the wall clock and the push workflow already runs it.
+#
+# GitHub disables a scheduled workflow after sixty days without a commit;
+# the dispatch trigger lets anyone run it by hand and re-enables the
+# schedule.
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.26
+      - name: deep-tests
+        env:
+          H3_CONFORMANCE_DIGESTS_MAXRES: 7
+          H3_CONFORMANCE_PATTERNS_MAXCOUNT: 10000000
+          H3GO_INVARIANTS_MAXRES: 3
+          H3GO_EXACT_PROJECTION_MAXRES: 4
+        run: |
+          go test -count=1 -timeout 5h30m ./...
+
+  report:
+    name: open or update the failure issue
+    needs: test
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: report
+        run: |
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          title="Nightly deep tests failed"
+          body="The scheduled deep run failed on at least one platform: $run_url"
+          gh label create nightly --force --color B60205 \
+            --description "Opened by the nightly workflow when a deep run fails"
+          existing=$(gh issue list --label nightly --state open \
+            --search "in:title $title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --label nightly --body "$body"
+          fi

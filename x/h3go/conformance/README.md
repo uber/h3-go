@@ -882,6 +882,14 @@ order given.
 and verifies the manifest against the vendored `H3_VERSION`. The tests are
 pure Go.
 
+Every push runs the suite at its default depths. The `Nightly` workflow
+(`.github/workflows/nightly.yml`) runs the whole module once a day on
+linux-amd64, linux-arm64 and macOS with `H3_CONFORMANCE_DIGESTS_MAXRES=7`,
+`H3_CONFORMANCE_PATTERNS_MAXCOUNT=10000000`, `H3GO_INVARIANTS_MAXRES=3` and
+`H3GO_EXACT_PROJECTION_MAXRES=4`, without the race detector, and opens or
+updates an issue labelled `nightly` when a scheduled run fails. It can be
+started by hand from the Actions tab.
+
 `go generate ./x/h3go/conformance` rewrites `testdata/` from the vendored C
 library. The generator, `internal/gen/gen.c`, is a standalone C99 program
 that depends only on the public H3 API and the C standard library;
