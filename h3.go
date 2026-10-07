@@ -714,10 +714,15 @@ func CellsToMultiPolygon(cells []Cell) ([]GeoPolygon, error) {
 // GreatCircleDistanceRads returns the "great circle" or "haversine" distance between
 // pairs of LatLng points (lat/lng pairs) in radians.
 func GreatCircleDistanceRads(a, b LatLng) float64 {
-	aLat := DegsToRads * a.Lat
-	aLng := DegsToRads * a.Lng
-	bLat := DegsToRads * b.Lat
-	bLng := DegsToRads * b.Lng
+	// The explicit conversions round each product before the subtraction
+	// below. Without them the compiler may fuse a product into the
+	// subtraction on architectures with fused multiply-add, leaving one side
+	// exact and the other rounded, so identical points measured a few 1e-17
+	// apart instead of exactly zero.
+	aLat := float64(DegsToRads * a.Lat)
+	aLng := float64(DegsToRads * a.Lng)
+	bLat := float64(DegsToRads * b.Lat)
+	bLng := float64(DegsToRads * b.Lng)
 
 	sinLat := math.Sin((bLat - aLat) * 0.5) //nolint:mnd // haversine formula
 	sinLng := math.Sin((bLng - aLng) * 0.5) //nolint:mnd // haversine formula
