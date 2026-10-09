@@ -319,6 +319,9 @@ func (c Cell) Boundary() (CellBoundary, error) {
 // Output is placed in an array in no particular order. Elements of the output
 // array may be left zero, as can happen when crossing a pentagon.
 func GridDisk(origin Cell, k int) ([]Cell, error) {
+	if k < 0 {
+		return nil, ErrDomain
+	}
 	out := make([]C.H3Index, maxGridDiskSize(k))
 	errC := C.gridDisk(C.H3Index(origin), C.int(k), &out[0])
 	// QUESTION: should we prune zeroes from the output?
@@ -346,6 +349,9 @@ func (c Cell) GridDisk(k int) ([]Cell, error) {
 // silently falls back to a slower traversal, this reports pentagon distortion
 // as an error rather than absorbing it.
 func GridDiskUnsafe(origin Cell, k int) ([]Cell, error) {
+	if k < 0 {
+		return nil, ErrDomain
+	}
 	out := make([]C.H3Index, maxGridDiskSize(k))
 	if err := toErr(C.gridDiskUnsafe(C.H3Index(origin), C.int(k), &out[0])); err != nil {
 		return nil, err
