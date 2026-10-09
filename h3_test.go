@@ -214,6 +214,14 @@ func TestGridDisk(t *testing.T) {
 		assertErr(t, err)
 		assertErrIs(t, err, ErrCellInvalid)
 	})
+
+	t.Run("negative k", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := validCell.GridDisk(-1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDomain)
+	})
 }
 
 func TestGridDisksUnsafe(t *testing.T) {
@@ -1953,6 +1961,14 @@ func TestGridDiskUnsafe(t *testing.T) {
 		_, err := c.GridDiskUnsafe(1)
 		assertErr(t, err)
 		assertErrIs(t, err, ErrCellInvalid)
+	})
+
+	t.Run("err/negative_k", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := GridDiskUnsafe(validCell, -1)
+		assertErr(t, err)
+		assertErrIs(t, err, ErrDomain)
 	})
 }
 
