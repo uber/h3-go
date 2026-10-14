@@ -4,7 +4,9 @@ import (
 	"testing"
 )
 
-// buckets for preventing compiler optimizing out calls.
+// Inputs at package scope so the compiler cannot constant-fold them into the
+// benchmarked call. Results need no sink: b.Loop keeps the arguments and
+// results of calls in its body alive.
 var (
 	geo = LatLng{
 		Lat: 37,
@@ -14,132 +16,121 @@ var (
 		Lat: 38,
 		Lng: -121,
 	}
-	latlngStr   string
-	cell, _     = LatLngToCell(geo, 15)
-	addr        = cell.String()
-	geoBndry    CellBoundary
-	cells       []Cell
-	disks       [][]Cell
-	distResult  float64
-	boolResult  bool
-	intResult   int
-	validResult bool
+	cell, _ = LatLngToCell(geo, 15)
 )
 
 func BenchmarkToString(b *testing.B) {
-	for range b.N {
-		addr = cell.String()
+	for b.Loop() {
+		_ = cell.String()
 	}
 }
 
 func BenchmarkFromString(b *testing.B) {
-	for range b.N {
-		cell = Cell(IndexFromString("850dab63fffffff"))
+	for b.Loop() {
+		IndexFromString("850dab63fffffff")
 	}
 }
 
 func BenchmarkLatLng_String(b *testing.B) {
-	for range b.N {
-		latlngStr = geo.String()
+	for b.Loop() {
+		_ = geo.String()
 	}
 }
 
 func BenchmarkCellToLatLng(b *testing.B) {
-	for range b.N {
-		geo, _ = CellToLatLng(cell)
+	for b.Loop() {
+		_, _ = CellToLatLng(cell)
 	}
 }
 
 func BenchmarkLatLngToCell(b *testing.B) {
-	for range b.N {
-		cell, _ = LatLngToCell(geo, 15)
+	for b.Loop() {
+		_, _ = LatLngToCell(geo, 15)
 	}
 }
 
 func BenchmarkCellToBoundary(b *testing.B) {
-	for range b.N {
-		geoBndry, _ = CellToBoundary(cell)
+	for b.Loop() {
+		_, _ = CellToBoundary(cell)
 	}
 }
 
 func BenchmarkGridDisk(b *testing.B) {
-	for range b.N {
-		cells, _ = cell.GridDisk(10)
+	for b.Loop() {
+		_, _ = cell.GridDisk(10)
 	}
 }
 
 func BenchmarkGridRing(b *testing.B) {
-	for range b.N {
-		cells, _ = cell.GridRing(10)
+	for b.Loop() {
+		_, _ = cell.GridRing(10)
 	}
 }
 
 func BenchmarkPolyfill(b *testing.B) {
-	for range b.N {
-		cells, _ = PolygonToCells(validGeoPolygonHoles, 13)
+	for b.Loop() {
+		_, _ = PolygonToCells(validGeoPolygonHoles, 13)
 	}
 }
 
 func BenchmarkGridDisksUnsafe(b *testing.B) {
-	cells, _ = PolygonToCells(validGeoPolygonHoles, 12)
+	cells, _ := PolygonToCells(validGeoPolygonHoles, 12)
 
-	b.ResetTimer()
-
-	for range b.N {
-		disks, _ = GridDisksUnsafe(cells, 10)
+	for b.Loop() {
+		_, _ = GridDisksUnsafe(cells, 10)
 	}
 }
 
 func BenchmarkGreatCircleDistanceRads(b *testing.B) {
-	for range b.N {
-		distResult = GreatCircleDistanceRads(geo, geo2)
+	for b.Loop() {
+		GreatCircleDistanceRads(geo, geo2)
 	}
 }
 
 func BenchmarkGreatCircleDistanceKm(b *testing.B) {
-	for range b.N {
-		distResult = GreatCircleDistanceKm(geo, geo2)
+	for b.Loop() {
+		GreatCircleDistanceKm(geo, geo2)
 	}
 }
 
 func BenchmarkGreatCircleDistanceM(b *testing.B) {
-	for range b.N {
-		distResult = GreatCircleDistanceM(geo, geo2)
+	for b.Loop() {
+		GreatCircleDistanceM(geo, geo2)
 	}
 }
 
 func BenchmarkResolution(b *testing.B) {
-	for range b.N {
-		intResult = cell.Resolution()
+	for b.Loop() {
+		cell.Resolution()
 	}
 }
 
 func BenchmarkBaseCellNumber(b *testing.B) {
-	for range b.N {
-		intResult = cell.BaseCellNumber()
+	for b.Loop() {
+		cell.BaseCellNumber()
 	}
 }
 
 func BenchmarkIsValid(b *testing.B) {
-	for range b.N {
-		boolResult = cell.IsValid()
+	for b.Loop() {
+		cell.IsValid()
 	}
 }
 
 func BenchmarkIsPentagon(b *testing.B) {
-	for range b.N {
-		boolResult = cell.IsPentagon()
+	for b.Loop() {
+		cell.IsPentagon()
 	}
 }
 
 func BenchmarkIsResClassIII(b *testing.B) {
-	for range b.N {
-		boolResult = cell.IsResClassIII()
+	for b.Loop() {
+		cell.IsResClassIII()
 	}
 }
 
 func BenchmarkIsValidIndex(b *testing.B) {
-	for range b.N {
-		validResult = IsValidIndex(cell)
+	for b.Loop() {
+		IsValidIndex(cell)
 	}
 }

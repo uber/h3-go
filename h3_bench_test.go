@@ -20,16 +20,12 @@ import (
 	"testing"
 )
 
-var sink int
-
 func BenchmarkNumCells(b *testing.B) {
 	for r := 0; r <= MaxResolution; r++ {
 		b.Run(strconv.Itoa(r), func(b *testing.B) {
-			var n int
 			for b.Loop() {
-				n = NumCells(r)
+				NumCells(r)
 			}
-			sink = n
 		})
 	}
 }
