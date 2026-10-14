@@ -270,7 +270,7 @@ func latLngToVec3(lat, lng float64) vec3d {
 // in degrees.
 func (v vec3d) toLatLng() LatLng {
 	return LatLng{
-		Lat: RadsToDegs * math.Asin(v.z),
+		Lat: RadsToDegs * math.Atan2(v.z, math.Sqrt(v.x*v.x+v.y*v.y)),
 		Lng: RadsToDegs * math.Atan2(v.y, v.x),
 	}
 }

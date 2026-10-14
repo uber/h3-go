@@ -6,7 +6,7 @@
     "seed": 20260929
   },
   "tolerances": {
-    "angularDeg": 1e-11,
+    "angularDeg": 1e-12,
     "relative": 1e-9
   },
   "files": {
@@ -40,23 +40,23 @@
     },
     "regions/polygons.jsonl": {
       "records": 360,
-      "sha256": "385cb5669aca18afeca70807487be48d050dca87c86800af91d738720969d910"
+      "sha256": "1e2e99690726c5dc2572e1a3c6544183f4d791fdbbcd8e2388abf0ddf8b263f3"
     },
     "floats/cells.jsonl": {
       "records": 542,
-      "sha256": "90033c7e5209633e6f346af6bcc1b2a785d28f476c64d4345bf691fc9c859126"
+      "sha256": "c7e98c8a9925acbfd1e0b0b80bde7d08359b696a7819c873075a7a8e41fa034c"
     },
     "floats/edges.jsonl": {
       "records": 920,
-      "sha256": "9b4aa9cbc0573220c2b518ef44d12bc0ebc87ea6f4cb387e3a5e23421ee347e4"
+      "sha256": "bf2aa1605e20150247a2c6fa14b1072462f641fd60eb906265172e0477f53cf6"
     },
     "floats/vertexes.jsonl": {
       "records": 924,
-      "sha256": "6258adf284c97fda48e9523b14003f28e33e12e19b74feda1d15e7f25ca54a79"
+      "sha256": "841e16cf458ace7e7c0237692ef2b668db859192199b6a98bd1a918244ea1787"
     },
     "floats/distances.jsonl": {
       "records": 1083,
-      "sha256": "3c62b9467b1ab924e72238c14803478fd6b521640c4f35c904364013f0d57b19"
+      "sha256": "ec6f723946190d6a8b69a78b92fb8d41f13fb0d74b3b1c4056bb957068a597ce"
     },
     "floats/resolutions.jsonl": {
       "records": 17,
@@ -96,7 +96,7 @@
     },
     "regions/curated.jsonl": {
       "records": 22,
-      "sha256": "b8ca897369ebbc71ec3788c55ac151c640dd37eb7f0124a1d965902bae4e976d"
+      "sha256": "744612eb48f5e731cd0a30174878ddcaf76209931aea04e9081e4d9956ec30af"
     }
   }
 }

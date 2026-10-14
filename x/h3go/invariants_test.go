@@ -56,7 +56,7 @@ const (
 	// place a point they share. A face crossing between them evaluates the
 	// same point through two different face charts, which is where the last
 	// bits differ.
-	sharedPointBoundDeg = 1e-11
+	sharedPointBoundDeg = 1e-12
 
 	// lengthRelativeTolerance bounds the relative difference between two
 	// evaluations of the same length; lengthFloorRads is the absolute floor

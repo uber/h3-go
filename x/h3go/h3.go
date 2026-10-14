@@ -2,7 +2,7 @@
 //
 // It is checked against the C reference by the conformance suite in the
 // conformance subdirectory, whose README states the contract: discrete
-// outputs identical to the reference, coordinates within 1e-11 degrees of
+// outputs identical to the reference, coordinates within 1e-12 degrees of
 // arc, measures within 1e-9 relative, and knife-edge inputs, such as points
 // on cell edges and polygon vertices on cell edges, outside the contract.
 // The README also records where this implementation is deliberately

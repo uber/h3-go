@@ -21,7 +21,7 @@ booleans, errors, sets and sequences of indexes are compared exactly,
 exhaustively over every cell at resolutions 0 through 7 through the digest
 streams and by sample beyond. There is no tolerance on a cell index.
 
-**Coordinates are within 1e-11 degrees of arc of the reference**, measured
+**Coordinates are within 1e-12 degrees of arc of the reference**, measured
 as angular distance on the sphere, and **measures are within 1e-9
 relative**, or within an absolute floor derived from that angle where the
 quantity is too small for a relative bound to be meaningful. The bound is
@@ -47,8 +47,9 @@ actually computes and is well conditioned everywhere; see Tolerances.
 **The bound is a floor on agreement, not a ceiling on accuracy.** Checked
 against a 256-bit evaluation of the same formula, the pure-Go port places
 every cell center and boundary vertex within 1e-13 degrees of arc of the
-exact value, worst case 3.9e-14 (`x/h3go/exact_projection_test.go`), and
-the reference evaluates the projection to the same few ulps. Two
+exact value, worst case 5.0e-14 for the latitude and longitude it returns
+(`x/h3go/exact_projection_test.go`), and the reference evaluates the
+projection to the same few ulps. Two
 implementations that each sit that close to the truth differ by at most
 the sum of their errors, far inside the bound; the bound is set by what
 the reference meets against itself across platforms, not by how far
@@ -141,7 +142,7 @@ a consumer runs every file of a group the same way.
   "format": "h3-conformance/1",
   "h3Version": "4.5.0",
   "generator": {"name": "...", "seed": 20260929},
-  "tolerances": {"angularDeg": 1e-11, "relative": 1e-9},
+  "tolerances": {"angularDeg": 1e-12, "relative": 1e-9},
   "files": {"inspection/cells.jsonl": {"records": 1885, "sha256": "..."}}
 }
 ```

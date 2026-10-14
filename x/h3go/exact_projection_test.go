@@ -22,10 +22,15 @@ package h3go
 // shared error; this test can, because the whole chain from integer IJK
 // coordinates to a unit vector is rational arithmetic plus square roots, plus
 // the sine and cosine of twenty fixed face-axis azimuths, all of which
-// math/big evaluates exactly for this purpose. The chain is compared where it
-// ends, in unit-vector space, by chord length, which equals the angular
-// separation for separations this small and avoids the asin and atan2 of the
-// final conversion to degrees.
+// math/big evaluates exactly for this purpose. The chain is compared twice:
+// where it ends in unit-vector space, by chord length, which equals the
+// angular separation for separations this small; and again after the final
+// conversion to latitude and longitude in degrees, by turning the returned
+// coordinates back into an exact unit vector with the series sine and cosine
+// and taking the same chord. The second comparison is what catches a
+// conversion that loses precision near the poles, where a latitude taken as
+// asin(z) is a few hundred ulps off while the unit vector it came from is
+// within four.
 
 import (
 	"math/big"
@@ -44,9 +49,11 @@ const (
 	// arc, allowed between the float64 result and the exact one. One unit in
 	// the last place of a unit-vector component is about 1.3e-14 degrees, so
 	// the bound is roughly eight ulps; the largest separation observed over
-	// every cell to res 4 and samples to res 15 is 3.9e-14 degrees, about
-	// three ulps. The conformance suite's coordinate tolerance is a hundred
-	// times looser.
+	// every cell to res 4 and samples to res 15 is 3.9e-14 degrees for the
+	// unit vector, about three ulps, and about five ulps for the degrees
+	// returned, which add the rounding of atan2 and of the conversion to
+	// degrees. The conformance suite's coordinate tolerance is ten times
+	// looser.
 	exactProjectionBoundDeg = 1e-13
 
 	// exactProjectionDefaultMaxRes is the finest resolution enumerated in full
@@ -304,6 +311,40 @@ func separationDeg(got vec3d, want bigVec3) float64 {
 	return chord * RadsToDegs
 }
 
+// exactPi is pi to more decimal digits than the working precision holds.
+const exactPi = "3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798214808651"
+
+// exactDegsToRads is pi/180 at the working precision.
+var exactDegsToRads = func() *big.Float { //nolint:gochecknoglobals // computed once for every comparison
+	pi, _, err := big.ParseFloat(exactPi, 10, exactPrec, big.ToNearestEven)
+	if err != nil {
+		panic(err)
+	}
+
+	return bigQuo(pi, bigInt(180))
+}()
+
+// coordinateSeparationDeg returns the angular separation, in degrees of arc,
+// between the point that a returned latitude and longitude in degrees name
+// and an exact unit vector. It covers the final conversion from the unit
+// vector to degrees, which separationDeg stops short of: the coordinates are
+// taken exactly, converted to radians and to a unit vector with the series
+// sine and cosine, and compared by chord like the vector itself.
+func coordinateSeparationDeg(point LatLng, want bigVec3) float64 {
+	sinLat, cosLat := bigSinCos(bigMul(bigOf(point.Lat), exactDegsToRads))
+	sinLng, cosLng := bigSinCos(bigMul(bigOf(point.Lng), exactDegsToRads))
+
+	diff := bigVec3{
+		x: bigSub(bigMul(cosLat, cosLng), want.x),
+		y: bigSub(bigMul(cosLat, sinLng), want.y),
+		z: bigSub(sinLat, want.z),
+	}
+
+	chord, _ := bigSqrt(diff.dot(diff)).Float64()
+
+	return chord * RadsToDegs
+}
+
 // projectionPoint is one evaluation of the projection: a 2D point on a face in
 // both representations, with the resolution and substrate flag it projects
 // under.
@@ -536,8 +577,8 @@ func TestExactProjectionCenters(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			t.Parallel()
 
-			worst := 0.0
-			worstCell := Cell(0)
+			worst, worstCoordinates := 0.0, 0.0
+			worstCell, worstCoordinatesCell := Cell(0), Cell(0)
 
 			for _, cell := range exactProjectionCells(t, scenario.res, maxRes) {
 				fijk, err := cell.toFaceIjk()
@@ -552,13 +593,28 @@ func TestExactProjectionCenters(t *testing.T) {
 				if sep := separationDeg(got, want); sep > worst {
 					worst, worstCell = sep, cell
 				}
+
+				center, err := cell.LatLng()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if sep := coordinateSeparationDeg(center, want); sep > worstCoordinates {
+					worstCoordinates, worstCoordinatesCell = sep, cell
+				}
 			}
 
-			t.Logf("worst center separation %.3g deg at %s", worst, worstCell)
+			t.Logf("worst center separation %.3g deg at %s, in degrees %.3g at %s",
+				worst, worstCell, worstCoordinates, worstCoordinatesCell)
 
 			if worst > exactProjectionBoundDeg {
 				t.Errorf("center of %s is %.3g deg from the exact projection, bound %.1g",
 					worstCell, worst, exactProjectionBoundDeg)
+			}
+
+			if worstCoordinates > exactProjectionBoundDeg {
+				t.Errorf("LatLng of %s is %.3g deg from the exact point, bound %.1g",
+					worstCoordinatesCell, worstCoordinates, exactProjectionBoundDeg)
 			}
 		})
 	}
@@ -577,8 +633,8 @@ func TestExactProjectionBoundaries(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			t.Parallel()
 
-			worst := 0.0
-			worstCell := Cell(0)
+			worst, worstCoordinates := 0.0, 0.0
+			worstCell, worstCoordinatesCell := Cell(0), Cell(0)
 			crossings := 0
 
 			for _, cell := range exactProjectionCells(t, scenario.res, maxRes) {
@@ -594,23 +650,33 @@ func TestExactProjectionBoundaries(t *testing.T) {
 					t.Fatalf("%s: mirrored walk has %d points, Boundary() has %d (%v)", cell, len(points), len(boundary), err)
 				}
 
-				for _, point := range points {
+				for i, point := range points {
 					want := oracle.toVec3(point.exact[0], point.exact[1], point.face, point.res, point.substrate)
 					got := point.float.toVec3(point.face, point.res, point.substrate)
 
 					if sep := separationDeg(got, want); sep > worst {
 						worst, worstCell = sep, cell
 					}
+
+					if sep := coordinateSeparationDeg(boundary[i], want); sep > worstCoordinates {
+						worstCoordinates, worstCoordinatesCell = sep, cell
+					}
 				}
 
 				crossings += len(points) - topologicalVertexCount(cell)
 			}
 
-			t.Logf("worst boundary separation %.3g deg at %s, %d face crossings checked", worst, worstCell, crossings)
+			t.Logf("worst boundary separation %.3g deg at %s, in degrees %.3g at %s, %d face crossings checked",
+				worst, worstCell, worstCoordinates, worstCoordinatesCell, crossings)
 
 			if worst > exactProjectionBoundDeg {
 				t.Errorf("boundary of %s is %.3g deg from the exact projection, bound %.1g",
 					worstCell, worst, exactProjectionBoundDeg)
+			}
+
+			if worstCoordinates > exactProjectionBoundDeg {
+				t.Errorf("Boundary() of %s is %.3g deg from the exact point, bound %.1g",
+					worstCoordinatesCell, worstCoordinates, exactProjectionBoundDeg)
 			}
 		})
 	}
