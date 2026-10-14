@@ -474,23 +474,20 @@ func TestGreatCircleDistanceWrappedLongitude(t *testing.T) {
 	}
 }
 
-// Inputs and sink for BenchmarkLatLngToVec3, kept at package scope so the
-// compiler cannot constant-fold the projection or drop its result. The
-// coordinate mirrors the paritytest fixture so the two benchmarks line up.
+// Inputs for BenchmarkLatLngToVec3, kept at package scope so the compiler
+// cannot constant-fold the projection. The coordinate mirrors the paritytest
+// fixture so the two benchmarks line up. The result needs no sink: b.Loop
+// keeps the results of calls in its body alive.
 var (
-	benchVec3Lat  = 37.7749 * DegsToRads
-	benchVec3Lng  = -122.4194 * DegsToRads
-	benchVec3Sink vec3d
+	benchVec3Lat = 37.7749 * DegsToRads
+	benchVec3Lng = -122.4194 * DegsToRads
 )
 
 // BenchmarkLatLngToVec3 measures the spherical-coordinate-to-unit-vector
 // projection in isolation, the trigonometric step on the LatLngToCell forward
 // path.
 func BenchmarkLatLngToVec3(b *testing.B) {
-	var out vec3d
 	for b.Loop() {
-		out = latLngToVec3(benchVec3Lat, benchVec3Lng)
+		latLngToVec3(benchVec3Lat, benchVec3Lng)
 	}
-
-	benchVec3Sink = out
 }
