@@ -10,6 +10,95 @@ Records are newline-delimited JSON, one per subject, with every key present
 on every line and errors spelled as `H3Error` names, so a file can be read
 by any language without a schema and a failing line can be quoted as it is.
 
+## What conformance means
+
+An implementation that passes the suite makes these promises, and only
+these. The rest of this file is the mechanism; this section is the
+contract, including what it deliberately leaves out.
+
+**Discrete outputs are identical to the reference.** Indexes, counts,
+booleans, errors, sets and sequences of indexes are compared exactly,
+exhaustively over every cell at resolutions 0 through 7 through the digest
+streams and by sample beyond. There is no tolerance on a cell index.
+
+**Coordinates are within 1e-11 degrees of arc of the reference**, measured
+as angular distance on the sphere, and **measures are within 1e-9
+relative**, or within an absolute floor derived from that angle where the
+quantity is too small for a relative bound to be meaningful. The bound is
+what the reference meets against itself: the same C source built for
+x86-64 and arm64 differs in the last bits of most coordinate outputs, from
+fused multiply-add and libm differences, so bit identity is not something
+any implementation can promise, the reference included.
+
+**Why the bound is an angle and not a latitude and a longitude.** The
+projection produces a unit vector, and longitude is a chart on it that is
+singular at the poles: a point a given angular distance from the pole has
+a longitude defined only to that distance divided by `cos(lat)`. Two
+implementations that agree to a few ulps of arc, about 5e-14 degrees, can
+therefore differ in longitude by that times `1/cos(lat)`, which is 1,384 at
+the highest-latitude resolution 4 cell, latitude 89.96 degrees, and grows
+by about `sqrt(7)` per resolution as cells crowd toward the poles. A
+per-coordinate bound met at the equator is breached at the poles from
+about resolution 10 on, by the reference built for two architectures as
+much as by any port, while the angular distance between the same two
+points stays at a few ulps. Angular distance is the quantity the library
+actually computes and is well conditioned everywhere; see Tolerances.
+
+**The bound is a floor on agreement, not a ceiling on accuracy.** Checked
+against a 256-bit evaluation of the same formula, the pure-Go port places
+every cell center and boundary vertex within 1e-13 degrees of arc of the
+exact value, worst case 3.9e-14 (`x/h3go/exact_projection_test.go`), and
+the reference evaluates the projection to the same few ulps. Two
+implementations that each sit that close to the truth differ by at most
+the sum of their errors, far inside the bound; the bound is set by what
+the reference meets against itself across platforms, not by how far
+either side is from the exact value.
+
+**Knife-edge inputs are outside the contract**, and the suite avoids them
+by construction rather than by filtering. Where an output is a discrete
+decision made on a float that lands within rounding error of the decision
+boundary, two correct implementations may decide differently, and so may
+one implementation on two platforms:
+
+- *Points on cell edges.* `latLngToCell` for a point within about 1e-9
+  degrees of a cell edge or vertex may return either neighbour. The
+  suite's reverse-lookup points are interior, halfway from the center to
+  each vertex, and the digests' round trip starts from cell centers.
+- *Polygon vertices on cell edges.* The `full` and `overlapping`
+  containment modes of `polygonToCellsExperimental` decide whether a cell
+  boundary vertex is inside the polygon. A polygon that is exactly a cell
+  boundary puts every finer cell's vertices on its edges, and the
+  reference disagreed with itself on 135 of 270 such rows after a round
+  trip through degrees. The suite's polygons are cell boundaries scaled by
+  0.8 and 1.2 about the center, which keeps every cell vertex clear of
+  every polygon edge.
+- *Nearly antipodal points.* The haversine `asin` has infinite slope at
+  its argument's upper limit, so a last-bit difference in the inputs moves
+  the distance by 1e-8 radians. The suite never pairs points within 1e-3
+  radians of antipodal.
+- *Fused arithmetic.* A compiler that contracts a multiply and an add into
+  one rounding, which gcc does across statements on arm64 and clang does
+  within an expression, moves last bits on both sides of a comparison.
+  The port rounds its degree-to-radian conversions explicitly before
+  subtracting them so that a point is at distance exactly zero from
+  itself; the reference takes radians and has nothing to fuse there.
+
+**Where the reference fails from its own limits, the better answer is
+allowed.** The classic `polygonToCells` returns `E_FAILED` when its output
+size estimate underestimates the fill, which happens for a band from 85 to
+89.9 degrees north spanning 179 degrees of longitude; an implementation
+without a fixed output buffer returns the cells. No such input is in the
+suite, so both behaviours pass. By contrast, `gridDistance` and
+`gridPathCells` returning `E_FAILED` for pairs that cross a pentagon or
+span too many faces is part of the contract: the reference's refusal is
+recorded and an implementation must refuse the same pairs.
+
+**Not specified** because the reference does not specify it: the output of
+`compactCells` on an input of mixed resolutions, which is order dependent
+in the reference; the order of indexes in any output, which the suite
+sorts before comparing; and the `0` padding of grid outputs, which the
+suite removes.
+
 ## Layout
 
 ```
