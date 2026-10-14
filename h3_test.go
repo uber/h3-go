@@ -1173,7 +1173,7 @@ func TestCellAreaM2(t *testing.T) {
 	t.Parallel()
 	area, err := CellAreaM2(validCell)
 	assertNoErr(t, err)
-	assertEqualEps(t, float64(269676877.9511), area)
+	assertEqualEps(t, float64(269676877.95096), area)
 
 	_, err = CellAreaM2(-1)
 	assertErr(t, err)

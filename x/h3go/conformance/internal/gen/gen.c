@@ -40,7 +40,7 @@
 #define FORMAT_VERSION "h3-conformance/1"
 #define GENERATOR_NAME "x/h3go/conformance/internal/gen/gen.c"
 #define DEFAULT_SEED UINT64_C(20260929)
-#define ANGULAR_DEG_TOLERANCE "1e-11"
+#define ANGULAR_DEG_TOLERANCE "1e-12"
 #define RELATIVE_TOLERANCE "1e-9"
 
 #define MAX_RES 15
