@@ -68,6 +68,7 @@
 #define RANDOM_PATTERNS 256
 #define HIERARCHY_CELLS_PER_RES 32
 #define TRAVERSAL_CELLS_PER_RES 16
+#define UNSAFE_CELLS_PER_RES 16
 #define SETS_CELLS_PER_RES 2
 #define REGIONS_MAX_RES 13
 #define REGIONS_PENTAGON_STEP 4
@@ -618,6 +619,68 @@ static void writeTraversalPair(FILE *out, H3Index h, H3Index target) {
     fputs("}\n", out);
 }
 
+/* ---- unsafe group (README, "unsafe/cells.jsonl") ---- */
+
+static void pushDisk(IndexList *list, H3Index h, int k);
+
+/* sampleUnsafe takes the valid-cell subjects and adds, at every resolution,
+ * every cell within MAX_DISK_K + 1 of each pentagon, which is where the
+ * unsafe traversals decide between a result and E_PENTAGON. */
+static void sampleUnsafe(IndexList *list, Splitmix64 *rng) {
+    sampleCells(list, rng, UNSAFE_CELLS_PER_RES);
+
+    for (int res = 0; res <= MAX_RES; res++) {
+        H3Index pentagons[NUM_PENTAGONS];
+        must(getPentagons(res, pentagons));
+        for (int i = 0; i < NUM_PENTAGONS; i++) {
+            pushDisk(list, pentagons[i], MAX_DISK_K + 1);
+        }
+    }
+
+    sortAndDedup(list);
+}
+
+/* printUnsafeOutcome prints true when an unsafe traversal of the origin at k
+ * succeeds, and its error otherwise. On success the cells it returned are, by
+ * construction of the reference, exactly the safe traversal's, so they are
+ * not repeated here. */
+static void printUnsafeOutcome(FILE *out, H3Index origin, int k, H3Error (*fn)(H3Index, int, H3Index *)) {
+    H3Index cells[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
+    H3Error err = fn(origin, k, cells);
+    if (err) {
+        printError(out, err);
+    } else {
+        printBool(out, 1);
+    }
+}
+
+/* printUnsafeOutcomes prints the outcomes of one unsafe traversal for k 1 to
+ * MAX_DISK_K as a sequence. */
+static void printUnsafeOutcomes(FILE *out, H3Index origin, H3Error (*fn)(H3Index, int, H3Index *)) {
+    fputc('[', out);
+    for (int k = 1; k <= MAX_DISK_K; k++) {
+        if (k > 1) {
+            fputc(',', out);
+        }
+        printUnsafeOutcome(out, origin, k, fn);
+    }
+    fputc(']', out);
+}
+
+/* writeUnsafeRecord writes whether gridDiskUnsafe and gridRingUnsafe succeed
+ * for k 1 to MAX_DISK_K. gridDiskDistancesUnsafe is gridDiskUnsafe's
+ * implementation and gridDisksUnsafe is a loop over it, so neither gets a key. */
+static void writeUnsafeRecord(FILE *out, H3Index h, Splitmix64 *rng) {
+    (void)rng;
+    fputs("{\"index\":", out);
+    printIndex(out, h);
+    fputs(",\"diskUnsafe\":", out);
+    printUnsafeOutcomes(out, h, gridDiskUnsafe);
+    fputs(",\"ringUnsafe\":", out);
+    printUnsafeOutcomes(out, h, gridRingUnsafe);
+    fputs("}\n", out);
+}
+
 /* ---- edges group (README, "edges/cells.jsonl") ---- */
 
 static void writeEdgesRecord(FILE *out, H3Index h, Splitmix64 *rng) {
@@ -924,7 +987,8 @@ static void pushChildren(IndexList *list, H3Index h, int childRes) {
 
 /* pushDisk appends gridDisk(h, k) without its padding, keeping slot order. */
 static void pushDisk(IndexList *list, H3Index h, int k) {
-    H3Index disk[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
+    /* Sized for MAX_DISK_K + 1, the widest disk any sampler pushes. */
+    H3Index disk[1 + 3 * (MAX_DISK_K + 1) * (MAX_DISK_K + 2)] = {0};
     must(gridDisk(h, k, disk));
     for (int i = 0; i < diskSize(k); i++) {
         if (disk[i]) {
@@ -2443,7 +2507,8 @@ static void writeCuratedFiles(const char *outDir, uint64_t seed, FileInfo *files
 /* Every record file of the suite, in manifest order. */
 static const char *const SUITE_FILES[] = {
     "inspection/cells.jsonl",  "hierarchy/cells.jsonl",     "traversal/cells.jsonl",
-    "edges/cells.jsonl",       "vertexes/cells.jsonl",      "localij/pairs.jsonl",
+    "unsafe/cells.jsonl",      "edges/cells.jsonl",         "vertexes/cells.jsonl",
+    "localij/pairs.jsonl",
     "sets/sets.jsonl",         "regions/polygons.jsonl",    "floats/cells.jsonl",
     "floats/edges.jsonl",      "floats/vertexes.jsonl",     "floats/distances.jsonl",
     "floats/resolutions.jsonl", "digests/resolutions.jsonl", "digests/baseCells.jsonl",
@@ -2531,6 +2596,7 @@ int main(int argc, char *argv[]) {
         {{"inspection/cells.jsonl", 0, ""}, sampleInspection, writeInspectionRecord},
         {{"hierarchy/cells.jsonl", 0, ""}, sampleHierarchy, writeHierarchyRecord},
         {{"traversal/cells.jsonl", 0, ""}, sampleTraversal, writeTraversalRecord},
+        {{"unsafe/cells.jsonl", 0, ""}, sampleUnsafe, writeUnsafeRecord},
         {{"edges/cells.jsonl", 0, ""}, sampleTraversal, writeEdgesRecord},
         {{"vertexes/cells.jsonl", 0, ""}, sampleTraversal, writeVertexesRecord},
         {{"localij/pairs.jsonl", 0, ""}, sampleTraversal, writeLocalIJSubject},

@@ -204,6 +204,21 @@ type TraversalRecord struct {
 	Neighbor Result[bool] `json:"neighbor"`
 }
 
+// UnsafeRecord holds, for one valid cell, whether each unsafe traversal
+// succeeds. A success carries no cells: the reference returns exactly the
+// safe traversal's cells when the unsafe one succeeds, so the runner checks
+// the implementation's unsafe output against its own safe output.
+type UnsafeRecord struct {
+	// Index is the subject cell.
+	Index string `json:"index"`
+	// DiskUnsafe holds, for k 1 to 3 in order, true when gridDiskUnsafe
+	// succeeds or its error.
+	DiskUnsafe []Result[bool] `json:"diskUnsafe"`
+	// RingUnsafe holds, for k 1 to 3 in order, true when gridRingUnsafe
+	// succeeds or its error.
+	RingUnsafe []Result[bool] `json:"ringUnsafe"`
+}
+
 // EdgesRecord holds the directed-edge outputs of one valid cell.
 //
 //nolint:govet // field order is the JSON key order given in README.md
@@ -430,6 +445,9 @@ func (r HierarchyRecord) subject() string { return r.Index }
 
 // subject returns the record's cell and target.
 func (r TraversalRecord) subject() string { return r.Index + "/" + r.Target }
+
+// subject returns the record's cell.
+func (r UnsafeRecord) subject() string { return r.Index }
 
 // subject returns the record's cell.
 func (r EdgesRecord) subject() string { return r.Index }

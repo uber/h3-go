@@ -110,6 +110,7 @@ hierarchy/cells.jsonl
 hierarchy/curated.jsonl
 traversal/cells.jsonl
 traversal/curated.jsonl
+unsafe/cells.jsonl
 edges/cells.jsonl
 vertexes/cells.jsonl
 localij/pairs.jsonl
@@ -320,6 +321,38 @@ Example:
 
 ```json
 {"index":"8001fffffffffff","disk1":["8001fffffffffff","8003fffffffffff","8005fffffffffff","8007fffffffffff","8009fffffffffff","800bfffffffffff","8011fffffffffff"],"disk2":["8001fffffffffff","8003fffffffffff","8005fffffffffff","8007fffffffffff","8009fffffffffff","800bfffffffffff","800dfffffffffff","800ffffffffffff","8011fffffffffff","8013fffffffffff","8015fffffffffff","8017fffffffffff","8019fffffffffff","801bfffffffffff","801ffffffffffff","8021fffffffffff","8025fffffffffff","802dfffffffffff"],"disk3":["8001fffffffffff","8003fffffffffff","8005fffffffffff","8007fffffffffff","8009fffffffffff","800bfffffffffff","800dfffffffffff","800ffffffffffff","8011fffffffffff","8013fffffffffff","8015fffffffffff","8017fffffffffff","8019fffffffffff","801bfffffffffff","801dfffffffffff","801ffffffffffff","8021fffffffffff","8023fffffffffff","8025fffffffffff","8027fffffffffff","8029fffffffffff","802bfffffffffff","802dfffffffffff","802ffffffffffff","8031fffffffffff","8033fffffffffff","8035fffffffffff","8039fffffffffff","803bfffffffffff","803dfffffffffff","803ffffffffffff","8041fffffffffff","8043fffffffffff","8053fffffffffff"],"ring1":["8003fffffffffff","8005fffffffffff","8007fffffffffff","8009fffffffffff","800bfffffffffff","8011fffffffffff"],"ring2":["800dfffffffffff","800ffffffffffff","8013fffffffffff","8015fffffffffff","8017fffffffffff","8019fffffffffff","801bfffffffffff","801ffffffffffff","8021fffffffffff","8025fffffffffff","802dfffffffffff"],"ring3":["801dfffffffffff","8023fffffffffff","8027fffffffffff","8029fffffffffff","802bfffffffffff","802ffffffffffff","8031fffffffffff","8033fffffffffff","8035fffffffffff","8039fffffffffff","803bfffffffffff","803dfffffffffff","803ffffffffffff","8041fffffffffff","8043fffffffffff","8053fffffffffff"],"diskDistances2":[["8001fffffffffff"],["8003fffffffffff","8005fffffffffff","8007fffffffffff","8009fffffffffff","800bfffffffffff","8011fffffffffff"],["800dfffffffffff","800ffffffffffff","8013fffffffffff","8015fffffffffff","8017fffffffffff","8019fffffffffff","801bfffffffffff","801ffffffffffff","8021fffffffffff","8025fffffffffff","802dfffffffffff"]],"target":"8005fffffffffff","distance":1,"path":["8001fffffffffff","8005fffffffffff"],"neighbor":true}
+```
+
+### `unsafe`
+
+One line per **valid cell**. `gridDiskUnsafe` and `gridRingUnsafe` walk
+the grid in a spiral and refuse with `E_PENTAGON` when the walk meets a
+pentagon, where the safe functions fall back to a slower search. Which
+origins and `k` are refused is a property of the reference's walk, not of
+the geometry. The disk walk refuses when any cell it visits is a pentagon.
+The ring walk steps `k` cells outward along one axis, circles the ring, and
+refuses when a cell on either leg is a pentagon or when the circuit fails to
+return to its first cell, which is how it notices distortion from a pentagon
+it never steps on. In the generated file the two decisions agree for every
+subject; both are recorded because they are separate walks and an
+implementation can reproduce one without the other. This file records the
+decision. It does not repeat the cells, because
+when the unsafe function succeeds the reference returns exactly the safe
+function's cells; an implementation checks its unsafe output against its own
+safe output, which `traversal` and the digests cover. `gridDiskDistancesUnsafe`
+is the function `gridDiskUnsafe` calls and `gridDisksUnsafe` is a loop over
+it, so neither has a key: they refuse exactly when `diskUnsafe` does.
+
+| Key | Function | Type |
+|---|---|---|
+| `index` | the subject cell | index string |
+| `diskUnsafe` | `gridDiskUnsafe(index, k)` for `k` 1, 2, 3, in that order | sequence of three: `true` on success, or error |
+| `ringUnsafe` | `gridRingUnsafe(index, k)` for `k` 1, 2, 3, in that order | sequence of three: `true` on success, or error |
+
+Example:
+
+```json
+{"index":"8003fffffffffff","diskUnsafe":[true,{"err":"E_PENTAGON"},{"err":"E_PENTAGON"}],"ringUnsafe":[true,{"err":"E_PENTAGON"},{"err":"E_PENTAGON"}]}
 ```
 
 ### `edges`
@@ -847,6 +880,15 @@ Valid-cell subjects with `n` = 32. No further draws.
 
 Valid-cell subjects with `n` = 16. Then for each subject, `target` is drawn
 from its 3-disk.
+
+### `unsafe/cells.jsonl`
+
+Valid-cell subjects with `n` = 16. Then, with no further draws, every
+non-zero cell of `gridDisk(p, 4)` for every pentagon `p` at every resolution
+0 through 15, in `getPentagons` order. The whole list is sorted ascending and
+deduplicated again. The 4-disks put every cell within one step of the
+largest disk or ring the file asks about, which is where the unsafe
+traversals change their answer.
 
 ### `edges/cells.jsonl`
 
