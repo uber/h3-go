@@ -48,9 +48,15 @@ func checkSets(t *testing.T, record SetsRecord) {
 		t.Errorf("CompactCells() = %s, want %s", formatResult(got), formatResult(record.Compact))
 	}
 
+	// A recorded true means the output is the input as a set.
+	wantUncompact := Result[[]string]{Err: record.Uncompact.Err, Value: record.Uncompact.Value.Cells}
+	if record.Uncompact.Value.Input {
+		wantUncompact = cellsResult(slices.Clone(input), nil)
+	}
+
 	uncompacted, err := h3go.UncompactCells(input, record.UncompactRes)
-	if got := cellsResult(uncompacted, err); !equalResults(got, record.Uncompact, slices.Equal) {
-		t.Errorf("UncompactCells(%d) = %s, want %s", record.UncompactRes, formatResult(got), formatResult(record.Uncompact))
+	if got := cellsResult(uncompacted, err); !equalResults(got, wantUncompact, slices.Equal) {
+		t.Errorf("UncompactCells(%d) = %s, want %s", record.UncompactRes, formatResult(got), formatResult(wantUncompact))
 	}
 
 	if record.Compact.Err != "" || !allValid {
