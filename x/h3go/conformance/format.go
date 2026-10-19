@@ -177,23 +177,18 @@ type HierarchyRecord struct {
 }
 
 // TraversalRecord holds the grid-traversal outputs of one valid cell and of
-// the cell paired with a target drawn from its 3-disk.
+// the cell paired with a target drawn from its 3-disk. Disks are not
+// recorded: the k-disk is the cell and the rings 1 to k, so a consumer
+// derives gridDisk and gridDiskDistances from the rings.
 //
 //nolint:govet // field order is the JSON key order given in README.md
 type TraversalRecord struct {
 	// Index is the subject cell.
 	Index string `json:"index"`
-	// Disk1, Disk2 and Disk3 are gridDisk for k 1 to 3, as sets.
-	Disk1 []string `json:"disk1"`
-	Disk2 []string `json:"disk2"`
-	Disk3 []string `json:"disk3"`
 	// Ring1, Ring2 and Ring3 are gridRing for k 1 to 3, as sets.
 	Ring1 []string `json:"ring1"`
 	Ring2 []string `json:"ring2"`
 	Ring3 []string `json:"ring3"`
-	// DiskDistances2 is gridDiskDistances for k 2, one set per distance from
-	// 0 to 2.
-	DiskDistances2 [][]string `json:"diskDistances2"`
 	// Target is the second cell of the pair.
 	Target string `json:"target"`
 	// Distance is gridDistance(index, target).
@@ -277,8 +272,45 @@ type SetsRecord struct {
 	Compact Result[[]string] `json:"compact"`
 	// UncompactRes is the resolution passed to uncompactCells.
 	UncompactRes int `json:"uncompactRes"`
-	// Uncompact is uncompactCells(input, uncompactRes), as a set.
-	Uncompact Result[[]string] `json:"uncompact"`
+	// Uncompact is uncompactCells(input, uncompactRes), as a set, or true
+	// when that set is the input as a set.
+	Uncompact Result[SetOrInput] `json:"uncompact"`
+}
+
+// SetOrInput is a set of index strings that may instead be recorded as true,
+// meaning "the record's input, as a set". It encodes as true or as the set.
+type SetOrInput struct {
+	// Cells is the set when Input is false.
+	Cells []string
+	// Input is true when the set is the input and Cells is empty.
+	Input bool
+}
+
+// MarshalJSON encodes true or the set.
+func (s SetOrInput) MarshalJSON() ([]byte, error) {
+	if s.Input {
+		return json.Marshal(true)
+	}
+
+	return json.Marshal(s.Cells)
+}
+
+// UnmarshalJSON decodes true or a set of index strings.
+func (s *SetOrInput) UnmarshalJSON(data []byte) error {
+	if string(data) == "true" {
+		*s = SetOrInput{Input: true}
+
+		return nil
+	}
+
+	var cells []string
+	if err := json.Unmarshal(data, &cells); err != nil {
+		return err
+	}
+
+	*s = SetOrInput{Cells: cells}
+
+	return nil
 }
 
 // GeoCoord is a point as a [latitude, longitude] pair in degrees.

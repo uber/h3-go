@@ -31,39 +31,52 @@ func TestTraversal(t *testing.T) {
 }
 
 // checkTraversal asserts every field of one traversal record against h3go.
+// The record carries the rings; the k-disk it implies is the cell and the
+// rings 1 to k, and the distance-grouped disk is those rings in order.
 func checkTraversal(t *testing.T, record TraversalRecord) {
 	t.Helper()
 
 	cell := h3go.CellFromString(record.Index)
 	target := h3go.CellFromString(record.Target)
 
-	disks := [][]string{record.Disk1, record.Disk2, record.Disk3}
-	rings := [][]string{record.Ring1, record.Ring2, record.Ring3}
+	rings := [][]string{{record.Index}, record.Ring1, record.Ring2, record.Ring3}
 
-	for k := 1; k <= len(disks); k++ {
-		disk, err := cell.GridDisk(k)
-		if got := cellsResult(disk, err); !equalResults(got, Result[[]string]{Value: disks[k-1]}, slices.Equal) {
-			t.Errorf("GridDisk(%d) = %s, want %v", k, formatResult(got), disks[k-1])
+	var disk []string
+
+	for k := range rings {
+		disk = slices.Sorted(slices.Values(slices.Concat(disk, rings[k])))
+
+		if k == 0 {
+			continue
 		}
 
 		ring, err := cell.GridRing(k)
-		if got := cellsResult(ring, err); !equalResults(got, Result[[]string]{Value: rings[k-1]}, slices.Equal) {
-			t.Errorf("GridRing(%d) = %s, want %v", k, formatResult(got), rings[k-1])
+		if got := cellsResult(ring, err); !equalResults(got, Result[[]string]{Value: rings[k]}, slices.Equal) {
+			t.Errorf("GridRing(%d) = %s, want %v", k, formatResult(got), rings[k])
 		}
-	}
 
-	distances, err := cell.GridDiskDistances(2)
-	if err != nil {
-		t.Errorf("GridDiskDistances(2): %v", err)
-	}
+		cells, err := cell.GridDisk(k)
+		if got := cellsResult(cells, err); !equalResults(got, Result[[]string]{Value: disk}, slices.Equal) {
+			t.Errorf("GridDisk(%d) = %s, want %v", k, formatResult(got), disk)
+		}
 
-	if len(distances) != len(record.DiskDistances2) {
-		t.Fatalf("GridDiskDistances(2) has %d rings, want %d", len(distances), len(record.DiskDistances2))
-	}
+		distances, err := cell.GridDiskDistances(k)
+		if err != nil {
+			t.Errorf("GridDiskDistances(%d): %v", k, err)
 
-	for distance, want := range record.DiskDistances2 {
-		if got := cellsResult(distances[distance], nil); !slices.Equal(got.Value, want) {
-			t.Errorf("GridDiskDistances(2)[%d] = %v, want %v", distance, got.Value, want)
+			continue
+		}
+
+		if len(distances) != k+1 {
+			t.Errorf("GridDiskDistances(%d) has %d rings, want %d", k, len(distances), k+1)
+
+			continue
+		}
+
+		for distance, want := range rings[:k+1] {
+			if got := cellsResult(distances[distance], nil); !slices.Equal(got.Value, want) {
+				t.Errorf("GridDiskDistances(%d)[%d] = %v, want %v", k, distance, got.Value, want)
+			}
 		}
 	}
 

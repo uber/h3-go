@@ -80,6 +80,55 @@ func TestResultJSON(t *testing.T) {
 	}
 }
 
+// TestSetOrInputJSON checks both encodings of SetOrInput and the decode
+// failure.
+func TestSetOrInputJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		give     string
+		want     SetOrInput
+		wantJSON string
+		wantErr  bool
+	}{
+		"input":     {give: `true`, want: SetOrInput{Input: true}, wantJSON: `true`},
+		"set":       {give: `["8001fffffffffff","8003fffffffffff"]`, want: SetOrInput{Cells: []string{"8001fffffffffff", "8003fffffffffff"}}, wantJSON: `["8001fffffffffff","8003fffffffffff"]`},
+		"empty_set": {give: `[]`, want: SetOrInput{Cells: []string{}}, wantJSON: `[]`},
+		"false":     {give: `false`, wantErr: true},
+		"malformed": {give: `["80`, wantErr: true},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var got SetOrInput
+
+			err := json.Unmarshal([]byte(tt.give), &got)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Unmarshal(%s): err %v, wantErr %v", tt.give, err, tt.wantErr)
+			}
+
+			if tt.wantErr {
+				return
+			}
+
+			if got.Input != tt.want.Input || !slices.Equal(got.Cells, tt.want.Cells) {
+				t.Fatalf("Unmarshal(%s) = %+v, want %+v", tt.give, got, tt.want)
+			}
+
+			data, err := json.Marshal(got)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if string(data) != tt.wantJSON {
+				t.Fatalf("Marshal = %s, want %s", data, tt.wantJSON)
+			}
+		})
+	}
+}
+
 // TestErrorName covers nil, every defined error, a wrapped error and an
 // unknown error.
 func TestErrorName(t *testing.T) {

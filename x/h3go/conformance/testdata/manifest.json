@@ -20,7 +20,7 @@
     },
     "traversal/cells.jsonl": {
       "records": 542,
-      "sha256": "bf9062bf55f0aa8a7f0fdfd8413f6ca981feda587e46189d6bd97bc12998f38c"
+      "sha256": "36f802c11c0afa8e557c231351df755c4c14ae9ffe5a9f70f47fe88bc4f6b7ae"
     },
     "unsafe/cells.jsonl": {
       "records": 9527,
@@ -40,7 +40,7 @@
     },
     "sets/sets.jsonl": {
       "records": 1344,
-      "sha256": "9e68eff694c4523e78878b8b785118c619c62c0edce931e47ea68a8d498f014d"
+      "sha256": "6e9a77106d69e66a653334461c808a4faffeaa5b135eeae12ba88ce1e852e67b"
     },
     "regions/polygons.jsonl": {
       "records": 360,
@@ -88,7 +88,7 @@
     },
     "traversal/curated.jsonl": {
       "records": 14,
-      "sha256": "eaa90880f83d11b12eb2b771c14ab462015bafdf85912c062356f77eead8e651"
+      "sha256": "16f628b5fab33c4311f689c3c929a779a53bcd65acd3c49d3df8234a931aaac6"
     },
     "localij/curated.jsonl": {
       "records": 12,

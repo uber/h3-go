@@ -443,10 +443,9 @@ static void printIndexSequence(FILE *out, const H3Index *indexes, int64_t count)
     fputc(']', out);
 }
 
-/* printIndexSet prints the distinct non-zero entries of indexes in ascending
- * order, compacting and sorting them in place, and returns how many were
- * kept. */
-static int64_t printIndexSet(FILE *out, H3Index *indexes, int64_t count) {
+/* normalizeSet compacts the non-zero entries of indexes to the front, sorts
+ * them ascending and removes duplicates, returning how many remain. */
+static int64_t normalizeSet(H3Index *indexes, int64_t count) {
     int64_t kept = 0;
     for (int64_t i = 0; i < count; i++) {
         if (indexes[i]) {
@@ -460,7 +459,14 @@ static int64_t printIndexSet(FILE *out, H3Index *indexes, int64_t count) {
             indexes[unique++] = indexes[i];
         }
     }
-    kept = unique;
+    return unique;
+}
+
+/* printIndexSet prints the distinct non-zero entries of indexes in ascending
+ * order, compacting and sorting them in place, and returns how many were
+ * kept. */
+static int64_t printIndexSet(FILE *out, H3Index *indexes, int64_t count) {
+    int64_t kept = normalizeSet(indexes, count);
     fputc('[', out);
     for (int64_t i = 0; i < kept; i++) {
         if (i) {
@@ -541,42 +547,18 @@ static void writeTraversalRecord(FILE *out, H3Index h, Splitmix64 *rng) {
     writeTraversalPair(out, h, drawDiskTarget(rng, h, MAX_DISK_K));
 }
 
-/* writeTraversalPair writes the subject's disks and rings, then its distance,
- * path and neighbour relation to the target. */
+/* writeTraversalPair writes the subject's rings, then its distance, path and
+ * neighbour relation to the target. Disks and distance-grouped disks are not
+ * written: a k-disk is the origin and the rings 1 to k, so a consumer derives
+ * them from the rings. */
 static void writeTraversalPair(FILE *out, H3Index h, H3Index target) {
     fputs("{\"index\":", out);
     printIndex(out, h);
 
     for (int k = 1; k <= MAX_DISK_K; k++) {
-        fprintf(out, ",\"disk%d\":", k);
-        printDiskSet(out, h, k, gridDisk);
-    }
-    for (int k = 1; k <= MAX_DISK_K; k++) {
         fprintf(out, ",\"ring%d\":", k);
         printDiskSet(out, h, k, gridRing);
     }
-
-    fputs(",\"diskDistances2\":[", out);
-    {
-        const int k = 2;
-        H3Index cells[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
-        int distances[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)] = {0};
-        H3Index ring[1 + 3 * MAX_DISK_K * (MAX_DISK_K + 1)];
-        must(gridDiskDistances(h, k, cells, distances));
-        for (int d = 0; d <= k; d++) {
-            int64_t count = 0;
-            for (int i = 0; i < diskSize(k); i++) {
-                if (cells[i] && distances[i] == d) {
-                    ring[count++] = cells[i];
-                }
-            }
-            if (d) {
-                fputc(',', out);
-            }
-            printIndexSet(out, ring, count);
-        }
-    }
-    fputc(']', out);
 
     fputs(",\"target\":", out);
     printIndex(out, target);
@@ -1025,7 +1007,25 @@ static void writeSetsRecordNamed(FILE *out, const char *id, const IndexList *inp
         }
         err = uncompactCells(input->items, (int64_t)input->len, cells, count, uncompactRes);
         if (!err) {
-            printIndexSet(out, cells, count);
+            /* When uncompactRes is the input's own resolution the output is
+             * the input as a set; write true instead of repeating it. */
+            H3Index *same = calloc(input->len ? input->len : 1, sizeof *same);
+            if (!same) {
+                fail("out of memory");
+            }
+            memcpy(same, input->items, input->len * sizeof *same);
+            int64_t inputCount = normalizeSet(same, (int64_t)input->len);
+            int64_t outputCount = normalizeSet(cells, count);
+            bool equal = inputCount == outputCount;
+            for (int64_t i = 0; equal && i < inputCount; i++) {
+                equal = same[i] == cells[i];
+            }
+            free(same);
+            if (equal) {
+                printBool(out, 1);
+            } else {
+                printIndexSet(out, cells, outputCount);
+            }
         }
         free(cells);
     }
