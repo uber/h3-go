@@ -1,0 +1,25 @@
+Take the latitude from atan2 near the poles.
+
+Upstream change uber/h3#1255, not yet in a release. asin(z) loses about
+1/cos(lat) in precision near the poles because it recovers cos(lat) from
+1 - z^2; sqrt(x^2 + y^2) is cos(lat) at full precision. The suite's
+angular tolerance of 1e-12 degrees depends on both the reference and the
+port using this form.
+
+Delete this file once the release pinned in third_party/h3 contains the
+change; build.sh fails when a patch is already applied.
+
+--- a/src/h3lib/include/vec3d.h
++++ b/src/h3lib/include/vec3d.h
+@@ -53,7 +53,10 @@ static inline Vec3d latLngToVec3(LatLng geo) {
+
+ static inline LatLng vec3ToLatLng(Vec3d v) {
+     LatLng out = {
+-        .lat = asin(v.z),
++        // atan2 rather than asin(z): near the poles asin loses about
++        // 1/cos(lat) in precision because it recovers cos(lat) from 1 - z^2,
++        // while sqrt(x^2 + y^2) is cos(lat) at full precision.
++        .lat = atan2(v.z, sqrt(v.x * v.x + v.y * v.y)),
+         .lng = atan2(v.y, v.x),
+     };
+     return out;
