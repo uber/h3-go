@@ -475,8 +475,7 @@ func TestGreatCircleDistanceWrappedLongitude(t *testing.T) {
 }
 
 // Inputs for BenchmarkLatLngToVec3, kept at package scope so the compiler
-// cannot constant-fold the projection. The coordinate mirrors the paritytest
-// fixture so the two benchmarks line up. The result needs no sink: b.Loop
+// cannot constant-fold the projection. The result needs no sink: b.Loop
 // keeps the results of calls in its body alive.
 var (
 	benchVec3Lat = 37.7749 * DegsToRads
