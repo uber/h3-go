@@ -20,7 +20,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
 // earthRadiusKm is the sphere radius the reference uses for kilometre and
@@ -56,7 +56,7 @@ func measure(value float64, err error) measurement {
 	return measurement{value: value, err: err}
 }
 
-// TestFloatCells runs every floats/cells record against h3go.
+// TestFloatCells runs every floats/cells record against h3.
 func TestFloatCells(t *testing.T) {
 	t.Parallel()
 
@@ -65,7 +65,7 @@ func TestFloatCells(t *testing.T) {
 	runGroup(t, "floats/cells", func(t *testing.T, record FloatCellRecord) {
 		t.Helper()
 
-		cell := h3go.CellFromString(record.Index)
+		cell := h3.CellFromString(record.Index)
 
 		center, err := cell.LatLng()
 		if err != nil || !withinAngular(center, record.Center, tolerances.AngularDeg) {
@@ -77,16 +77,16 @@ func TestFloatCells(t *testing.T) {
 			t.Errorf("Boundary() = %v (%v), want %v", boundary, err, record.Boundary)
 		}
 
-		checkMeasure(t, "CellAreaRads2", record.AreaRads2, rads2, tolerances, measure(h3go.CellAreaRads2(cell)))
-		checkMeasure(t, "CellAreaKm2", record.AreaKm2, km2, tolerances, measure(h3go.CellAreaKm2(cell)))
-		checkMeasure(t, "CellAreaM2", record.AreaM2, m2, tolerances, measure(h3go.CellAreaM2(cell)))
+		checkMeasure(t, "CellAreaRads2", record.AreaRads2, rads2, tolerances, measure(h3.CellAreaRads2(cell)))
+		checkMeasure(t, "CellAreaKm2", record.AreaKm2, km2, tolerances, measure(h3.CellAreaKm2(cell)))
+		checkMeasure(t, "CellAreaM2", record.AreaM2, m2, tolerances, measure(h3.CellAreaM2(cell)))
 
 		if len(record.Interior) != len(record.InteriorCells) {
 			t.Fatalf("record has %d interior points and %d cells", len(record.Interior), len(record.InteriorCells))
 		}
 
 		for i, point := range record.Interior {
-			got, err := h3go.LatLngToCell(h3go.LatLng{Lat: point[0], Lng: point[1]}, record.InteriorRes)
+			got, err := h3.LatLngToCell(h3.LatLng{Lat: point[0], Lng: point[1]}, record.InteriorRes)
 			if err != nil || got.String() != record.InteriorCells[i] {
 				t.Errorf("LatLngToCell(%v, %d) = %s (%v), want %s", point, record.InteriorRes, got, err, record.InteriorCells[i])
 			}
@@ -94,7 +94,7 @@ func TestFloatCells(t *testing.T) {
 	})
 }
 
-// TestFloatEdges runs every floats/edges record against h3go.
+// TestFloatEdges runs every floats/edges record against h3.
 func TestFloatEdges(t *testing.T) {
 	t.Parallel()
 
@@ -103,11 +103,11 @@ func TestFloatEdges(t *testing.T) {
 	runGroup(t, "floats/edges", func(t *testing.T, record FloatEdgeRecord) {
 		t.Helper()
 
-		edge := h3go.DirectedEdgeFromString(record.Index)
+		edge := h3.DirectedEdgeFromString(record.Index)
 
-		checkMeasure(t, "EdgeLengthRads", record.LengthRads, rads, tolerances, measure(h3go.EdgeLengthRads(edge)))
-		checkMeasure(t, "EdgeLengthKm", record.LengthKm, km, tolerances, measure(h3go.EdgeLengthKm(edge)))
-		checkMeasure(t, "EdgeLengthM", record.LengthM, m, tolerances, measure(h3go.EdgeLengthM(edge)))
+		checkMeasure(t, "EdgeLengthRads", record.LengthRads, rads, tolerances, measure(h3.EdgeLengthRads(edge)))
+		checkMeasure(t, "EdgeLengthKm", record.LengthKm, km, tolerances, measure(h3.EdgeLengthKm(edge)))
+		checkMeasure(t, "EdgeLengthM", record.LengthM, m, tolerances, measure(h3.EdgeLengthM(edge)))
 
 		boundary, err := edge.Boundary()
 		if err != nil || !sequenceWithinAngular(boundary, record.Boundary, tolerances.AngularDeg) {
@@ -116,7 +116,7 @@ func TestFloatEdges(t *testing.T) {
 	})
 }
 
-// TestFloatVertexes runs every floats/vertexes record against h3go.
+// TestFloatVertexes runs every floats/vertexes record against h3.
 func TestFloatVertexes(t *testing.T) {
 	t.Parallel()
 
@@ -125,7 +125,7 @@ func TestFloatVertexes(t *testing.T) {
 	runGroup(t, "floats/vertexes", func(t *testing.T, record FloatVertexRecord) {
 		t.Helper()
 
-		vertex := h3go.VertexFromString(record.Index)
+		vertex := h3.VertexFromString(record.Index)
 
 		point, err := vertex.LatLng()
 		if err != nil || !withinAngular(point, record.LatLng, tolerances.AngularDeg) {
@@ -134,7 +134,7 @@ func TestFloatVertexes(t *testing.T) {
 	})
 }
 
-// TestDistances runs every floats/distances record against h3go.
+// TestDistances runs every floats/distances record against h3.
 func TestDistances(t *testing.T) {
 	t.Parallel()
 
@@ -143,16 +143,16 @@ func TestDistances(t *testing.T) {
 	runGroup(t, "floats/distances", func(t *testing.T, record DistanceRecord) {
 		t.Helper()
 
-		a := h3go.LatLng{Lat: record.A[0], Lng: record.A[1]}
-		b := h3go.LatLng{Lat: record.B[0], Lng: record.B[1]}
+		a := h3.LatLng{Lat: record.A[0], Lng: record.A[1]}
+		b := h3.LatLng{Lat: record.B[0], Lng: record.B[1]}
 
-		checkMeasure(t, "GreatCircleDistanceRads", record.Rads, rads, tolerances, measure(h3go.GreatCircleDistanceRads(a, b), nil))
-		checkMeasure(t, "GreatCircleDistanceKm", record.Km, km, tolerances, measure(h3go.GreatCircleDistanceKm(a, b), nil))
-		checkMeasure(t, "GreatCircleDistanceM", record.M, m, tolerances, measure(h3go.GreatCircleDistanceM(a, b), nil))
+		checkMeasure(t, "GreatCircleDistanceRads", record.Rads, rads, tolerances, measure(h3.GreatCircleDistanceRads(a, b), nil))
+		checkMeasure(t, "GreatCircleDistanceKm", record.Km, km, tolerances, measure(h3.GreatCircleDistanceKm(a, b), nil))
+		checkMeasure(t, "GreatCircleDistanceM", record.M, m, tolerances, measure(h3.GreatCircleDistanceM(a, b), nil))
 	})
 }
 
-// TestFloatResolutions runs every floats/resolutions record against h3go.
+// TestFloatResolutions runs every floats/resolutions record against h3.
 func TestFloatResolutions(t *testing.T) {
 	t.Parallel()
 
@@ -161,10 +161,10 @@ func TestFloatResolutions(t *testing.T) {
 	runGroup(t, "floats/resolutions", func(t *testing.T, record FloatResolutionRecord) {
 		t.Helper()
 
-		checkMeasureResult(t, "HexagonAreaAvgKm2", record.HexagonAreaKm2, km2, tolerances, measure(h3go.HexagonAreaAvgKm2(record.Res)))
-		checkMeasureResult(t, "HexagonAreaAvgM2", record.HexagonAreaM2, m2, tolerances, measure(h3go.HexagonAreaAvgM2(record.Res)))
-		checkMeasureResult(t, "HexagonEdgeLengthAvgKm", record.EdgeLengthKm, km, tolerances, measure(h3go.HexagonEdgeLengthAvgKm(record.Res)))
-		checkMeasureResult(t, "HexagonEdgeLengthAvgM", record.EdgeLengthM, m, tolerances, measure(h3go.HexagonEdgeLengthAvgM(record.Res)))
+		checkMeasureResult(t, "HexagonAreaAvgKm2", record.HexagonAreaKm2, km2, tolerances, measure(h3.HexagonAreaAvgKm2(record.Res)))
+		checkMeasureResult(t, "HexagonAreaAvgM2", record.HexagonAreaM2, m2, tolerances, measure(h3.HexagonAreaAvgM2(record.Res)))
+		checkMeasureResult(t, "HexagonEdgeLengthAvgKm", record.EdgeLengthKm, km, tolerances, measure(h3.HexagonEdgeLengthAvgKm(record.Res)))
+		checkMeasureResult(t, "HexagonEdgeLengthAvgM", record.EdgeLengthM, m, tolerances, measure(h3.HexagonEdgeLengthAvgM(record.Res)))
 	})
 }
 
@@ -215,7 +215,7 @@ func withinMeasure(got, want float64, u unit, tolerances Tolerances) bool {
 
 // sequenceWithinAngular reports whether two point sequences have the same
 // length and are pairwise within the angular tolerance, in order.
-func sequenceWithinAngular(got []h3go.LatLng, want []GeoCoord, angularDeg float64) bool {
+func sequenceWithinAngular(got []h3.LatLng, want []GeoCoord, angularDeg float64) bool {
 	if len(got) != len(want) {
 		return false
 	}

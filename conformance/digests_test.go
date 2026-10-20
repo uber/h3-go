@@ -29,7 +29,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
 // digestsMaxResEnv names the environment variable that raises the finest
@@ -53,10 +53,10 @@ const (
 // polygonFactors scale a cell boundary about its center for the polygons
 // stream, and containmentModes are the fills taken of each, in line order.
 var (
-	polygonFactors   = []float64{0.8, 1.2}     //nolint:gochecknoglobals // fixed by the format
-	containmentModes = []h3go.ContainmentMode{ //nolint:gochecknoglobals // fixed by the format
-		h3go.ContainmentCenter, h3go.ContainmentFull,
-		h3go.ContainmentOverlapping, h3go.ContainmentOverlappingBbox,
+	polygonFactors   = []float64{0.8, 1.2}   //nolint:gochecknoglobals // fixed by the format
+	containmentModes = []h3.ContainmentMode{ //nolint:gochecknoglobals // fixed by the format
+		h3.ContainmentCenter, h3.ContainmentFull,
+		h3.ContainmentOverlapping, h3.ContainmentOverlappingBbox,
 	}
 )
 
@@ -86,7 +86,7 @@ type baseCellDigests struct {
 
 // digestBaseCell enumerates the cells of res under base, sorted, and runs
 // every stream over them.
-func digestBaseCell(base h3go.Cell, res int) (baseCellDigests, error) {
+func digestBaseCell(base h3.Cell, res int) (baseCellDigests, error) {
 	cells, err := base.Children(res)
 	if err != nil {
 		return baseCellDigests{}, fmt.Errorf("Children(%s, %d): %w", base, res, err)
@@ -116,7 +116,7 @@ func TestResolutionDigests(t *testing.T) {
 			t.Skipf("resolution %d is above %s=%d", record.Res, digestsMaxResEnv, maxRes)
 		}
 
-		res0, err := h3go.Res0Cells()
+		res0, err := h3.Res0Cells()
 		if err != nil {
 			t.Fatalf("Res0Cells(): %v", err)
 		}
@@ -194,7 +194,7 @@ func TestBaseCellDigests(t *testing.T) {
 			t.Skipf("resolution %d is above %s=%d", record.Res, digestsMaxResEnv, maxRes)
 		}
 
-		base, err := h3go.ConstructCell(0, record.BaseCell, nil)
+		base, err := h3.ConstructCell(0, record.BaseCell, nil)
 		if err != nil {
 			t.Fatalf("ConstructCell(0, %d): %v", record.BaseCell, err)
 		}
@@ -250,7 +250,7 @@ type lineWriter struct {
 }
 
 // start begins a line with the subject cell.
-func (w *lineWriter) start(cell h3go.Cell) {
+func (w *lineWriter) start(cell h3.Cell) {
 	w.line.Reset()
 	w.line.WriteString(cell.String())
 }
@@ -283,7 +283,7 @@ func (w *lineWriter) result(value int, err error) {
 }
 
 // cellSet appends distinct cells in ascending order and returns them.
-func (w *lineWriter) cellSet(cells []h3go.Cell) []h3go.Cell {
+func (w *lineWriter) cellSet(cells []h3.Cell) []h3.Cell {
 	slices.Sort(cells)
 	cells = slices.Compact(cells)
 
@@ -303,7 +303,7 @@ func (w *lineWriter) finish(stream string) {
 // digestStreams runs every stream over the sorted cells and returns the hex
 // digests by stream name. A call the stream definition does not allow to
 // fail is reported as an error rather than a panic.
-func digestStreams(cells []h3go.Cell, res int) (digests map[string]string, err error) {
+func digestStreams(cells []h3.Cell, res int) (digests map[string]string, err error) {
 	names := streamsAt(res)
 
 	writer := &lineWriter{hashes: map[string]hash.Hash{}}
@@ -330,7 +330,7 @@ func digestStreams(cells []h3go.Cell, res int) (digests map[string]string, err e
 }
 
 // digestCell appends one cell's line to every stream.
-func digestCell(w *lineWriter, cell h3go.Cell, res int) {
+func digestCell(w *lineWriter, cell h3.Cell, res int) {
 	w.start(cell)
 	w.finish("cells")
 
@@ -369,7 +369,7 @@ func digestCell(w *lineWriter, cell h3go.Cell, res int) {
 
 	w.finish("inspection")
 
-	var disk3 []h3go.Cell
+	var disk3 []h3.Cell
 
 	w.start(cell)
 
@@ -446,7 +446,7 @@ func digestCell(w *lineWriter, cell h3go.Cell, res int) {
 		origin = must(parent0.CenterChild(res))
 	}
 
-	if ij, err := h3go.CellToLocalIJ(origin, cell); err != nil {
+	if ij, err := h3.CellToLocalIJ(origin, cell); err != nil {
 		w.field(ErrorName(err))
 	} else {
 		w.integer(ij.I)
@@ -457,11 +457,11 @@ func digestCell(w *lineWriter, cell h3go.Cell, res int) {
 
 	w.start(cell)
 	slices.Sort(children)
-	w.cellSet(must(h3go.CompactCells(children[:len(children)-1])))
+	w.cellSet(must(h3.CompactCells(children[:len(children)-1])))
 	w.finish("compact")
 
 	w.start(cell)
-	w.index(must(h3go.LatLngToCell(must(cell.LatLng()), res)))
+	w.index(must(h3.LatLngToCell(must(cell.LatLng()), res)))
 	w.finish("roundTrip")
 
 	if res <= polygonsMaxRes {
@@ -475,7 +475,7 @@ func digestCell(w *lineWriter, cell h3go.Cell, res int) {
 					w.field("|")
 				}
 
-				w.cellSet(must(h3go.PolygonToCellsExperimental(polygon, res+polygonsFillStep, mode)))
+				w.cellSet(must(h3.PolygonToCellsExperimental(polygon, res+polygonsFillStep, mode)))
 			}
 		}
 
@@ -485,19 +485,19 @@ func digestCell(w *lineWriter, cell h3go.Cell, res int) {
 
 // scaledPolygon returns the cell's boundary scaled about its center by
 // factor, computed in degrees as README.md "regions/polygons.jsonl" states.
-func scaledPolygon(cell h3go.Cell, factor float64) h3go.GeoPolygon {
+func scaledPolygon(cell h3.Cell, factor float64) h3.GeoPolygon {
 	center := must(cell.LatLng())
 	boundary := must(cell.Boundary())
-	loop := make(h3go.GeoLoop, len(boundary))
+	loop := make(h3.GeoLoop, len(boundary))
 
 	for i, vertex := range boundary {
-		loop[i] = h3go.LatLng{
+		loop[i] = h3.LatLng{
 			Lat: center.Lat + factor*(vertex.Lat-center.Lat),
 			Lng: wrapDegrees(center.Lng + factor*wrapDegrees(vertex.Lng-center.Lng)),
 		}
 	}
 
-	return h3go.GeoPolygon{GeoLoop: loop}
+	return h3.GeoPolygon{GeoLoop: loop}
 }
 
 // wrapDegrees brings a longitude difference back into [-180, 180].

@@ -27,7 +27,7 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
 // TestResultJSON checks both encodings of Result and the decode failure.
@@ -139,12 +139,12 @@ func TestErrorName(t *testing.T) {
 		want string
 	}{
 		"nil":         {give: nil, want: ""},
-		"cell":        {give: h3go.ErrCellInvalid, want: "E_CELL_INVALID"},
-		"wrapped":     {give: fmt.Errorf("outer: %w", h3go.ErrDeletedDigit), want: "E_DELETED_DIGIT"},
+		"cell":        {give: h3.ErrCellInvalid, want: "E_CELL_INVALID"},
+		"wrapped":     {give: fmt.Errorf("outer: %w", h3.ErrDeletedDigit), want: "E_DELETED_DIGIT"},
 		"unknown":     {give: errors.New("something else"), want: "E_FAILED"},
-		"failed":      {give: h3go.ErrFailed, want: "E_FAILED"},
-		"res_domain":  {give: h3go.ErrResolutionDomain, want: "E_RES_DOMAIN"},
-		"base_domain": {give: h3go.ErrBaseCellDomain, want: "E_BASE_CELL_DOMAIN"},
+		"failed":      {give: h3.ErrFailed, want: "E_FAILED"},
+		"res_domain":  {give: h3.ErrResolutionDomain, want: "E_RES_DOMAIN"},
+		"base_domain": {give: h3.ErrBaseCellDomain, want: "E_BASE_CELL_DOMAIN"},
 	}
 
 	for name, tt := range tests {

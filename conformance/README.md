@@ -3,7 +3,7 @@
 A language-neutral description of what the H3 reference implementation
 returns for a fixed set of inputs, so that a port can prove it matches without
 building the C library. This directory holds the format specification (this
-file), the Go runner that checks `x/h3go` against it, the generator that
+file), the Go runner that checks the `h3` package against it, the generator that
 produces it from the C library, and the generated files under `testdata/`.
 
 Records are newline-delimited JSON, one per subject, with every key present
@@ -48,7 +48,7 @@ actually computes and is well conditioned everywhere; see Tolerances.
 against a 256-bit evaluation of the same formula, the pure-Go port places
 every cell center and boundary vertex within 1e-13 degrees of arc of the
 exact value, worst case 5.0e-14 for the latitude and longitude it returns
-(`x/h3go/exact_projection_test.go`), and the reference evaluates the
+(`exact_projection_test.go` at the repository root), and the reference evaluates the
 projection to the same few ulps. Two
 implementations that each sit that close to the truth differ by at most
 the sum of their errors, far inside the bound; the bound is set by what
@@ -1019,15 +1019,15 @@ order given.
 
 ## Running and regenerating
 
-`go test ./conformance/...` runs the checked-in suite against `x/h3go`
-and verifies the manifest against the vendored `H3_VERSION`. The tests are
+`go test ./conformance/...` runs the checked-in suite against the `h3` package
+and verifies the manifest against the pinned `H3_VERSION`. The tests are
 pure Go.
 
 Every push runs the suite at its default depths. The `Nightly` workflow
 (`.github/workflows/nightly.yml`) runs the whole module once a day on
 linux-amd64, linux-arm64 and macOS with `H3_CONFORMANCE_DIGESTS_MAXRES=7`,
-`H3_CONFORMANCE_PATTERNS_MAXCOUNT=10000000`, `H3GO_INVARIANTS_MAXRES=3` and
-`H3GO_EXACT_PROJECTION_MAXRES=4`, without the race detector, and opens or
+`H3_CONFORMANCE_PATTERNS_MAXCOUNT=10000000`, `H3_INVARIANTS_MAXRES=3` and
+`H3_EXACT_PROJECTION_MAXRES=4`, without the race detector, and opens or
 updates an issue labelled `nightly` when a scheduled run fails. It can be
 started by hand from the Actions tab.
 
@@ -1066,7 +1066,7 @@ resolution 7 rows.
 
 The files under `testdata/` are a bootstrap. They are produced here because
 the C library does not yet ship a generator, and they are checked in so that
-`go test ./...` is pure Go, works offline, and shows exactly what `x/h3go` is
+`go test ./...` is pure Go, works offline, and shows exactly what the `h3` package is
 held to. The manifest hash makes any change to them a visible diff.
 
 The intended home is the C library. The generator is written in C against
@@ -1080,6 +1080,6 @@ byte for byte. Once upstream publishes the files, in `tests/inputfiles/` or
 as a release asset per tag, this package consumes them: `testdata/` becomes a
 vendored snapshot verified by hash against the upstream manifest, and
 `internal/gen` is removed. The runner, the manifest check against the
-vendored `H3_VERSION`, and a copy of the files small enough to test offline
+pinned `H3_VERSION`, and a copy of the files small enough to test offline
 stay here either way. What moves is authorship of the expected values, from
 this repository's build of the C library to upstream's own build and CI.

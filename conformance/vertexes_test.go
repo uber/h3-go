@@ -20,21 +20,21 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
-// TestVertexes runs every vertexes record in the suite against h3go.
+// TestVertexes runs every vertexes record in the suite against h3.
 func TestVertexes(t *testing.T) {
 	t.Parallel()
 
 	runGroup(t, "vertexes/", checkVertexes)
 }
 
-// checkVertexes asserts every field of one vertexes record against h3go.
+// checkVertexes asserts every field of one vertexes record against h3.
 func checkVertexes(t *testing.T, record VertexesRecord) {
 	t.Helper()
 
-	cell := h3go.CellFromString(record.Index)
+	cell := h3.CellFromString(record.Index)
 
 	vertexes, err := cell.Vertexes()
 	if err != nil {

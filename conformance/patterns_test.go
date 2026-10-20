@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
 // patternsMaxCountEnv names the environment variable that raises the largest
@@ -37,7 +37,7 @@ const defaultPatternsMaxCount = 1_000_000
 
 // Index layout and draw ranges, as README.md "Index construction" and
 // "digests/patterns.jsonl" state them. These are deliberately the spec's
-// numbers rather than h3go's internal constants: the sampler must draw the
+// numbers rather than h3's internal constants: the sampler must draw the
 // words the generator drew regardless of what the library under test
 // believes the layout is, and a port in another language copies this block.
 const (
@@ -81,7 +81,7 @@ func (rng *splitmix64) drawN(n int) int {
 
 // digitShift returns the bit offset of the digit slot for resolution r.
 func digitShift(r int) uint {
-	return uint((h3go.MaxResolution - r) * digitBits)
+	return uint((h3.MaxResolution - r) * digitBits)
 }
 
 // setField replaces width bits at offset with value.
@@ -95,9 +95,9 @@ func setField(index uint64, offset, width uint, value uint64) uint64 {
 // and the remaining slots set to 7. The result may be invalid.
 func (rng *splitmix64) drawCell(res int) uint64 {
 	index := uint64(cellMode)<<modeOffset | uint64(res)<<resOffset
-	index |= uint64(rng.drawN(h3go.NumBaseCells)) << baseCellOffset
+	index |= uint64(rng.drawN(h3.NumBaseCells)) << baseCellOffset
 
-	for r := 1; r <= h3go.MaxResolution; r++ {
+	for r := 1; r <= h3.MaxResolution; r++ {
 		digit := uint64(numDigits)
 		if r <= res {
 			digit = uint64(rng.drawN(numDigits))
@@ -113,7 +113,7 @@ func (rng *splitmix64) drawCell(res int) uint64 {
 func (rng *splitmix64) drawValidCell(res int) uint64 {
 	for {
 		index := rng.drawCell(res)
-		if h3go.Cell(int64(index)).IsValid() {
+		if h3.Cell(int64(index)).IsValid() {
 			return index
 		}
 	}
@@ -127,7 +127,7 @@ func (rng *splitmix64) drawPattern() uint64 {
 		return rng.draw()
 	}
 
-	cell := rng.drawValidCell(rng.drawN(h3go.MaxResolution + 1))
+	cell := rng.drawValidCell(rng.drawN(h3.MaxResolution + 1))
 
 	switch kind {
 	case 1:
@@ -135,11 +135,11 @@ func (rng *splitmix64) drawPattern() uint64 {
 	case 2:
 		return setField(cell, reservedOffset, reservedBits, uint64(rng.drawN(numDigitValues)))
 	case 3:
-		return setField(cell, resOffset, modeBits, uint64(rng.drawN(h3go.MaxResolution+1)))
+		return setField(cell, resOffset, modeBits, uint64(rng.drawN(h3.MaxResolution+1)))
 	case 4:
 		return setField(cell, baseCellOffset, baseCellBits, uint64(rng.drawN(1<<baseCellBits)))
 	case 5:
-		position := 1 + rng.drawN(h3go.MaxResolution)
+		position := 1 + rng.drawN(h3.MaxResolution)
 
 		return setField(cell, digitShift(position), digitBits, uint64(rng.drawN(numDigitValues)))
 	case 6:
@@ -179,10 +179,10 @@ func validityLine(word uint64) string {
 	signed := int64(word)
 
 	return strconv.FormatUint(word, 16) +
-		" " + strconv.Itoa(boolInt(h3go.Cell(signed).IsValid())) +
-		" " + strconv.Itoa(boolInt(h3go.IsValidIndex(h3go.Cell(signed)))) +
-		" " + strconv.Itoa(boolInt(h3go.DirectedEdge(signed).IsValid())) +
-		" " + strconv.Itoa(boolInt(h3go.Vertex(signed).IsValid())) + "\n"
+		" " + strconv.Itoa(boolInt(h3.Cell(signed).IsValid())) +
+		" " + strconv.Itoa(boolInt(h3.IsValidIndex(h3.Cell(signed)))) +
+		" " + strconv.Itoa(boolInt(h3.DirectedEdge(signed).IsValid())) +
+		" " + strconv.Itoa(boolInt(h3.Vertex(signed).IsValid())) + "\n"
 }
 
 // TestPatternDigests recomputes the validity stream over the first Count

@@ -4,8 +4,8 @@ name: Nightly
 # push: conformance digests through resolution 7, the exhaustive invariants
 # through resolution 3, the exact projection check through resolution 4 and
 # the ten-million validity patterns, on linux-amd64, linux-arm64 and macOS,
-# so that the pure-Go port and the cgo binding are both exercised on every
-# platform the C library is built for. No race detector: it costs several
+# so that the implementation is exercised on every platform the reference
+# library is built for. No race detector: it costs several
 # times the wall clock and the push workflow already runs it.
 #
 # GitHub disables a scheduled workflow after sixty days without a commit;
@@ -45,8 +45,8 @@ jobs:
         env:
           H3_CONFORMANCE_DIGESTS_MAXRES: 7
           H3_CONFORMANCE_PATTERNS_MAXCOUNT: 10000000
-          H3GO_INVARIANTS_MAXRES: 3
-          H3GO_EXACT_PROJECTION_MAXRES: 4
+          H3_INVARIANTS_MAXRES: 3
+          H3_EXACT_PROJECTION_MAXRES: 4
         run: |
           go test -count=1 -timeout 5h30m ./...
 

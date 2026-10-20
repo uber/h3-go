@@ -30,7 +30,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
 // FormatVersion identifies the suite layout and record semantics described in
@@ -519,31 +519,31 @@ func (r BaseCellDigestsRecord) subject() string {
 	return strconv.Itoa(r.Res) + "/" + strconv.Itoa(r.BaseCell)
 }
 
-// errorNames maps the h3go errors to the H3Error enum names used in record
+// errorNames maps the h3 errors to the H3Error enum names used in record
 // files.
 var errorNames = map[error]string{
-	h3go.ErrFailed:                "E_FAILED",
-	h3go.ErrDomain:                "E_DOMAIN",
-	h3go.ErrLatLngDomain:          "E_LATLNG_DOMAIN",
-	h3go.ErrResolutionDomain:      "E_RES_DOMAIN",
-	h3go.ErrCellInvalid:           "E_CELL_INVALID",
-	h3go.ErrDirectedEdgeInvalid:   "E_DIR_EDGE_INVALID",
-	h3go.ErrUndirectedEdgeInvalid: "E_UNDIR_EDGE_INVALID",
-	h3go.ErrVertexInvalid:         "E_VERTEX_INVALID",
-	h3go.ErrPentagon:              "E_PENTAGON",
-	h3go.ErrDuplicateInput:        "E_DUPLICATE_INPUT",
-	h3go.ErrNotNeighbors:          "E_NOT_NEIGHBORS",
-	h3go.ErrResolutionMismatch:    "E_RES_MISMATCH",
-	h3go.ErrMemoryAlloc:           "E_MEMORY_ALLOC",
-	h3go.ErrMemoryBounds:          "E_MEMORY_BOUNDS",
-	h3go.ErrOptionInvalid:         "E_OPTION_INVALID",
-	h3go.ErrIndexInvalid:          "E_INDEX_INVALID",
-	h3go.ErrBaseCellDomain:        "E_BASE_CELL_DOMAIN",
-	h3go.ErrDigitDomain:           "E_DIGIT_DOMAIN",
-	h3go.ErrDeletedDigit:          "E_DELETED_DIGIT",
+	h3.ErrFailed:                "E_FAILED",
+	h3.ErrDomain:                "E_DOMAIN",
+	h3.ErrLatLngDomain:          "E_LATLNG_DOMAIN",
+	h3.ErrResolutionDomain:      "E_RES_DOMAIN",
+	h3.ErrCellInvalid:           "E_CELL_INVALID",
+	h3.ErrDirectedEdgeInvalid:   "E_DIR_EDGE_INVALID",
+	h3.ErrUndirectedEdgeInvalid: "E_UNDIR_EDGE_INVALID",
+	h3.ErrVertexInvalid:         "E_VERTEX_INVALID",
+	h3.ErrPentagon:              "E_PENTAGON",
+	h3.ErrDuplicateInput:        "E_DUPLICATE_INPUT",
+	h3.ErrNotNeighbors:          "E_NOT_NEIGHBORS",
+	h3.ErrResolutionMismatch:    "E_RES_MISMATCH",
+	h3.ErrMemoryAlloc:           "E_MEMORY_ALLOC",
+	h3.ErrMemoryBounds:          "E_MEMORY_BOUNDS",
+	h3.ErrOptionInvalid:         "E_OPTION_INVALID",
+	h3.ErrIndexInvalid:          "E_INDEX_INVALID",
+	h3.ErrBaseCellDomain:        "E_BASE_CELL_DOMAIN",
+	h3.ErrDigitDomain:           "E_DIGIT_DOMAIN",
+	h3.ErrDeletedDigit:          "E_DELETED_DIGIT",
 }
 
-// ErrorName returns the H3Error enum name of an h3go error, "" for nil, and
+// ErrorName returns the H3Error enum name of an h3 error, "" for nil, and
 // "E_FAILED" for an error the package does not define.
 func ErrorName(err error) string {
 	if err == nil {
@@ -556,7 +556,7 @@ func ErrorName(err error) string {
 		}
 	}
 
-	return errorNames[h3go.ErrFailed]
+	return errorNames[h3.ErrFailed]
 }
 
 // Records decodes a newline-delimited JSON stream one record at a time. The

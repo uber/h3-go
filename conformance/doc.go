@@ -15,7 +15,7 @@
  */
 
 // Package conformance defines the file format of the H3 conformance suite and
-// runs the suite against the pure-Go h3go package.
+// runs the suite against the pure-Go h3 package.
 //
 // The suite is a set of newline-delimited JSON files under testdata, each line
 // describing one input and the outputs the H3 reference implementation
@@ -25,9 +25,9 @@
 // package.
 //
 // The files are produced by internal/gen/gen.c, a standalone C program built
-// against the vendored H3 sources so that it can move to the H3 repository
-// unchanged. Regenerate them with go generate after changing the generator or
-// the vendored H3 version.
+// against the H3 sources pinned as a git submodule at third_party/h3, so that
+// it can move to the H3 repository unchanged. Regenerate them with go generate
+// after changing the generator or moving the submodule to a new release.
 package conformance
 
 //go:generate sh internal/gen/generate.sh testdata

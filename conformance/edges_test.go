@@ -20,23 +20,23 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
-// TestEdges runs every edges record in the suite against h3go.
+// TestEdges runs every edges record in the suite against h3.
 func TestEdges(t *testing.T) {
 	t.Parallel()
 
 	runGroup(t, "edges/", checkEdges)
 }
 
-// checkEdges asserts every field of one edges record against h3go, plus the
+// checkEdges asserts every field of one edges record against h3, plus the
 // origin check the group definition requires.
 func checkEdges(t *testing.T, record EdgesRecord) {
 	t.Helper()
 
-	cell := h3go.CellFromString(record.Index)
-	target := h3go.CellFromString(record.Target)
+	cell := h3.CellFromString(record.Index)
+	target := h3.CellFromString(record.Target)
 
 	edges, err := cell.DirectedEdges()
 	if err != nil {
