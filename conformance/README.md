@@ -1031,14 +1031,21 @@ linux-amd64, linux-arm64 and macOS with `H3_CONFORMANCE_DIGESTS_MAXRES=7`,
 updates an issue labelled `nightly` when a scheduled run fails. It can be
 started by hand from the Actions tab.
 
-`go generate ./conformance` rewrites `testdata/` from the vendored C
-library. The generator, `internal/gen/gen.c`, is a standalone C99 program
-that depends only on the public H3 API and the C standard library;
-`generate.sh` compiles it against the `h3_*.c` sources at the repository root
-and runs it. Every expected value is therefore the reference implementation's
-own answer, and nothing passes through the Go binding. Regenerate after
-bumping the vendored H3 version, and expect a diff only when the reference's
-behaviour changed.
+`go generate ./conformance` rewrites `testdata/` from the C library pinned
+as a git submodule at `third_party/h3` (`git submodule update --init
+third_party/h3` once after cloning; nothing else in the repository needs
+it). The generator, `internal/gen/gen.c`, is a standalone C99 program that
+depends only on the public H3 API and the C standard library.
+`internal/gen/build.sh` copies the submodule's `src/h3lib` sources into a
+scratch tree, renders `h3api.h` from its CMake template, applies the patches
+in `internal/gen/patches/` and compiles `gen.c` against the result; the
+submodule itself is never modified. A patch carries an upstream change the
+pinned release does not yet contain, and is deleted once it does, which
+`build.sh` enforces by failing on a patch that is already applied. The build
+also checks that `H3_VERSION` names the pinned release. Every expected value
+is therefore the reference implementation's own answer, and nothing passes
+through Go. Regenerate after moving the submodule to a new release, and
+expect a diff only when the reference's behaviour changed.
 
 ```
 gen -o <out-dir> -v <h3-version> [-s <seed>]

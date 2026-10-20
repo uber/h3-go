@@ -16,10 +16,8 @@ build=$(mktemp -d)
 trap 'rm -rf "$build"' EXIT
 jobs=${JOBS:-$(getconf _NPROCESSORS_ONLN)}
 
-mkdir -p "$build/include" "$build/rows"
-ln -s "$root/h3_h3api.h" "$build/include/h3api.h"
-${CC:-cc} -std=c99 -O2 -DH3_HAVE_VLA=1 -I"$root" -I"$build/include" \
-    -o "$build/gen" "$here/gen.c" "$root"/h3_*.c -lm
+mkdir -p "$build/rows"
+sh "$here/build.sh" "$build/gen"
 
 # One process per base cell; each writes its row to its own file so the rows
 # can be concatenated in base-cell order afterwards.
