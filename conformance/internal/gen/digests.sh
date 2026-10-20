@@ -11,7 +11,7 @@ set -eu
 res=$1
 out=${2:-testdata}
 here=$(cd "$(dirname "$0")" && pwd)
-root=$(cd "$here/../../../../.." && pwd)
+root=$(cd "$here/../../.." && pwd)
 build=$(mktemp -d)
 trap 'rm -rf "$build"' EXIT
 jobs=${JOBS:-$(getconf _NPROCESSORS_ONLN)}

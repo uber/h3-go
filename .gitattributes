@@ -3,4 +3,4 @@
 *.h binary linguist-generated
 
 # hand-written; not a vendored H3 source
-x/h3go/conformance/internal/gen/gen.c -binary -linguist-generated
+conformance/internal/gen/gen.c -binary -linguist-generated

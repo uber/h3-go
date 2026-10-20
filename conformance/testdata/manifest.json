@@ -2,7 +2,7 @@
   "format": "h3-conformance/1",
   "h3Version": "4.5.0",
   "generator": {
-    "name": "x/h3go/conformance/internal/gen/gen.c",
+    "name": "conformance/internal/gen/gen.c",
     "seed": 20260929
   },
   "tolerances": {
