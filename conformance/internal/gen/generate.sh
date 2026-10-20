@@ -6,7 +6,7 @@ set -eu
 
 out=${1:-testdata}
 here=$(cd "$(dirname "$0")" && pwd)
-root=$(cd "$here/../../../../.." && pwd)
+root=$(cd "$here/../../.." && pwd)
 build=$(mktemp -d)
 trap 'rm -rf "$build"' EXIT
 

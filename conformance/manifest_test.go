@@ -33,7 +33,7 @@ const suiteDir = "testdata"
 
 // vendoredVersionFile holds the version of the C library vendored at the
 // repository root, which the suite must have been generated from.
-var vendoredVersionFile = filepath.Join("..", "..", "..", "H3_VERSION")
+var vendoredVersionFile = filepath.Join("..", "H3_VERSION")
 
 // loadSuite loads and verifies the checked-in manifest.
 func loadSuite(t *testing.T) Manifest {

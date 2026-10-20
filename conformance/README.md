@@ -1019,7 +1019,7 @@ order given.
 
 ## Running and regenerating
 
-`go test ./x/h3go/conformance/...` runs the checked-in suite against `x/h3go`
+`go test ./conformance/...` runs the checked-in suite against `x/h3go`
 and verifies the manifest against the vendored `H3_VERSION`. The tests are
 pure Go.
 
@@ -1031,7 +1031,7 @@ linux-amd64, linux-arm64 and macOS with `H3_CONFORMANCE_DIGESTS_MAXRES=7`,
 updates an issue labelled `nightly` when a scheduled run fails. It can be
 started by hand from the Actions tab.
 
-`go generate ./x/h3go/conformance` rewrites `testdata/` from the vendored C
+`go generate ./conformance` rewrites `testdata/` from the vendored C
 library. The generator, `internal/gen/gen.c`, is a standalone C99 program
 that depends only on the public H3 API and the C standard library;
 `generate.sh` compiles it against the `h3_*.c` sources at the repository root
