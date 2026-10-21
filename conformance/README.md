@@ -124,6 +124,7 @@ floats/edges.jsonl
 floats/vertexes.jsonl
 floats/distances.jsonl
 floats/resolutions.jsonl
+floats/curated.jsonl
 digests/resolutions.jsonl
 digests/baseCells.jsonl
 digests/patterns.jsonl
@@ -676,10 +677,11 @@ runner stops at the one-million tier unless
 ## Curated files
 
 Seeded sampling gives coverage density but is blind to the particular inputs
-that have broken implementations. Six files hold such inputs by hand:
+that have broken implementations. Seven files hold such inputs by hand:
 `inspection/curated.jsonl`, `hierarchy/curated.jsonl`,
-`traversal/curated.jsonl`, `localij/curated.jsonl`, `sets/curated.jsonl` and
-`regions/curated.jsonl`. Each has exactly the record type of its group, so a
+`traversal/curated.jsonl`, `localij/curated.jsonl`, `sets/curated.jsonl`,
+`regions/curated.jsonl` and `floats/curated.jsonl`. Each has exactly the
+record type of its group (for `floats`, that of `floats/cells.jsonl`), so a
 consumer runs it with the group's checks and nothing else. The expected
 values are the reference's answers, produced by the same generator as every
 other file; only the subjects are chosen. The tables below are the
@@ -795,6 +797,29 @@ degrees as it does for the sampled polygons.
 | `line:5` | two vertices, the origin and one radian north | tests |
 | `cliTriangle:7` | `polygon_test1.txt`, three vertices in San Francisco | inputfiles |
 | `cliDecagon:7` | `polygon_test2.txt`, ten vertices in San Francisco | inputfiles |
+
+### `floats/curated.jsonl`
+
+Cells on the antimeridian, with the record type of `floats/cells.jsonl`.
+The area of a cell is a sum over its edges of a term in the difference of
+the endpoints' longitudes; for an edge crossing ±180° the raw difference is
+close to ±360°, and the true, tiny step is lost to the rounding of a value
+that large unless both longitudes are first brought to the same side of the
+antimeridian. The seeded sample has straddling cells only at resolutions 0
+and 1, where the loss is far below tolerance; the defect is 0.1% at res 13
+and 9% at res 15.
+
+| Index | Source | Why |
+|---|---|---|
+| `8d056898db628bf`, `8d056898db62d7f` | tests | a res 13 straddling cell and a neighbour that does not straddle |
+| `8e32b605c51e067`, `8e32b605c51e15f` | tests | the same at res 14 |
+| `8f7f809893b5b9d`, `8f7f809893b5b9c` | tests | the same at res 15 |
+| `807ffffffffffff` … `8f7eb57221a2bb0` | hand | the cell containing (0°, 180°) at each resolution 0 through 15, in order |
+| `8023fffffffffff` … `8f2261a9d5b3701` | hand | the cell containing (45°, 180°) at each resolution |
+| `80ebfffffffffff` … `8feab634872d2b4` | hand | the cell containing (−60°, 180°) at each resolution |
+
+The *hand* rows are `latLngToCell` of the stated point at each resolution,
+54 subjects in all; the two res 0 cells are pentagons.
 
 ## Sampling
 

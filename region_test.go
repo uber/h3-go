@@ -521,8 +521,8 @@ func TestPointInsidePolygonHole(t *testing.T) {
 func TestNormalizeLng(t *testing.T) {
 	t.Parallel()
 
-	if got := normalizeLng(-1, true); got != -1+twoPiRad {
-		t.Fatalf("normalizeLng(-1, true): got %v, want %v", got, -1+twoPiRad)
+	if got := normalizeLng(-1, true); got != -1+m2PI {
+		t.Fatalf("normalizeLng(-1, true): got %v, want %v", got, -1+m2PI)
 	}
 
 	if got := normalizeLng(-1, false); got != -1 {

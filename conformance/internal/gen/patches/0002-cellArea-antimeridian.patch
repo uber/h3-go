@@ -1,0 +1,33 @@
+Keep cell areas exact for cells crossing the antimeridian.
+
+Upstream change uber/h3#1274, not yet in a release. cagnoli() subtracts
+the raw longitudes of an edge's endpoints; for an edge crossing +-180 the
+difference is close to +-2*pi and the true (tiny) longitude step is lost
+to the rounding of a value that large. Straddling cells came out too
+small: about 0.1% at res 13 and 9% at res 15. Shifting both longitudes to
+the same side of the antimeridian before subtracting keeps the result
+exact, and sin and cos are 2*pi-periodic, so nothing else changes. The
+suite's floats/curated.jsonl holds straddling cells at every resolution
+that depend on both the reference and the port using this form.
+
+Delete this file once the release pinned in third_party/h3 contains the
+change; build.sh fails when a patch is already applied.
+
+--- a/src/h3lib/lib/area.c
++++ b/src/h3lib/lib/area.c
+@@ -37,7 +37,15 @@ static inline double cagnoli(LatLng x, LatLng y) {
+     double sa = sin(x.lat) * sin(y.lat);
+     double ca = cos(x.lat) * cos(y.lat);
+
++    // For an edge crossing the antimeridian, the raw difference is close to
++    // +-2*pi, and the true (tiny) longitude step is lost to the ulp of 2*pi.
++    // Shift both longitudes to the same side of the antimeridian first so
++    // that the subtraction is between two nearby values; sin and cos are
++    // 2*pi-periodic, so the result is mathematically unchanged.
+     double d = y.lng - x.lng;
++    if (d > M_PI || d < -M_PI) {
++        d = (y.lng - copysign(M_PI, y.lng)) - (x.lng - copysign(M_PI, x.lng));
++    }
+     double sd = sin(d);
+     double cd = cos(d);
+

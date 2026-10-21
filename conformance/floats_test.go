@@ -56,13 +56,13 @@ func measure(value float64, err error) measurement {
 	return measurement{value: value, err: err}
 }
 
-// TestFloatCells runs every floats/cells record against h3.
+// TestFloatCells runs every floats/cells and floats/curated record against h3.
 func TestFloatCells(t *testing.T) {
 	t.Parallel()
 
 	tolerances := loadSuite(t).Tolerances
 
-	runGroup(t, "floats/cells", func(t *testing.T, record FloatCellRecord) {
+	check := func(t *testing.T, record FloatCellRecord) {
 		t.Helper()
 
 		cell := h3.CellFromString(record.Index)
@@ -91,7 +91,10 @@ func TestFloatCells(t *testing.T) {
 				t.Errorf("LatLngToCell(%v, %d) = %s (%v), want %s", point, record.InteriorRes, got, err, record.InteriorCells[i])
 			}
 		}
-	})
+	}
+
+	runGroup(t, "floats/cells", check)
+	runGroup(t, "floats/curated", check)
 }
 
 // TestFloatEdges runs every floats/edges record against h3.

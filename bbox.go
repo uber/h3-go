@@ -18,20 +18,6 @@ package h3
 
 import "math"
 
-// Longitude span constants in degrees, the units of the public API. They stand
-// in for the H3 C library's radian M_PI / M_2PI when detecting and normalizing
-// antimeridian-crossing geometry.
-const (
-	piDeg     = 180.0
-	twoPiDeg  = 360.0
-	halfPiDeg = 90.0
-
-	// twoPiRad is a full longitude turn in radians, used to normalize
-	// antimeridian-crossing geometry where the math must run at the radian scale
-	// of the H3 C library.
-	twoPiRad = 2 * math.Pi
-)
-
 // longitudeNormalization selects how a longitude is shifted so two bounding
 // boxes, either of which may cross the antimeridian, can be compared in one
 // frame of reference.

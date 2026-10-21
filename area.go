@@ -106,7 +106,18 @@ func (v cagnoliVertex) cagnoli(other cagnoliVertex) float64 {
 	sa := v.sinHalfLat * other.sinHalfLat
 	ca := v.cosHalfLat * other.cosHalfLat
 
-	delta := (other.lng - v.lng) * DegsToRads
+	// For an edge crossing the antimeridian the raw difference is close to
+	// ±360°, and the true (tiny) longitude step is lost to the rounding of a
+	// value that large. Shift both longitudes to the same side of the
+	// antimeridian first so the subtraction is between two nearby values; sin
+	// and cos are 2π-periodic, so the result is mathematically unchanged.
+	deltaDegs := other.lng - v.lng
+	if deltaDegs > piDeg || deltaDegs < -piDeg {
+		deltaDegs = (other.lng - math.Copysign(piDeg, other.lng)) -
+			(v.lng - math.Copysign(piDeg, v.lng))
+	}
+
+	delta := deltaDegs * DegsToRads
 	sinDelta := math.Sin(delta)
 	cosDelta := math.Cos(delta)
 
