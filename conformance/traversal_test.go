@@ -20,24 +20,24 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
-// TestTraversal runs every traversal record in the suite against h3go.
+// TestTraversal runs every traversal record in the suite against h3.
 func TestTraversal(t *testing.T) {
 	t.Parallel()
 
 	runGroup(t, "traversal/", checkTraversal)
 }
 
-// checkTraversal asserts every field of one traversal record against h3go.
+// checkTraversal asserts every field of one traversal record against h3.
 // The record carries the rings; the k-disk it implies is the cell and the
 // rings 1 to k, and the distance-grouped disk is those rings in order.
 func checkTraversal(t *testing.T, record TraversalRecord) {
 	t.Helper()
 
-	cell := h3go.CellFromString(record.Index)
-	target := h3go.CellFromString(record.Target)
+	cell := h3.CellFromString(record.Index)
+	target := h3.CellFromString(record.Target)
 
 	rings := [][]string{{record.Index}, record.Ring1, record.Ring2, record.Ring3}
 
@@ -98,7 +98,7 @@ func checkTraversal(t *testing.T, record TraversalRecord) {
 
 // cellSequenceResult packs an ordered cell-returning call into a Result of
 // string forms, preserving order.
-func cellSequenceResult(cells []h3go.Cell, err error) Result[[]string] {
+func cellSequenceResult(cells []h3.Cell, err error) Result[[]string] {
 	if err != nil {
 		return Result[[]string]{Err: ErrorName(err)}
 	}

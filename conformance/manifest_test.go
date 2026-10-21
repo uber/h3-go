@@ -31,9 +31,9 @@ import (
 // suiteDir is the checked-in suite the tests run against.
 const suiteDir = "testdata"
 
-// vendoredVersionFile holds the version of the C library vendored at the
-// repository root, which the suite must have been generated from.
-var vendoredVersionFile = filepath.Join("..", "H3_VERSION")
+// pinnedVersionFile is the file at the repository root naming the pinned C
+// library release, which the suite must have been generated from.
+var pinnedVersionFile = filepath.Join("..", "H3_VERSION")
 
 // loadSuite loads and verifies the checked-in manifest.
 func loadSuite(t *testing.T) Manifest {
@@ -94,23 +94,23 @@ func runGroup[T subject](t *testing.T, prefix string, check func(*testing.T, T))
 }
 
 // TestSuiteManifest checks that the checked-in suite is internally consistent
-// and matches the vendored C library version.
+// and matches the pinned C library version.
 func TestSuiteManifest(t *testing.T) {
 	t.Parallel()
 
 	manifest := loadSuite(t)
 
-	t.Run("h3_version_matches_vendored", func(t *testing.T) {
+	t.Run("h3_version_matches_pinned", func(t *testing.T) {
 		t.Parallel()
 
-		data, err := os.ReadFile(vendoredVersionFile)
+		data, err := os.ReadFile(pinnedVersionFile)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		want := strings.TrimPrefix(strings.TrimSpace(string(data)), "v")
 		if manifest.H3Version != want {
-			t.Fatalf("manifest h3Version %q, vendored %q: regenerate the suite", manifest.H3Version, want)
+			t.Fatalf("manifest h3Version %q, pinned %q: regenerate the suite", manifest.H3Version, want)
 		}
 	})
 

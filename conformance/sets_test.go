@@ -20,30 +20,30 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
-// TestSets runs every sets record in the suite against h3go.
+// TestSets runs every sets record in the suite against h3.
 func TestSets(t *testing.T) {
 	t.Parallel()
 
 	runGroup(t, "sets/", checkSets)
 }
 
-// checkSets asserts every field of one sets record against h3go, plus the
+// checkSets asserts every field of one sets record against h3, plus the
 // round trip the group definition requires.
 func checkSets(t *testing.T, record SetsRecord) {
 	t.Helper()
 
-	input := make([]h3go.Cell, len(record.Input))
+	input := make([]h3.Cell, len(record.Input))
 	allValid := true
 
 	for i, index := range record.Input {
-		input[i] = h3go.CellFromString(index)
+		input[i] = h3.CellFromString(index)
 		allValid = allValid && input[i].IsValid()
 	}
 
-	compacted, err := h3go.CompactCells(input)
+	compacted, err := h3.CompactCells(input)
 	if got := cellsResult(compacted, err); !equalResults(got, record.Compact, slices.Equal) {
 		t.Errorf("CompactCells() = %s, want %s", formatResult(got), formatResult(record.Compact))
 	}
@@ -54,7 +54,7 @@ func checkSets(t *testing.T, record SetsRecord) {
 		wantUncompact = cellsResult(slices.Clone(input), nil)
 	}
 
-	uncompacted, err := h3go.UncompactCells(input, record.UncompactRes)
+	uncompacted, err := h3.UncompactCells(input, record.UncompactRes)
 	if got := cellsResult(uncompacted, err); !equalResults(got, wantUncompact, slices.Equal) {
 		t.Errorf("UncompactCells(%d) = %s, want %s", record.UncompactRes, formatResult(got), formatResult(wantUncompact))
 	}
@@ -68,7 +68,7 @@ func checkSets(t *testing.T, record SetsRecord) {
 		finest = max(finest, cell.Resolution())
 	}
 
-	roundTrip, err := h3go.UncompactCells(compacted, finest)
+	roundTrip, err := h3.UncompactCells(compacted, finest)
 	if got, want := cellsResult(roundTrip, err), cellsResult(input, nil); !equalResults(got, want, slices.Equal) {
 		t.Errorf("UncompactCells(compact, %d) = %s, want %s", finest, formatResult(got), formatResult(want))
 	}

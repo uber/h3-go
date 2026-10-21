@@ -20,22 +20,22 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
-// TestHierarchy runs every hierarchy record in the suite against h3go.
+// TestHierarchy runs every hierarchy record in the suite against h3.
 func TestHierarchy(t *testing.T) {
 	t.Parallel()
 
 	runGroup(t, "hierarchy/", checkHierarchy)
 }
 
-// checkHierarchy asserts every field of one hierarchy record against h3go,
+// checkHierarchy asserts every field of one hierarchy record against h3,
 // plus the childPosToCell round trip the group definition requires.
 func checkHierarchy(t *testing.T, record HierarchyRecord) {
 	t.Helper()
 
-	cell := h3go.CellFromString(record.Index)
+	cell := h3.CellFromString(record.Index)
 	res := cell.Resolution()
 
 	if len(record.Parents) != res {
@@ -74,7 +74,7 @@ func checkHierarchy(t *testing.T, record HierarchyRecord) {
 
 	ancestor := cell
 	if res > 0 {
-		ancestor = h3go.CellFromString(record.Parents[0])
+		ancestor = h3.CellFromString(record.Parents[0])
 	}
 
 	roundTrip, err := ancestor.ChildPosToCell(int(record.ChildPos.Value), res)
@@ -84,7 +84,7 @@ func checkHierarchy(t *testing.T, record HierarchyRecord) {
 }
 
 // cellResult packs a cell-returning call into a Result of its string form.
-func cellResult(cell h3go.Cell, err error) Result[string] {
+func cellResult(cell h3.Cell, err error) Result[string] {
 	if err != nil {
 		return Result[string]{Err: ErrorName(err)}
 	}
@@ -94,7 +94,7 @@ func cellResult(cell h3go.Cell, err error) Result[string] {
 
 // cellsResult packs a cell-set-returning call into a Result of sorted string
 // forms.
-func cellsResult(cells []h3go.Cell, err error) Result[[]string] {
+func cellsResult(cells []h3.Cell, err error) Result[[]string] {
 	if err != nil {
 		return Result[[]string]{Err: ErrorName(err)}
 	}

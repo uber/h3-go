@@ -20,10 +20,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
-// TestUnsafe runs every unsafe-traversal record in the suite against h3go.
+// TestUnsafe runs every unsafe-traversal record in the suite against h3.
 func TestUnsafe(t *testing.T) {
 	t.Parallel()
 
@@ -37,7 +37,7 @@ func TestUnsafe(t *testing.T) {
 func checkUnsafe(t *testing.T, record UnsafeRecord) {
 	t.Helper()
 
-	cell := h3go.CellFromString(record.Index)
+	cell := h3.CellFromString(record.Index)
 
 	disks := record.DiskUnsafe
 	rings := record.RingUnsafe
@@ -50,7 +50,7 @@ func checkUnsafe(t *testing.T, record UnsafeRecord) {
 		want := disks[k-1]
 
 		disk, err := cell.GridDiskUnsafe(k)
-		checkUnsafeOutcome(t, "GridDiskUnsafe", k, cellsResult(disk, err), want, func() []h3go.Cell {
+		checkUnsafeOutcome(t, "GridDiskUnsafe", k, cellsResult(disk, err), want, func() []h3.Cell {
 			safe, safeErr := cell.GridDisk(k)
 			if safeErr != nil {
 				t.Fatalf("GridDisk(%d): %v", k, safeErr)
@@ -60,12 +60,12 @@ func checkUnsafe(t *testing.T, record UnsafeRecord) {
 		})
 
 		distances, err := cell.GridDiskDistancesUnsafe(k)
-		checkUnsafeOutcome(t, "GridDiskDistancesUnsafe", k, cellsResult(slices.Concat(distances...), err), want, func() []h3go.Cell {
+		checkUnsafeOutcome(t, "GridDiskDistancesUnsafe", k, cellsResult(slices.Concat(distances...), err), want, func() []h3.Cell {
 			return disk
 		})
 
 		ring, err := cell.GridRingUnsafe(k)
-		checkUnsafeOutcome(t, "GridRingUnsafe", k, cellsResult(ring, err), rings[k-1], func() []h3go.Cell {
+		checkUnsafeOutcome(t, "GridRingUnsafe", k, cellsResult(ring, err), rings[k-1], func() []h3.Cell {
 			safe, safeErr := cell.GridRing(k)
 			if safeErr != nil {
 				t.Fatalf("GridRing(%d): %v", k, safeErr)
@@ -79,7 +79,7 @@ func checkUnsafe(t *testing.T, record UnsafeRecord) {
 // checkUnsafeOutcome compares one unsafe call's outcome with the record. On a
 // recorded success the call must succeed and return the cells that safe
 // yields; on a recorded error it must fail with the same error.
-func checkUnsafeOutcome(t *testing.T, name string, k int, got Result[[]string], want Result[bool], safe func() []h3go.Cell) {
+func checkUnsafeOutcome(t *testing.T, name string, k int, got Result[[]string], want Result[bool], safe func() []h3.Cell) {
 	t.Helper()
 
 	if want.Err != "" {

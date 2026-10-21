@@ -19,24 +19,24 @@ package conformance
 import (
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
-// TestLocalIJ runs every local IJ record in the suite against h3go.
+// TestLocalIJ runs every local IJ record in the suite against h3.
 func TestLocalIJ(t *testing.T) {
 	t.Parallel()
 
 	runGroup(t, "localij/", checkLocalIJ)
 }
 
-// checkLocalIJ asserts every field of one local IJ record against h3go.
+// checkLocalIJ asserts every field of one local IJ record against h3.
 func checkLocalIJ(t *testing.T, record LocalIJRecord) {
 	t.Helper()
 
-	origin := h3go.CellFromString(record.Index)
-	target := h3go.CellFromString(record.Target)
+	origin := h3.CellFromString(record.Index)
+	target := h3.CellFromString(record.Target)
 
-	ij, err := h3go.CellToLocalIJ(origin, target)
+	ij, err := h3.CellToLocalIJ(origin, target)
 
 	got := Result[CoordIJ]{Value: CoordIJ{I: ij.I, J: ij.J}, Err: ErrorName(err)}
 	if !equalResults(got, record.IJ, equalValues) {
@@ -51,7 +51,7 @@ func checkLocalIJ(t *testing.T, record LocalIJRecord) {
 		return
 	}
 
-	cell, err := h3go.LocalIJToCell(origin, h3go.CoordIJ{I: record.IJ.Value.I, J: record.IJ.Value.J})
+	cell, err := h3.LocalIJToCell(origin, h3.CoordIJ{I: record.IJ.Value.I, J: record.IJ.Value.J})
 	if got := cellResult(cell, err); !equalResults(got, record.Cell, equalValues) {
 		t.Errorf("LocalIJToCell(%+v) = %s, want %s", record.IJ.Value, formatResult(got), formatResult(record.Cell))
 	}

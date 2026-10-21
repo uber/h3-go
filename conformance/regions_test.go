@@ -21,10 +21,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
-// TestRegions runs every regions record in the suite against h3go.
+// TestRegions runs every regions record in the suite against h3.
 func TestRegions(t *testing.T) {
 	t.Parallel()
 
@@ -36,30 +36,30 @@ func TestRegions(t *testing.T) {
 	})
 }
 
-// checkRegions asserts every field of one regions record against h3go.
+// checkRegions asserts every field of one regions record against h3.
 func checkRegions(t *testing.T, record RegionsRecord, tolerances Tolerances) {
 	t.Helper()
 
 	polygon := toGeoPolygon(record.Polygon)
 
-	cells, err := h3go.PolygonToCells(polygon, record.Res)
+	cells, err := h3.PolygonToCells(polygon, record.Res)
 	if got := cellsResult(cells, err); !equalResults(got, record.Cells, slices.Equal) {
 		t.Errorf("PolygonToCells(%d) = %s, want %s", record.Res, formatResult(got), formatResult(record.Cells))
 	}
 
 	modes := []struct {
 		name string
-		mode h3go.ContainmentMode
+		mode h3.ContainmentMode
 		want Result[[]string]
 	}{
-		{"center", h3go.ContainmentCenter, record.Center},
-		{"full", h3go.ContainmentFull, record.Full},
-		{"overlapping", h3go.ContainmentOverlapping, record.Overlapping},
-		{"overlappingBbox", h3go.ContainmentOverlappingBbox, record.OverlappingBbox},
+		{"center", h3.ContainmentCenter, record.Center},
+		{"full", h3.ContainmentFull, record.Full},
+		{"overlapping", h3.ContainmentOverlapping, record.Overlapping},
+		{"overlappingBbox", h3.ContainmentOverlappingBbox, record.OverlappingBbox},
 	}
 
 	for _, mode := range modes {
-		filled, err := h3go.PolygonToCellsExperimental(polygon, record.Res, mode.mode)
+		filled, err := h3.PolygonToCellsExperimental(polygon, record.Res, mode.mode)
 		if got := cellsResult(filled, err); !equalResults(got, mode.want, slices.Equal) {
 			t.Errorf("PolygonToCellsExperimental(%d, %s) = %s, want %s", record.Res, mode.name, formatResult(got), formatResult(mode.want))
 		}
@@ -73,12 +73,12 @@ func checkRegions(t *testing.T, record RegionsRecord, tolerances Tolerances) {
 		return
 	}
 
-	input := make([]h3go.Cell, len(record.Cells.Value))
+	input := make([]h3.Cell, len(record.Cells.Value))
 	for i, index := range record.Cells.Value {
-		input[i] = h3go.CellFromString(index)
+		input[i] = h3.CellFromString(index)
 	}
 
-	polygons, err := h3go.CellsToMultiPolygon(input)
+	polygons, err := h3.CellsToMultiPolygon(input)
 	if name := ErrorName(err); name != record.MultiPolygon.Err {
 		t.Fatalf("CellsToMultiPolygon() error = %q, want %q", name, record.MultiPolygon.Err)
 	}
@@ -103,9 +103,9 @@ func checkRegions(t *testing.T, record RegionsRecord, tolerances Tolerances) {
 	}
 }
 
-// toGeoPolygon converts a record polygon to the h3go input type.
-func toGeoPolygon(polygon Polygon) h3go.GeoPolygon {
-	out := h3go.GeoPolygon{GeoLoop: toGeoLoop(polygon.Outer)}
+// toGeoPolygon converts a record polygon to the h3 input type.
+func toGeoPolygon(polygon Polygon) h3.GeoPolygon {
+	out := h3.GeoPolygon{GeoLoop: toGeoLoop(polygon.Outer)}
 	for _, hole := range polygon.Holes {
 		out.Holes = append(out.Holes, toGeoLoop(hole))
 	}
@@ -113,11 +113,11 @@ func toGeoPolygon(polygon Polygon) h3go.GeoPolygon {
 	return out
 }
 
-// toGeoLoop converts a sequence of record points to an h3go loop.
-func toGeoLoop(points []GeoCoord) h3go.GeoLoop {
-	loop := make(h3go.GeoLoop, len(points))
+// toGeoLoop converts a sequence of record points to an h3 loop.
+func toGeoLoop(points []GeoCoord) h3.GeoLoop {
+	loop := make(h3.GeoLoop, len(points))
 	for i, point := range points {
-		loop[i] = h3go.LatLng{Lat: point[0], Lng: point[1]}
+		loop[i] = h3.LatLng{Lat: point[0], Lng: point[1]}
 	}
 
 	return loop
@@ -125,15 +125,15 @@ func toGeoLoop(points []GeoCoord) h3go.GeoLoop {
 
 // withinAngular reports whether two points are within angularDeg degrees of
 // arc of each other on the sphere.
-func withinAngular(got h3go.LatLng, want GeoCoord, angularDeg float64) bool {
-	rads := h3go.GreatCircleDistanceRads(got, h3go.LatLng{Lat: want[0], Lng: want[1]})
+func withinAngular(got h3.LatLng, want GeoCoord, angularDeg float64) bool {
+	rads := h3.GreatCircleDistanceRads(got, h3.LatLng{Lat: want[0], Lng: want[1]})
 
 	return rads*180/math.Pi <= angularDeg
 }
 
 // loopsMatch reports whether two loops visit the same points in the same
 // direction, allowing the actual loop to start at any vertex.
-func loopsMatch(got h3go.GeoLoop, want []GeoCoord, angularDeg float64) bool {
+func loopsMatch(got h3.GeoLoop, want []GeoCoord, angularDeg float64) bool {
 	if len(got) != len(want) {
 		return false
 	}
@@ -159,7 +159,7 @@ func loopsMatch(got h3go.GeoLoop, want []GeoCoord, angularDeg float64) bool {
 
 // holesMatch reports whether every expected hole has a distinct matching
 // actual hole, in any order.
-func holesMatch(got []h3go.GeoLoop, want [][]GeoCoord, angularDeg float64) bool {
+func holesMatch(got []h3.GeoLoop, want [][]GeoCoord, angularDeg float64) bool {
 	if len(got) != len(want) {
 		return false
 	}

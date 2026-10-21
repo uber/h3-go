@@ -1,0 +1,979 @@
+/*
+ * Copyright 2026 Uber Technologies, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package h3
+
+import (
+	"errors"
+	"math"
+	"testing"
+)
+
+// gridCorpus builds a deterministic set of cells exercising hexagons, pentagons,
+// pentagon children (which reach the distortion paths), and cells around the
+// poles and antimeridian. It is shared read-only across the grid tests.
+func gridCorpus(t *testing.T) []Cell {
+	t.Helper()
+
+	res0, err := Res0Cells()
+	if err != nil {
+		t.Fatalf("Res0Cells: %v", err)
+	}
+
+	cells := append([]Cell{}, res0...)
+
+	points := []LatLng{
+		{Lat: 0, Lng: 0},
+		{Lat: 37.7749, Lng: -122.4194},
+		{Lat: 67.1509, Lng: -168.3908},
+		{Lat: -45, Lng: 170},
+		{Lat: 89.9, Lng: 0},
+	}
+
+	for res := 0; res <= 6; res++ {
+		for _, point := range points {
+			if cell, err := LatLngToCell(point, res); err == nil {
+				cells = append(cells, cell)
+			}
+		}
+
+		pents, err := Pentagons(res)
+		if err != nil {
+			t.Fatalf("Pentagons(%d): %v", res, err)
+		}
+
+		cells = append(cells, pents...)
+
+		// Children of a pentagon reach the pentagon-distortion branches when
+		// their disks and rings are traced; two generations down places cells
+		// right against the deleted edge, where the fast traversals fail.
+		for _, pent := range pents {
+			children, err := pent.Children(res + 2)
+			if err != nil {
+				t.Fatalf("Children(%015x): %v", uint64(pent), err)
+			}
+
+			cells = append(cells, children...)
+		}
+	}
+
+	return cells
+}
+
+// cellsAsMap returns the cells of in as a set for membership tests, dropping zeros.
+func cellsAsMap(in []Cell) map[Cell]bool {
+	set := make(map[Cell]bool, len(in))
+	for _, cell := range in {
+		if cell != 0 {
+			set[cell] = true
+		}
+	}
+
+	return set
+}
+
+// TestGridDiskDistancesConsistency checks the internal invariants of the disk
+// family over the corpus: the origin sits alone in ring 0, GridDisk equals the
+// flattened distances, and the safe and (when it succeeds) unsafe traversals
+// agree as sets.
+func TestGridDiskDistancesConsistency(t *testing.T) {
+	t.Parallel()
+
+	for _, origin := range gridCorpus(t) {
+		for _, k := range []int{0, 1, 2, 3} {
+			rings, err := origin.GridDiskDistances(k)
+			if err != nil {
+				t.Fatalf("GridDiskDistances(%015x, %d): %v", uint64(origin), k, err)
+			}
+
+			if len(rings) != k+1 {
+				t.Fatalf("GridDiskDistances(%015x, %d): %d rings, want %d", uint64(origin), k, len(rings), k+1)
+			}
+
+			if len(rings[0]) != 1 || rings[0][0] != origin {
+				t.Fatalf("GridDiskDistances(%015x, %d): ring 0 = %v, want [origin]", uint64(origin), k, rings[0])
+			}
+
+			disk, err := origin.GridDisk(k)
+			if err != nil {
+				t.Fatalf("GridDisk(%015x, %d): %v", uint64(origin), k, err)
+			}
+
+			var flat int
+			for _, ring := range rings {
+				flat += len(ring)
+			}
+
+			if len(disk) != flat {
+				t.Fatalf("GridDisk(%015x, %d): %d cells, flattened distances had %d", uint64(origin), k, len(disk), flat)
+			}
+
+			safe, err := origin.GridDiskDistancesSafe(k)
+			if err != nil {
+				t.Fatalf("GridDiskDistancesSafe(%015x, %d): %v", uint64(origin), k, err)
+			}
+
+			unsafe, unsafeErr := origin.GridDiskDistancesUnsafe(k)
+			if unsafeErr == nil {
+				for ring := range safe {
+					assertSameSet(t, unsafe[ring], safe[ring], "unsafe vs safe ring")
+				}
+			}
+		}
+	}
+}
+
+// TestGridRingMatchesDiskRing checks that GridRing yields exactly the cells at
+// distance k from the disk's ring k, over the corpus, and that the free function
+// delegates to the method.
+func TestGridRingMatchesDiskRing(t *testing.T) {
+	t.Parallel()
+
+	for _, origin := range gridCorpus(t) {
+		for _, k := range []int{0, 1, 2, 3} {
+			rings, err := origin.GridDiskDistances(k)
+			if err != nil {
+				t.Fatalf("GridDiskDistances(%015x, %d): %v", uint64(origin), k, err)
+			}
+
+			ring, err := GridRing(origin, k)
+			if err != nil {
+				t.Fatalf("GridRing(%015x, %d): %v", uint64(origin), k, err)
+			}
+
+			assertSameSet(t, ring, rings[k], "GridRing vs disk ring")
+		}
+	}
+}
+
+// TestGridRingUnsafeMatchesGridRing checks that when GridRingUnsafe succeeds its
+// result matches GridRing as a set, exercising the fast single-loop traversal.
+func TestGridRingUnsafeMatchesGridRing(t *testing.T) {
+	t.Parallel()
+
+	for _, origin := range gridCorpus(t) {
+		for _, k := range []int{1, 2, 3, 4, 5} {
+			unsafe, err := GridRingUnsafe(origin, k)
+			if err != nil {
+				continue
+			}
+
+			ring, err := origin.GridRing(k)
+			if err != nil {
+				t.Fatalf("GridRing(%015x, %d): %v", uint64(origin), k, err)
+			}
+
+			assertSameSet(t, unsafe, ring, "GridRingUnsafe vs GridRing")
+		}
+	}
+}
+
+// TestGridDisksUnsafe covers the batch traversal: the empty-input short circuit
+// and equivalence with per-origin GridDiskDistancesUnsafe over a hexagon-only
+// subset (the batch fails fast on any pentagon).
+func TestGridDisksUnsafe(t *testing.T) {
+	t.Parallel()
+
+	if out, err := GridDisksUnsafe(nil, 2); out != nil || err != nil {
+		t.Fatalf("GridDisksUnsafe(nil): got %v, %v, want nil, nil", out, err)
+	}
+
+	origins := []Cell{
+		CellFromString("8928308280fffff"),
+		CellFromString("85283473fffffff"),
+	}
+
+	const k = 2
+
+	batch, err := GridDisksUnsafe(origins, k)
+	if err != nil {
+		t.Fatalf("GridDisksUnsafe: %v", err)
+	}
+
+	for i, origin := range origins {
+		rings, err := origin.GridDiskDistancesUnsafe(k)
+		if err != nil {
+			t.Fatalf("GridDiskDistancesUnsafe(%015x): %v", uint64(origin), err)
+		}
+
+		var flat []Cell
+		for _, ring := range rings {
+			flat = append(flat, ring...)
+		}
+
+		assertSameSet(t, batch[i], flat, "batch vs per-origin disk")
+	}
+}
+
+// TestGridDisksUnsafePentagonFails checks that the batch traversal propagates the
+// pentagon failure from any single origin.
+func TestGridDisksUnsafePentagonFails(t *testing.T) {
+	t.Parallel()
+
+	pents, err := Pentagons(5)
+	if err != nil {
+		t.Fatalf("Pentagons(5): %v", err)
+	}
+
+	origins := append([]Cell{CellFromString("8928308280fffff")}, pents[0])
+	if _, err := GridDisksUnsafe(origins, 1); !errors.Is(err, ErrPentagon) {
+		t.Fatalf("GridDisksUnsafe with pentagon: got %v, want ErrPentagon", err)
+	}
+}
+
+// TestGridDomainErrors checks that every variant rejects a negative k with
+// ErrDomain.
+func TestGridDomainErrors(t *testing.T) {
+	t.Parallel()
+
+	origin := CellFromString("8928308280fffff")
+
+	if _, err := origin.GridDiskDistancesUnsafe(-1); !errors.Is(err, ErrDomain) {
+		t.Fatalf("GridDiskDistancesUnsafe(-1): got %v, want ErrDomain", err)
+	}
+
+	if _, err := origin.GridDiskDistancesSafe(-1); !errors.Is(err, ErrDomain) {
+		t.Fatalf("GridDiskDistancesSafe(-1): got %v, want ErrDomain", err)
+	}
+
+	if _, err := origin.GridDisk(-1); !errors.Is(err, ErrDomain) {
+		t.Fatalf("GridDisk(-1): got %v, want ErrDomain", err)
+	}
+
+	if _, err := origin.GridRingUnsafe(-1); !errors.Is(err, ErrDomain) {
+		t.Fatalf("GridRingUnsafe(-1): got %v, want ErrDomain", err)
+	}
+
+	if _, err := origin.GridRing(-1); !errors.Is(err, ErrDomain) {
+		t.Fatalf("GridRing(-1): got %v, want ErrDomain", err)
+	}
+
+	if _, err := GridDisksUnsafe([]Cell{origin}, -1); !errors.Is(err, ErrDomain) {
+		t.Fatalf("GridDisksUnsafe(-1): got %v, want ErrDomain", err)
+	}
+
+	// gridDiskUnsafeInto guards k itself; every public caller validates first,
+	// so this is the only path that reaches the guard.
+	if _, err := origin.gridDiskUnsafeInto(-1, nil); !errors.Is(err, ErrDomain) {
+		t.Fatalf("gridDiskUnsafeInto(-1): got %v, want ErrDomain", err)
+	}
+}
+
+// TestGridPentagonFallback checks that the unsafe variants report ErrPentagon on
+// a pentagon origin while the safe/auto variants succeed via fallback.
+func TestGridPentagonFallback(t *testing.T) {
+	t.Parallel()
+
+	pents, err := Pentagons(3)
+	if err != nil {
+		t.Fatalf("Pentagons(3): %v", err)
+	}
+
+	pentagon := pents[0]
+
+	if _, err := pentagon.GridDiskDistancesUnsafe(2); !errors.Is(err, ErrPentagon) {
+		t.Fatalf("GridDiskDistancesUnsafe(pentagon): got %v, want ErrPentagon", err)
+	}
+
+	if _, err := pentagon.GridDiskUnsafe(2); !errors.Is(err, ErrPentagon) {
+		t.Fatalf("GridDiskUnsafe(pentagon): got %v, want ErrPentagon", err)
+	}
+
+	if _, err := pentagon.GridRingUnsafe(2); !errors.Is(err, ErrPentagon) {
+		t.Fatalf("GridRingUnsafe(pentagon): got %v, want ErrPentagon", err)
+	}
+
+	if _, err := pentagon.GridDisk(2); err != nil {
+		t.Fatalf("GridDisk(pentagon): %v", err)
+	}
+
+	if _, err := pentagon.GridRing(2); err != nil {
+		t.Fatalf("GridRing(pentagon): %v", err)
+	}
+}
+
+// TestNeighborRotationsErrors covers the error paths of neighborRotations that a
+// validly constructed cell cannot reach through the public traversal API.
+func TestNeighborRotationsErrors(t *testing.T) {
+	t.Parallel()
+
+	origin := CellFromString("8928308280fffff")
+
+	if _, _, err := origin.neighborRotations(invalidDigit, 0); !errors.Is(err, ErrFailed) {
+		t.Fatalf("neighborRotations(invalidDigit): got %v, want ErrFailed", err)
+	}
+
+	if _, _, err := origin.neighborRotations(-1, 0); !errors.Is(err, ErrFailed) {
+		t.Fatalf("neighborRotations(-1): got %v, want ErrFailed", err)
+	}
+
+	badBaseCell := Cell(h3Init) | Cell(cellMode)<<modeOffset | Cell(NumBaseCells)<<baseCellOffset
+	if _, _, err := badBaseCell.neighborRotations(kAxesDigit, 0); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("neighborRotations(bad base cell): got %v, want ErrCellInvalid", err)
+	}
+
+	badDigit := origin.setIndexDigit(origin.Resolution(), invalidDigit)
+	if _, _, err := badDigit.neighborRotations(kAxesDigit, 0); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("neighborRotations(invalid digit): got %v, want ErrCellInvalid", err)
+	}
+
+	// A malformed pentagon index can land in the deleted k subsequence with a
+	// leading digit the pentagon adjustment does not define, which is rejected.
+	if _, _, err := Cell(0x810840000000000).neighborRotations(centerDigit, 0); !errors.Is(err, ErrFailed) {
+		t.Fatalf("neighborRotations(undefined pentagon move): got %v, want ErrFailed", err)
+	}
+}
+
+// TestGridDefensiveErrors covers the error-propagation paths in the traversals
+// that a validly constructed cell cannot reach, using malformed indexes whose
+// invalid digits make the internal neighbor step fail partway through.
+func TestGridDefensiveErrors(t *testing.T) {
+	t.Parallel()
+
+	base := CellFromString("8928308280fffff")
+
+	// firstStep fails on the move to the next ring; secondStep passes that move
+	// but fails while tracing the ring. Together they exercise both neighbor-step
+	// error returns in the fast disk and ring traversals.
+	firstStep := base.setIndexDigit(9, invalidDigit)
+	secondStep := base.setIndexDigit(8, invalidDigit)
+
+	for _, malformed := range []Cell{firstStep, secondStep} {
+		if _, err := malformed.GridDiskDistancesUnsafe(1); err == nil {
+			t.Fatalf("GridDiskDistancesUnsafe(%015x): got nil error, want failure", uint64(malformed))
+		}
+
+		if _, err := malformed.GridRingUnsafe(1); err == nil {
+			t.Fatalf("GridRingUnsafe(%015x): got nil error, want failure", uint64(malformed))
+		}
+	}
+
+	// The safe traversal surfaces the same non-pentagon failure, and the disk
+	// and ring fallbacks propagate it.
+	if _, err := firstStep.GridDiskDistancesSafe(1); err == nil {
+		t.Fatal("GridDiskDistancesSafe(malformed): got nil error, want failure")
+	}
+
+	if _, err := firstStep.GridDisk(1); err == nil {
+		t.Fatal("GridDisk(malformed): got nil error, want failure")
+	}
+
+	if _, err := firstStep.GridRing(1); err == nil {
+		t.Fatal("GridRing(malformed): got nil error, want failure")
+	}
+}
+
+// TestNeighborRotationsResetByRotations checks that the rotations argument is
+// reduced modulo 6 and applied to the direction, so a six-fold rotation is a
+// no-op relative to none.
+func TestNeighborRotationsResetByRotations(t *testing.T) {
+	t.Parallel()
+
+	origin := CellFromString("8928308280fffff")
+
+	base, baseRot, err := origin.neighborRotations(kAxesDigit, 0)
+	if err != nil {
+		t.Fatalf("neighborRotations(0 rotations): %v", err)
+	}
+
+	six, sixRot, err := origin.neighborRotations(kAxesDigit, 6)
+	if err != nil {
+		t.Fatalf("neighborRotations(6 rotations): %v", err)
+	}
+
+	if base != six || baseRot != sixRot {
+		t.Fatalf("rotations not modulo 6: (%015x,%d) vs (%015x,%d)", uint64(base), baseRot, uint64(six), sixRot)
+	}
+}
+
+// TestIsNeighbor covers the neighbor relation: self is never a neighbor, true
+// neighbors from the ring, non-neighbors, resolution mismatch, and non-cell mode.
+func TestIsNeighbor(t *testing.T) {
+	t.Parallel()
+
+	origin := CellFromString("8928308280fffff")
+
+	if got, err := origin.IsNeighbor(origin); err != nil || got {
+		t.Fatalf("IsNeighbor(self): got %v, %v, want false, nil", got, err)
+	}
+
+	ring, err := origin.GridRing(1)
+	if err != nil {
+		t.Fatalf("GridRing(1): %v", err)
+	}
+
+	for _, neighbor := range ring {
+		if got, err := origin.IsNeighbor(neighbor); err != nil || !got {
+			t.Fatalf("IsNeighbor(%015x, %015x): got %v, %v, want true, nil", uint64(origin), uint64(neighbor), got, err)
+		}
+	}
+
+	far, err := LatLngToCell(LatLng{Lat: -33.8688, Lng: 151.2093}, 9)
+	if err != nil {
+		t.Fatalf("LatLngToCell(far): %v", err)
+	}
+
+	if got, err := origin.IsNeighbor(far); err != nil || got {
+		t.Fatalf("IsNeighbor(far): got %v, %v, want false, nil", got, err)
+	}
+
+	parent, err := origin.ImmediateParent()
+	if err != nil {
+		t.Fatalf("ImmediateParent: %v", err)
+	}
+
+	if _, err := origin.IsNeighbor(parent); !errors.Is(err, ErrResolutionMismatch) {
+		t.Fatalf("IsNeighbor(parent): got %v, want ErrResolutionMismatch", err)
+	}
+
+	notACell := origin &^ (Cell(modeMask) << modeOffset)
+	if _, err := notACell.IsNeighbor(origin); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("IsNeighbor(non-cell): got %v, want ErrCellInvalid", err)
+	}
+
+	if _, err := origin.IsNeighbor(notACell); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("IsNeighbor(other non-cell): got %v, want ErrCellInvalid", err)
+	}
+}
+
+// TestIsNeighborPentagon exercises the optimized same-parent branch around a
+// pentagon, where a k-axis digit under a pentagon parent is rejected as invalid.
+func TestIsNeighborPentagon(t *testing.T) {
+	t.Parallel()
+
+	pents, err := Pentagons(5)
+	if err != nil {
+		t.Fatalf("Pentagons(5): %v", err)
+	}
+
+	pentagon := pents[0]
+
+	children, err := pentagon.Children(6)
+	if err != nil {
+		t.Fatalf("Children(6): %v", err)
+	}
+
+	// Every child shares the pentagon parent; comparing children exercises the
+	// same-parent optimization including the deleted-k rejection.
+	for _, a := range children {
+		for _, b := range children {
+			if _, err := a.IsNeighbor(b); err != nil && !errors.Is(err, ErrCellInvalid) {
+				t.Fatalf("IsNeighbor(%015x, %015x): unexpected error %v", uint64(a), uint64(b), err)
+			}
+		}
+	}
+}
+
+// TestIsNeighborDefensive covers the invalid-input branches of IsNeighbor that a
+// validly constructed pair cannot reach: an out-of-range indexing digit under a
+// shared parent, a k-axis digit under a shared pentagon parent, and a malformed
+// origin that fails the general disk fallback.
+func TestIsNeighborDefensive(t *testing.T) {
+	t.Parallel()
+
+	base := CellFromString("8928308280fffff")
+
+	// Same res-8 parent, but the origin's finest digit is the unused sentinel.
+	invalidChild := base.setIndexDigit(9, invalidDigit)
+	sibling := base.setIndexDigit(9, jAxesDigit)
+
+	if _, err := invalidChild.IsNeighbor(sibling); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("IsNeighbor(invalid digit child): got %v, want ErrCellInvalid", err)
+	}
+
+	// Same pentagon parent, with a k-axis digit that the deleted subsequence
+	// makes invalid.
+	pents, err := Pentagons(8)
+	if err != nil {
+		t.Fatalf("Pentagons(8): %v", err)
+	}
+
+	pentParent := pents[0]
+	kChild := pentParent.setResolution(9).setIndexDigit(9, kAxesDigit)
+	otherChild := pentParent.setResolution(9).setIndexDigit(9, jAxesDigit)
+
+	if _, err := kChild.IsNeighbor(otherChild); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("IsNeighbor(k-axis pentagon child): got %v, want ErrCellInvalid", err)
+	}
+
+	// A malformed origin with a different parent than the target skips the
+	// optimization and fails in the general disk fallback.
+	malformed := base.setIndexDigit(9, invalidDigit)
+
+	far, err := LatLngToCell(LatLng{Lat: -33.8688, Lng: 151.2093}, 9)
+	if err != nil {
+		t.Fatalf("LatLngToCell(far): %v", err)
+	}
+
+	if _, err := malformed.IsNeighbor(far); err == nil {
+		t.Fatal("IsNeighbor(malformed, far): got nil error, want failure")
+	}
+}
+
+// TestGridFreeFunctions checks that the package-level free functions delegate to
+// the Cell methods and return matching results.
+func TestGridFreeFunctions(t *testing.T) {
+	t.Parallel()
+
+	origin := CellFromString("8928308280fffff")
+
+	const k = 2
+
+	disk, err := GridDisk(origin, k)
+	if err != nil {
+		t.Fatalf("GridDisk: %v", err)
+	}
+
+	method, err := origin.GridDisk(k)
+	if err != nil {
+		t.Fatalf("Cell.GridDisk: %v", err)
+	}
+
+	assertSameSet(t, disk, method, "GridDisk free vs method")
+
+	auto, err := GridDiskDistances(origin, k)
+	if err != nil {
+		t.Fatalf("GridDiskDistances: %v", err)
+	}
+
+	unsafe, err := GridDiskDistancesUnsafe(origin, k)
+	if err != nil {
+		t.Fatalf("GridDiskDistancesUnsafe: %v", err)
+	}
+
+	safe, err := GridDiskDistancesSafe(origin, k)
+	if err != nil {
+		t.Fatalf("GridDiskDistancesSafe: %v", err)
+	}
+
+	for ring := range auto {
+		assertSameSet(t, auto[ring], unsafe[ring], "auto vs unsafe ring")
+		assertSameSet(t, auto[ring], safe[ring], "auto vs safe ring")
+	}
+}
+
+// assertSameSet fails if two cell slices differ as sets, ignoring order and
+// zero padding.
+func assertSameSet(t *testing.T, got, want []Cell, msg string) {
+	t.Helper()
+
+	gotSet := cellsAsMap(got)
+	wantSet := cellsAsMap(want)
+
+	if len(gotSet) != len(wantSet) {
+		t.Fatalf("%s: set sizes differ got=%d want=%d", msg, len(gotSet), len(wantSet))
+	}
+
+	for cell := range wantSet {
+		if !gotSet[cell] {
+			t.Fatalf("%s: missing %015x", msg, uint64(cell))
+		}
+	}
+}
+
+// TestGridRingUnsafeRegressions ports the testGridRingUnsafe.c cases: the exact
+// rings 1 and 2 around an SF cell, the identity and negative-k contracts, and
+// the pentagon failure modes (near a pentagon and starting on one).
+func TestGridRingUnsafeRegressions(t *testing.T) {
+	t.Parallel()
+
+	// The C fixture builds this cell from a truncated-pi SF coordinate; rebuild
+	// it the same way so the expected rings line up bit for bit.
+	sfHex, err := LatLngToCell(LatLng{
+		Lat: 0.659966917655 * RadsToDegs,
+		Lng: (2*3.14159 - 2.1364398519396) * RadsToDegs,
+	}, 9)
+	if err != nil {
+		t.Fatalf("LatLngToCell(sf): %v", err)
+	}
+
+	t.Run("negative_k", func(t *testing.T) {
+		t.Parallel()
+
+		if _, err := sfHex.GridRingUnsafe(-1); !errors.Is(err, ErrDomain) {
+			t.Fatalf("GridRingUnsafe(-1): got %v, want ErrDomain", err)
+		}
+	})
+
+	t.Run("identity", func(t *testing.T) {
+		t.Parallel()
+
+		ring, err := sfHex.GridRingUnsafe(0)
+		if err != nil {
+			t.Fatalf("GridRingUnsafe(0): %v", err)
+		}
+
+		if len(ring) != 1 || ring[0] != sfHex {
+			t.Fatalf("GridRingUnsafe(0): got %v, want [%015x]", ring, uint64(sfHex))
+		}
+	})
+
+	t.Run("ring1", func(t *testing.T) {
+		t.Parallel()
+
+		want := []Cell{
+			0x89283080ddbffff, 0x89283080c37ffff, 0x89283080c27ffff,
+			0x89283080d53ffff, 0x89283080dcfffff, 0x89283080dc3ffff,
+		}
+
+		got, err := sfHex.GridRingUnsafe(1)
+		if err != nil {
+			t.Fatalf("GridRingUnsafe(1): %v", err)
+		}
+
+		assertSameSet(t, got, want, "ring1")
+	})
+
+	t.Run("ring2", func(t *testing.T) {
+		t.Parallel()
+
+		want := []Cell{
+			0x89283080ca7ffff, 0x89283080cafffff, 0x89283080c33ffff,
+			0x89283080c23ffff, 0x89283080c2fffff, 0x89283080d5bffff,
+			0x89283080d43ffff, 0x89283080d57ffff, 0x89283080d1bffff,
+			0x89283080dc7ffff, 0x89283080dd7ffff, 0x89283080dd3ffff,
+		}
+
+		got, err := sfHex.GridRingUnsafe(2)
+		if err != nil {
+			t.Fatalf("GridRingUnsafe(2): %v", err)
+		}
+
+		assertSameSet(t, got, want, "ring2")
+	})
+
+	t.Run("near_pentagon", func(t *testing.T) {
+		t.Parallel()
+
+		nearPentagon := Cell(0x837405fffffffff)
+		for _, k := range []int{1, 2} {
+			if _, err := nearPentagon.GridRingUnsafe(k); !errors.Is(err, ErrPentagon) {
+				t.Fatalf("GridRingUnsafe(near, %d): got %v, want ErrPentagon", k, err)
+			}
+		}
+	})
+
+	t.Run("on_pentagon", func(t *testing.T) {
+		t.Parallel()
+
+		onPentagon := setH3Index(0, 4, centerDigit)
+		if _, err := onPentagon.GridRingUnsafe(2); !errors.Is(err, ErrPentagon) {
+			t.Fatalf("GridRingUnsafe(on, 2): got %v, want ErrPentagon", err)
+		}
+	})
+}
+
+// TestGridDiskRegressions ports the testGridDisk.c known-array cases: the disk
+// around an SF base cell, and the polar pentagon at res 0 and 1 (which have only
+// 5 neighbors, so the disk holds 6 cells). It checks the exact membership and
+// that GridDiskDistances places the origin at distance 0 and the rest at 1.
+func TestGridDiskRegressions(t *testing.T) {
+	t.Parallel()
+
+	sfHex0, err := LatLngToCell(LatLng{
+		Lat: 0.659966917655 * RadsToDegs,
+		Lng: (2*3.14159 - 2.1364398519396) * RadsToDegs,
+	}, 0)
+	if err != nil {
+		t.Fatalf("LatLngToCell(sf, 0): %v", err)
+	}
+
+	tests := map[string]struct {
+		giveOrigin Cell
+		want       []Cell
+	}{
+		"sf_res0": {
+			giveOrigin: sfHex0,
+			want: []Cell{
+				0x8029fffffffffff, 0x801dfffffffffff, 0x8013fffffffffff,
+				0x8027fffffffffff, 0x8049fffffffffff, 0x8051fffffffffff,
+				0x8037fffffffffff,
+			},
+		},
+		"polar_pentagon_res0": {
+			giveOrigin: setH3Index(0, 4, centerDigit),
+			want: []Cell{
+				0x8009fffffffffff, 0x8007fffffffffff, 0x8001fffffffffff,
+				0x8011fffffffffff, 0x801ffffffffffff, 0x8019fffffffffff,
+			},
+		},
+		"polar_pentagon_res1": {
+			giveOrigin: setH3Index(1, 4, centerDigit),
+			want: []Cell{
+				0x81083ffffffffff, 0x81093ffffffffff, 0x81097ffffffffff,
+				0x8108fffffffffff, 0x8108bffffffffff, 0x8109bffffffffff,
+			},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			disk, err := tt.giveOrigin.GridDisk(1)
+			if err != nil {
+				t.Fatalf("GridDisk(1): %v", err)
+			}
+
+			assertSameSet(t, disk, tt.want, "disk")
+
+			rings, err := tt.giveOrigin.GridDiskDistances(1)
+			if err != nil {
+				t.Fatalf("GridDiskDistances(1): %v", err)
+			}
+
+			if len(rings[0]) != 1 || rings[0][0] != tt.giveOrigin {
+				t.Fatalf("ring 0: got %v, want [origin]", rings[0])
+			}
+		})
+	}
+}
+
+// TestNeighborRotationsRegressions ports the testGridDiskInternal.c
+// h3NeighborRotations cases: large rotation counts must be reduced modulo 6
+// without overflow, and out-of-range directions must fail.
+func TestNeighborRotationsRegressions(t *testing.T) {
+	t.Parallel()
+
+	t.Run("rotations_overflow", func(t *testing.T) {
+		t.Parallel()
+
+		origin := setH3Index(0, 0, centerDigit)
+
+		out, rotations, err := origin.neighborRotations(kAxesDigit, 2147483646)
+		if err != nil {
+			t.Fatalf("neighborRotations: %v", err)
+		}
+
+		if want := setH3Index(0, 1, centerDigit); out != want {
+			t.Fatalf("out: got %015x, want %015x", uint64(out), uint64(want))
+		}
+
+		if rotations != 5 {
+			t.Fatalf("rotations: got %d, want 5", rotations)
+		}
+	})
+
+	t.Run("rotations_overflow2", func(t *testing.T) {
+		t.Parallel()
+
+		origin := setH3Index(0, 4, centerDigit)
+
+		out, rotations, err := origin.neighborRotations(jkAxesDigit, math.MaxInt32)
+		if err != nil {
+			t.Fatalf("neighborRotations: %v", err)
+		}
+
+		if want := setH3Index(0, 0, centerDigit); out != want {
+			t.Fatalf("out: got %015x, want %015x", uint64(out), uint64(want))
+		}
+
+		if rotations != 0 {
+			t.Fatalf("rotations: got %d, want 0", rotations)
+		}
+	})
+
+	t.Run("invalid_direction", func(t *testing.T) {
+		t.Parallel()
+
+		origin := Cell(0x811d7ffffffffff)
+		for _, dir := range []int{-1, 7, 100} {
+			if _, _, err := origin.neighborRotations(dir, 0); !errors.Is(err, ErrFailed) {
+				t.Fatalf("neighborRotations(dir %d): got %v, want ErrFailed", dir, err)
+			}
+		}
+	})
+}
+
+// TestGridDiskPentagonArrays ports the testGridDisk.c k3 polar-pentagon and k4
+// pentagon known-array cases. The polar k3 case also checks the per-cell grid
+// distance; the pentagon k4 case checks set membership.
+func TestGridDiskPentagonArrays(t *testing.T) {
+	t.Parallel()
+
+	t.Run("polar_pentagon_k3", func(t *testing.T) {
+		t.Parallel()
+
+		// cell -> expected grid distance from the origin setH3Index(1,4,0).
+		wantDist := map[Cell]int{
+			0x81013ffffffffff: 2, 0x811fbffffffffff: 3, 0x81193ffffffffff: 2,
+			0x81097ffffffffff: 1, 0x81003ffffffffff: 3, 0x81183ffffffffff: 3,
+			0x8111bffffffffff: 3, 0x81077ffffffffff: 2, 0x811f7ffffffffff: 2,
+			0x81067ffffffffff: 3, 0x81093ffffffffff: 1, 0x811e7ffffffffff: 3,
+			0x81083ffffffffff: 0, 0x81117ffffffffff: 2, 0x8101bffffffffff: 3,
+			0x81107ffffffffff: 3, 0x81073ffffffffff: 2, 0x811f3ffffffffff: 2,
+			0x81063ffffffffff: 3, 0x8108fffffffffff: 1, 0x811e3ffffffffff: 3,
+			0x8119bffffffffff: 3, 0x81113ffffffffff: 2, 0x81017ffffffffff: 2,
+			0x81103ffffffffff: 3, 0x8109bffffffffff: 1, 0x81197ffffffffff: 2,
+			0x81007ffffffffff: 3, 0x8108bffffffffff: 1, 0x81187ffffffffff: 3,
+			0x8107bffffffffff: 3,
+		}
+
+		rings, err := setH3Index(1, 4, centerDigit).GridDiskDistances(3)
+		if err != nil {
+			t.Fatalf("GridDiskDistances(3): %v", err)
+		}
+
+		gotDist := make(map[Cell]int)
+
+		for distance, ring := range rings {
+			for _, cell := range ring {
+				gotDist[cell] = distance
+			}
+		}
+
+		if len(gotDist) != len(wantDist) {
+			t.Fatalf("cell count: got %d, want %d", len(gotDist), len(wantDist))
+		}
+
+		for cell, want := range wantDist {
+			if got, ok := gotDist[cell]; !ok || got != want {
+				t.Fatalf("cell %015x: got distance %d (present=%v), want %d", uint64(cell), got, ok, want)
+			}
+		}
+	})
+
+	t.Run("pentagon_k4", func(t *testing.T) {
+		t.Parallel()
+
+		want := []Cell{
+			0x811d7ffffffffff, 0x810c7ffffffffff, 0x81227ffffffffff, 0x81293ffffffffff,
+			0x81133ffffffffff, 0x8136bffffffffff, 0x81167ffffffffff, 0x811d3ffffffffff,
+			0x810c3ffffffffff, 0x81223ffffffffff, 0x81477ffffffffff, 0x8128fffffffffff,
+			0x81367ffffffffff, 0x8112fffffffffff, 0x811cfffffffffff, 0x8123bffffffffff,
+			0x810dbffffffffff, 0x8112bffffffffff, 0x81473ffffffffff, 0x8128bffffffffff,
+			0x81363ffffffffff, 0x811cbffffffffff, 0x81237ffffffffff, 0x810d7ffffffffff,
+			0x81127ffffffffff, 0x8137bffffffffff, 0x81287ffffffffff, 0x8126bffffffffff,
+			0x81177ffffffffff, 0x810d3ffffffffff, 0x81233ffffffffff, 0x8150fffffffffff,
+			0x81123ffffffffff, 0x81377ffffffffff, 0x81283ffffffffff, 0x8102fffffffffff,
+			0x811c3ffffffffff, 0x810cfffffffffff, 0x8122fffffffffff, 0x8113bffffffffff,
+			0x81373ffffffffff, 0x8129bffffffffff, 0x8102bffffffffff, 0x811dbffffffffff,
+			0x810cbffffffffff, 0x8122bffffffffff, 0x81297ffffffffff, 0x81507ffffffffff,
+			0x8136fffffffffff, 0x8127bffffffffff, 0x81137ffffffffff,
+		}
+
+		got, err := setH3Index(1, 14, centerDigit).GridDisk(4)
+		if err != nil {
+			t.Fatalf("GridDisk(4): %v", err)
+		}
+
+		assertSameSet(t, got, want, "pentagon k4")
+	})
+}
+
+// TestGridRingPentagonArrays ports the testGridRing.c k3 polar-pentagon and k4
+// pentagon hollow-ring known-array cases.
+func TestGridRingPentagonArrays(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		giveOrigin Cell
+		giveK      int
+		want       []Cell
+	}{
+		"polar_pentagon_k3": {
+			giveOrigin: setH3Index(1, 4, centerDigit),
+			giveK:      3,
+			want: []Cell{
+				0x811fbffffffffff, 0x81003ffffffffff, 0x81183ffffffffff, 0x8111bffffffffff,
+				0x81067ffffffffff, 0x811e7ffffffffff, 0x8101bffffffffff, 0x81107ffffffffff,
+				0x81063ffffffffff, 0x811e3ffffffffff, 0x8119bffffffffff, 0x81103ffffffffff,
+				0x81007ffffffffff, 0x81187ffffffffff, 0x8107bffffffffff,
+			},
+		},
+		"pentagon_k4": {
+			giveOrigin: setH3Index(1, 14, centerDigit),
+			giveK:      4,
+			want: []Cell{
+				0x81227ffffffffff, 0x81293ffffffffff, 0x8136bffffffffff, 0x81167ffffffffff,
+				0x81477ffffffffff, 0x810dbffffffffff, 0x81473ffffffffff, 0x81237ffffffffff,
+				0x81127ffffffffff, 0x8126bffffffffff, 0x81177ffffffffff, 0x810d3ffffffffff,
+				0x8150fffffffffff, 0x8102fffffffffff, 0x8129bffffffffff, 0x8102bffffffffff,
+				0x81507ffffffffff, 0x8136fffffffffff, 0x8127bffffffffff, 0x81137ffffffffff,
+			},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tt.giveOrigin.GridRing(tt.giveK)
+			if err != nil {
+				t.Fatalf("GridRing(%d): %v", tt.giveK, err)
+			}
+
+			assertSameSet(t, got, tt.want, name)
+		})
+	}
+}
+
+// TestGridDiskInvalidDigit ports the testGridDisk.c gridDiskInvalidDigit
+// regression: a malformed index must fail with ErrCellInvalid.
+func TestGridDiskInvalidDigit(t *testing.T) {
+	t.Parallel()
+
+	if _, err := GridDisk(Cell(0x4d4b00fe5c5c3030), 2); !errors.Is(err, ErrCellInvalid) {
+		t.Fatalf("GridDisk(invalid digit): got %v, want ErrCellInvalid", err)
+	}
+}
+
+// TestGridDiskUnsafe checks the flat unsafe disk: the negative-k domain error,
+// and agreement with the ringed unsafe variant it shares a traversal with.
+func TestGridDiskUnsafe(t *testing.T) {
+	t.Parallel()
+
+	origin := setH3Index(5, 0, 0)
+
+	t.Run("negative_k", func(t *testing.T) {
+		t.Parallel()
+
+		if _, err := GridDiskUnsafe(origin, -1); !errors.Is(err, ErrDomain) {
+			t.Fatalf("GridDiskUnsafe(-1): got %v, want ErrDomain", err)
+		}
+	})
+
+	t.Run("matches_ringed_variant", func(t *testing.T) {
+		t.Parallel()
+
+		for k := 0; k <= 3; k++ {
+			flat, err := GridDiskUnsafe(origin, k)
+			if err != nil {
+				t.Fatalf("GridDiskUnsafe(%d): %v", k, err)
+			}
+
+			rings, err := origin.GridDiskDistancesUnsafe(k)
+			if err != nil {
+				t.Fatalf("GridDiskDistancesUnsafe(%d): %v", k, err)
+			}
+
+			var want []Cell
+			for _, ring := range rings {
+				want = append(want, ring...)
+			}
+
+			if len(flat) != len(want) {
+				t.Fatalf("GridDiskUnsafe(%d) length = %d, want %d", k, len(flat), len(want))
+			}
+
+			for i := range want {
+				if flat[i] != want[i] {
+					t.Fatalf("GridDiskUnsafe(%d)[%d] = %015x, want %015x", k, i, uint64(flat[i]), uint64(want[i]))
+				}
+			}
+		}
+	})
+}

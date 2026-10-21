@@ -21,26 +21,26 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/uber/h3-go/v4/x/h3go"
+	"github.com/uber/h3-go/v4"
 )
 
-// TestInspection runs every inspection record in the suite against h3go.
+// TestInspection runs every inspection record in the suite against h3.
 func TestInspection(t *testing.T) {
 	t.Parallel()
 
 	runGroup(t, "inspection/", checkInspection)
 }
 
-// checkInspection asserts every field of one inspection record against h3go.
+// checkInspection asserts every field of one inspection record against h3.
 func checkInspection(t *testing.T, record InspectionRecord) {
 	t.Helper()
 
-	index := h3go.IndexFromString(record.Index)
-	if got := h3go.IndexToString(index); got != record.Index {
+	index := h3.IndexFromString(record.Index)
+	if got := h3.IndexToString(index); got != record.Index {
 		t.Errorf("IndexToString(IndexFromString(%q)) = %q", record.Index, got)
 	}
 
-	cell := h3go.Cell(index)
+	cell := h3.Cell(index)
 
 	if got := cell.Resolution(); got != record.Res {
 		t.Errorf("Resolution() = %d, want %d", got, record.Res)
@@ -54,7 +54,7 @@ func checkInspection(t *testing.T, record InspectionRecord) {
 		t.Errorf("IsValid() = %v, want %v", got, record.ValidCell)
 	}
 
-	if got := h3go.IsValidIndex(cell); got != record.ValidIndex {
+	if got := h3.IsValidIndex(cell); got != record.ValidIndex {
 		t.Errorf("IsValidIndex() = %v, want %v", got, record.ValidIndex)
 	}
 
@@ -66,11 +66,11 @@ func checkInspection(t *testing.T, record InspectionRecord) {
 		t.Errorf("IsPentagon() = %v, want %v", got, record.Pentagon)
 	}
 
-	if len(record.Digits) != h3go.MaxResolution {
-		t.Fatalf("record has %d digits, want %d", len(record.Digits), h3go.MaxResolution)
+	if len(record.Digits) != h3.MaxResolution {
+		t.Fatalf("record has %d digits, want %d", len(record.Digits), h3.MaxResolution)
 	}
 
-	for r := 1; r <= h3go.MaxResolution; r++ {
+	for r := 1; r <= h3.MaxResolution; r++ {
 		got, err := cell.IndexDigit(r)
 		if err != nil {
 			t.Errorf("IndexDigit(%d): %v", r, err)
@@ -88,11 +88,11 @@ func checkInspection(t *testing.T, record InspectionRecord) {
 		t.Errorf("IcosahedronFaces() = %s, want %s", formatResult(got), formatResult(record.Faces))
 	}
 
-	constructed, err := h3go.ConstructCell(record.Res, record.BaseCell, record.Digits[:record.Res])
+	constructed, err := h3.ConstructCell(record.Res, record.BaseCell, record.Digits[:record.Res])
 
 	got := Result[string]{Err: ErrorName(err)}
 	if err == nil {
-		got.Value = h3go.IndexToString(uint64(constructed))
+		got.Value = h3.IndexToString(uint64(constructed))
 	}
 
 	if !equalResults(got, record.Construct, func(a, b string) bool { return a == b }) {

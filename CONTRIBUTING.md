@@ -10,32 +10,39 @@ Ask **questions** by posting to the [H3 tag on StackOverflow](https://stackoverf
   [changelog](./CHANGELOG.md).
 * Please open issues to discuss large features or changes which would break
   compatibility, before submitting pull requests.
-* Please keep code coverage of H3-Go library near 100%.
+* Please keep code coverage of the H3-Go library at 100%.
 
 ## Development
 
-Install dependencies:
+The library is pure Go and has no dependencies. Run tests:
 
 ```bash
-go get -t ./...
-```
-
-Run tests:
-
-```bash
-go test
+go test ./...
 ```
 
 Generate coverage:
 
 ```bash
-go test -coverprofile=covprofile && go tool cover -html=covprofile
+go test -coverprofile=covprofile . && go tool cover -html=covprofile
 ```
 
 Run lint:
 ```bash
-golangci-lint run
+golangci-lint run ./...
 ```
+
+### Updating H3
+
+The reference C library is a git submodule at `third_party/h3`, used only to
+regenerate the conformance suite. To move to a new release:
+
+```bash
+./update-h3.sh v4.6.0
+```
+
+It moves the submodule to the tag, writes `H3_VERSION`, updates the README
+badge and prints the regeneration steps, which are described in
+[conformance/README.md](./conformance/README.md#running-and-regenerating).
 
 ### Using VSCode
 
