@@ -37,6 +37,13 @@ const (
 	// RadsToDegs converts radians to degrees when multiplied.
 	RadsToDegs = 180.0 / math.Pi
 
+	// piDeg, twoPiDeg and halfPiDeg are angle spans in degrees, the units of
+	// the public API. They stand in for the H3 C library's radian M_PI, M_2PI
+	// and M_PI_2 when detecting and normalizing antimeridian-crossing geometry.
+	piDeg     = 180.0
+	twoPiDeg  = 360.0
+	halfPiDeg = 90.0
+
 	epsilon          = 1e-16
 	m2PI             = 2 * math.Pi
 	mSqrt7           = 2.6457513110645905905016157536392604257102

@@ -18,6 +18,7 @@ package h3
 
 import (
 	"math"
+	"strconv"
 	"testing"
 )
 
@@ -183,6 +184,123 @@ func TestBoundaryAreaEmpty(t *testing.T) {
 	if got := (CellBoundary{}).areaRads2(); got != 0 {
 		t.Fatalf("empty boundary area = %v, want 0", got)
 	}
+}
+
+// TestCellAreaAntimeridian checks that a cell straddling the antimeridian has
+// the same area as a neighbouring cell at the same resolution that does not.
+// Subtracting raw longitudes across ±180° loses the tiny true step to the
+// rounding of a value near 360°, which made straddling cells too small.
+func TestCellAreaAntimeridian(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		giveStraddling string
+		giveNeighbor   string
+	}{
+		"res13": {"8d056898db628bf", "8d056898db62d7f"},
+		"res14": {"8e32b605c51e067", "8e32b605c51e15f"},
+		"res15": {"8f7f809893b5b9d", "8f7f809893b5b9c"},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			straddling, err := CellAreaRads2(CellFromString(tt.giveStraddling))
+			if err != nil {
+				t.Fatalf("CellAreaRads2(%s): %v", tt.giveStraddling, err)
+			}
+
+			neighbor, err := CellAreaRads2(CellFromString(tt.giveNeighbor))
+			if err != nil {
+				t.Fatalf("CellAreaRads2(%s): %v", tt.giveNeighbor, err)
+			}
+
+			const tol = 1e-5
+			if rel := math.Abs(straddling-neighbor) / neighbor; rel > tol {
+				t.Fatalf("straddling area %.17g, neighbor %.17g: relative difference %.2e > %.0e",
+					straddling, neighbor, rel, tol)
+			}
+		})
+	}
+}
+
+// TestCellAreaAntimeridianRotation checks, at every resolution, that a cell on
+// the antimeridian keeps its area when its boundary is rotated 180° about the
+// polar axis, which moves it onto the prime meridian where no edge crosses
+// ±180°. A rotation cannot change an area, so no reference values are needed.
+func TestCellAreaAntimeridianRotation(t *testing.T) {
+	t.Parallel()
+
+	for res := 0; res <= MaxResolution; res++ {
+		t.Run(strconv.Itoa(res), func(t *testing.T) {
+			t.Parallel()
+
+			for _, lat := range []float64{-60, 0, 45} {
+				cell, err := LatLngToCell(NewLatLng(lat, 180), res)
+				if err != nil {
+					t.Fatalf("LatLngToCell: %v", err)
+				}
+
+				boundary, err := cell.Boundary()
+				if err != nil {
+					t.Fatalf("Boundary: %v", err)
+				}
+
+				rotated := make(CellBoundary, len(boundary))
+				for i := range boundary {
+					rotated[i] = LatLng{Lat: boundary[i].Lat, Lng: rotateHalfTurn(boundary[i].Lng)}
+				}
+
+				const tol = 1e-6
+
+				got, want := boundary.areaRads2(), rotated.areaRads2()
+				if rel := math.Abs(got-want) / want; rel > tol {
+					t.Fatalf("%s: area %.17g, rotated %.17g: relative difference %.2e > %.0e",
+						cell, got, want, rel, tol)
+				}
+			}
+		})
+	}
+}
+
+// TestBoundaryAreaAntimeridianTriangle checks that a small triangle across
+// ±180° has the same area as the same triangle across 0°. A triangle rather
+// than a rectangle: a rectangle's two crossing edges have identical longitude
+// differences, so their rounding errors cancel and hide the defect.
+func TestBoundaryAreaAntimeridianTriangle(t *testing.T) {
+	t.Parallel()
+
+	const halfWidth = 1e-6
+
+	prime := CellBoundary{
+		{Lat: 0, Lng: -halfWidth},
+		{Lat: 0, Lng: halfWidth},
+		{Lat: 2 * halfWidth, Lng: 0},
+	}
+
+	anti := make(CellBoundary, len(prime))
+	for i := range prime {
+		anti[i] = LatLng{Lat: prime[i].Lat, Lng: rotateHalfTurn(prime[i].Lng)}
+	}
+
+	const tol = 1e-9
+
+	got, want := anti.areaRads2(), prime.areaRads2()
+	if rel := math.Abs(got-want) / want; rel > tol {
+		t.Fatalf("antimeridian triangle area %.17g, prime meridian %.17g: relative difference %.2e > %.0e",
+			got, want, rel, tol)
+	}
+}
+
+// rotateHalfTurn returns the longitude 180° east of lng, wrapped to (-180, 180].
+func rotateHalfTurn(lng float64) float64 {
+	rotated := lng + piDeg
+	if rotated > piDeg {
+		rotated -= twoPiDeg
+	}
+
+	return rotated
 }
 
 // assertRelClose fails if got and want differ by more than a small relative

@@ -2175,7 +2175,7 @@ static void writeManifest(const char *outDir, const char *version, uint64_t seed
 /* ---- curated files (README, "Curated files") ---- */
 
 #define COUNT(array) (sizeof(array) / sizeof((array)[0]))
-#define NUM_CURATED_FILES 6
+#define NUM_CURATED_FILES 7
 #define MAX_CURATED_VERTS 16
 
 /* Indexes from the reference's own tests and command-line fixtures, plus
@@ -2187,6 +2187,31 @@ static const uint64_t CURATED_INSPECTION[] = {
     UINT64_C(0x80c3fffffffffff),  UINT64_C(0x8f283080dcb0ae2), UINT64_C(0x88283080ddfffff),
     UINT64_C(0x81083ffffffffff),  UINT64_C(0x81087ffffffffff), UINT64_C(0x82080ffffffffff),
     UINT64_C(0x8029fffffffffff),  UINT64_C(0x85283472fffffff),
+};
+
+/* Cells on the antimeridian: the three straddling and non-straddling pairs
+ * from the reference's cellArea tests, then the cell containing (lat, 180)
+ * at every resolution for lat 0, 45 and -60. Their areas depend on the
+ * reference subtracting edge longitudes on one side of +-180. */
+static const uint64_t CURATED_FLOATS[] = {
+    UINT64_C(0x8d056898db628bf), UINT64_C(0x8d056898db62d7f), UINT64_C(0x8e32b605c51e067),
+    UINT64_C(0x8e32b605c51e15f), UINT64_C(0x8f7f809893b5b9d), UINT64_C(0x8f7f809893b5b9c),
+    UINT64_C(0x807ffffffffffff),  UINT64_C(0x817ebffffffffff), UINT64_C(0x827eb7fffffffff),
+    UINT64_C(0x837eb5fffffffff),  UINT64_C(0x847eb57ffffffff), UINT64_C(0x857eb573fffffff),
+    UINT64_C(0x867eb5727ffffff),  UINT64_C(0x877eb5722ffffff), UINT64_C(0x887eb57221fffff),
+    UINT64_C(0x897eb57221bffff),  UINT64_C(0x8a7eb57221a7fff), UINT64_C(0x8b7eb57221a2fff),
+    UINT64_C(0x8c7eb57221a2bff),  UINT64_C(0x8d7eb57221a2bbf), UINT64_C(0x8e7eb57221a2bb7),
+    UINT64_C(0x8f7eb57221a2bb0),  UINT64_C(0x8023fffffffffff), UINT64_C(0x81227ffffffffff),
+    UINT64_C(0x822267fffffffff),  UINT64_C(0x832261fffffffff), UINT64_C(0x842261bffffffff),
+    UINT64_C(0x852261abfffffff),  UINT64_C(0x862261a9fffffff), UINT64_C(0x872261a9dffffff),
+    UINT64_C(0x882261a9d5fffff),  UINT64_C(0x892261a9d5bffff), UINT64_C(0x8a2261a9d5b7fff),
+    UINT64_C(0x8b2261a9d5b3fff),  UINT64_C(0x8c2261a9d5b37ff), UINT64_C(0x8d2261a9d5b373f),
+    UINT64_C(0x8e2261a9d5b3707),  UINT64_C(0x8f2261a9d5b3701), UINT64_C(0x80ebfffffffffff),
+    UINT64_C(0x81eabffffffffff),  UINT64_C(0x82eab7fffffffff), UINT64_C(0x83eab6fffffffff),
+    UINT64_C(0x84eab63ffffffff),  UINT64_C(0x85eab637fffffff), UINT64_C(0x86eab634fffffff),
+    UINT64_C(0x87eab6348ffffff),  UINT64_C(0x88eab63487fffff), UINT64_C(0x89eab634873ffff),
+    UINT64_C(0x8aeab634872ffff),  UINT64_C(0x8beab634872dfff), UINT64_C(0x8ceab634872d3ff),
+    UINT64_C(0x8deab634872d2bf),  UINT64_C(0x8eeab634872d2b7), UINT64_C(0x8feab634872d2b4),
 };
 
 static const uint64_t CURATED_HIERARCHY[] = {
@@ -2486,7 +2511,7 @@ static void writeCuratedPolygons(const char *outDir, FileInfo *info) {
     finishFile(out, path, info);
 }
 
-/* writeCuratedFiles writes the six curated files and their manifest entries. */
+/* writeCuratedFiles writes the seven curated files and their manifest entries. */
 static void writeCuratedFiles(const char *outDir, uint64_t seed, FileInfo *files) {
     files[0] = (FileInfo){"inspection/curated.jsonl", 0, ""};
     writeCuratedIndexes(outDir, seed, &files[0], CURATED_INSPECTION, COUNT(CURATED_INSPECTION),
@@ -2502,6 +2527,9 @@ static void writeCuratedFiles(const char *outDir, uint64_t seed, FileInfo *files
     writeCuratedSets(outDir, &files[4]);
     files[5] = (FileInfo){"regions/curated.jsonl", 0, ""};
     writeCuratedPolygons(outDir, &files[5]);
+    files[6] = (FileInfo){"floats/curated.jsonl", 0, ""};
+    writeCuratedIndexes(outDir, seed, &files[6], CURATED_FLOATS, COUNT(CURATED_FLOATS),
+                        writeFloatCellRecord);
 }
 
 /* Every record file of the suite, in manifest order. */
@@ -2514,7 +2542,7 @@ static const char *const SUITE_FILES[] = {
     "floats/resolutions.jsonl", "digests/resolutions.jsonl", "digests/baseCells.jsonl",
     "digests/patterns.jsonl",  "inspection/curated.jsonl",  "hierarchy/curated.jsonl",
     "traversal/curated.jsonl", "localij/curated.jsonl",     "sets/curated.jsonl",
-    "regions/curated.jsonl",
+    "regions/curated.jsonl",   "floats/curated.jsonl",
 };
 
 /* writeManifestFromDisk describes every suite file as it is on disk and

@@ -48,7 +48,7 @@
     },
     "floats/cells.jsonl": {
       "records": 542,
-      "sha256": "c7e98c8a9925acbfd1e0b0b80bde7d08359b696a7819c873075a7a8e41fa034c"
+      "sha256": "9ff63d7c16550de734de6dc4940387565aa9962c118a27d396c95947aaaaf0dd"
     },
     "floats/edges.jsonl": {
       "records": 920,
@@ -101,6 +101,10 @@
     "regions/curated.jsonl": {
       "records": 22,
       "sha256": "744612eb48f5e731cd0a30174878ddcaf76209931aea04e9081e4d9956ec30af"
+    },
+    "floats/curated.jsonl": {
+      "records": 54,
+      "sha256": "5200d771c161d00ec6ed70311d7647d90d04929dc36ddf0b2d95a55aa10a5c28"
     }
   }
 }

@@ -26,7 +26,7 @@ const dblEpsilon = 2.2204460492503131e-16
 // frame.
 func normalizeLng(lng float64, isTransmeridian bool) float64 {
 	if isTransmeridian && lng < 0 {
-		return lng + twoPiRad
+		return lng + m2PI
 	}
 
 	return lng
