@@ -22,7 +22,9 @@ import "math"
 const (
 	// MaxResolution is the finest H3 resolution.
 	MaxResolution = 15
-	// MaxCellBndryVerts is the maximum number of vertices in a CellBoundary.
+	// MaxCellBndryVerts is the most vertices a CellBoundary can have: six
+	// topological vertices plus up to four where Class III edges cross
+	// icosahedron face edges.
 	MaxCellBndryVerts = 10
 	// NumBaseCells is the number of resolution-0 base cells.
 	NumBaseCells = 122
@@ -33,94 +35,140 @@ const (
 	// InvalidH3Index is the zero value returned for an invalid index.
 	InvalidH3Index = 0
 	// DegsToRads converts degrees to radians when multiplied.
-	DegsToRads = math.Pi / 180.0
+	DegsToRads = math.Pi / piDeg
 	// RadsToDegs converts radians to degrees when multiplied.
-	RadsToDegs = 180.0 / math.Pi
+	RadsToDegs = piDeg / math.Pi
+)
 
-	// piDeg, twoPiDeg and halfPiDeg are angle spans in degrees, the units of
-	// the public API. They stand in for the H3 C library's radian M_PI, M_2PI
-	// and M_PI_2 when detecting and normalizing antimeridian-crossing geometry.
+// Angle spans in degrees, the units of the public API. They stand in for the
+// H3 C library's radian M_PI, M_2PI and M_PI_2 when detecting and normalizing
+// antimeridian-crossing geometry.
+const (
 	piDeg     = 180.0
-	twoPiDeg  = 360.0
-	halfPiDeg = 90.0
+	twoPiDeg  = 2 * piDeg
+	halfPiDeg = piDeg / 2
+)
 
-	epsilon          = 1e-16
-	m2PI             = 2 * math.Pi
-	mSqrt7           = 2.6457513110645905905016157536392604257102
-	mRSqrt7          = 0.37796447300922722721451653623418006081576
-	mRSin60          = 1.1547005383792515290182975610039149112953
-	mSqrt3Half       = 0.8660254037844386467637231707529361834714
-	mOneSeventh      = 1.0 / 7.0
-	mOneThird        = 1.0 / 3.0
-	mAP7RotRads      = 0.333473172251832115336090755351601070065900389
-	invRes0UGnomonic = 2.61803398874989588842
-	res0UGnomonic    = 0.38196601125010500003
-	maxFaceCoord     = 2
-
-	// numHexVerts and numPentVerts are the topological vertex counts of a
-	// hexagon and a pentagon cell, respectively.
-	numHexVerts  = 6
-	numPentVerts = 5
-
-	// maxCellBoundaryVerts is the most vertices a cell boundary can have: six
-	// topological vertices plus up to four where Class III edges cross
-	// icosahedron face edges.
-	maxCellBoundaryVerts = 10
-
-	// maxEdgeBoundaryVerts is the most vertices a directed edge boundary can
-	// have: its two endpoints plus one where a Class III edge crosses an
-	// icosahedron face edge.
-	maxEdgeBoundaryVerts = 3
-
+// Mathematical constants from the H3 C library's constants.h, kept to the
+// same digits so projections round identically.
+const (
+	// epsilon is the threshold below which two unit vectors are the same point.
+	epsilon = 1e-16
 	// fltEpsilon is the 32-bit float epsilon used to detect when a cell-boundary
 	// edge intersection coincides with an existing vertex, matching the H3 C
 	// library's use of FLT_EPSILON.
 	fltEpsilon = 1.1920928955078125e-07
 
-	// faceNeighbors quadrant indices: the direction from a face to the adjacent
-	// face that shares the corresponding pair of axes.
-	dirIJ = 1
-	dirKI = 2
-	dirJK = 3
+	m2PI        = 2 * math.Pi
+	mSqrt7      = 2.6457513110645905905016157536392604257102
+	mRSqrt7     = 0.37796447300922722721451653623418006081576
+	mRSin60     = 1.1547005383792515290182975610039149112953
+	mSqrt3Half  = 0.8660254037844386467637231707529361834714
+	mOneSeventh = 1.0 / 7.0
+	mOneThird   = 1.0 / 3.0
+	// mAP7RotRads is the rotation angle between Class II and Class III
+	// resolution axes, asin(sqrt(3/28)).
+	mAP7RotRads = 0.333473172251832115336090755351601070065900389
+
+	// res0UGnomonic is the scaling factor from hex2d to gnomonic coordinates
+	// at resolution 0; invRes0UGnomonic is its inverse.
+	res0UGnomonic    = 0.38196601125010500003
+	invRes0UGnomonic = 2.61803398874989588842
 
 	// earthRadiusKm is the authalic (equal-area) radius of the Earth in
 	// kilometers, used to convert spherical measures to physical units.
 	earthRadiusKm = 6371.007180918475
 
-	// h3Init has all 15 digit slots set to 7 (invalid); mode/res/base cell are 0.
-	h3Init = 35184372088831
+	// maxFaceCoord is the largest IJK coordinate on a resolution-0 face.
+	maxFaceCoord = 2
+)
 
-	centerDigit  = 0
-	kAxesDigit   = 1
-	jAxesDigit   = 2
-	jkAxesDigit  = 3
-	iAxesDigit   = 4
-	ikAxesDigit  = 5
-	ijAxesDigit  = 6
-	invalidDigit = 7
-	numDigits    = 7
+// Cell geometry counts.
+const (
+	// numHexVerts and numPentVerts are the topological vertex counts of a
+	// hexagon and a pentagon cell, respectively.
+	numHexVerts  = 6
+	numPentVerts = 5
 
-	// H3 index bit-layout offsets and masks, matching h3_h3Index.h and
-	// h3_constants.h.
-	modeOffset       = 59  // H3_MODE_OFFSET
-	resolutionOffset = 52  // H3_RES_OFFSET
-	baseCellOffset   = 45  // H3_BC_OFFSET
-	perDigitOffset   = 3   // H3_PER_DIGIT_OFFSET
-	digitMask        = 7   // H3_DIGIT_MASK
-	resolutionMask   = 0xF // low 4 bits of the resolution field
-
-	// numCellEdges is the number of directed edges originating at a cell.
-	numCellEdges = 6
+	// numCellEdges is the number of directed edges originating at a cell, one
+	// per hexagon vertex.
+	numCellEdges = numHexVerts
 	// oneRingSize is the cell count of a grid disk of radius 1: the origin
 	// plus one neighbor per edge.
 	oneRingSize = numCellEdges + 1
 	// numEdgeCells is the number of cells a directed edge connects.
 	numEdgeCells = 2
+
+	// maxEdgeBoundaryVerts is the most vertices a directed edge boundary can
+	// have: its two endpoints plus one where a Class III edge crosses an
+	// icosahedron face edge.
+	maxEdgeBoundaryVerts = 3
+)
+
+// Index digits, the H3 C library's Direction enum: the IJK axes a digit
+// points along, with the K, J and I bits valued 1, 2 and 4.
+const (
+	centerDigit = iota // no axes
+	kAxesDigit         // K
+	jAxesDigit         // J
+	jkAxesDigit        // J and K
+	iAxesDigit         // I
+	ikAxesDigit        // I and K
+	ijAxesDigit        // I and J
+	numDigits          // every valid digit is below it; also the unset value of a digit
+)
+
+// faceNeighbors slot indices: the direction from a face to the adjacent face
+// that shares the corresponding pair of axes. Slot 0 is the face itself.
+const (
+	dirIJ = iota + 1
+	dirKI
+	dirJK
+)
+
+// H3 index bit layout, matching h3Index.h: from the high bit down, one
+// reserved high bit, a 4-bit mode, 3 reserved bits, a 4-bit resolution, a
+// 7-bit base cell and fifteen 3-bit digits.
+const (
+	bitSize = 64
+
+	modeOffset       = 59 // H3_MODE_OFFSET
+	reservedOffset   = 56 // H3_RESERVED_OFFSET
+	resolutionOffset = 52 // H3_RES_OFFSET
+	baseCellOffset   = 45 // H3_BC_OFFSET
+	perDigitOffset   = 3  // H3_PER_DIGIT_OFFSET
+
+	// Field masks, applied after shifting the field down.
+	modeMask       = 0xF
+	reservedMask   = 0x7
+	resolutionMask = 0xF
+	baseCellMask   = 0x7F
+	digitMask      = 1<<perDigitOffset - 1
+
+	// digitRegionOffset is the number of non-digit bits above the fifteen
+	// 3-bit digits: high bit, mode, reserved, resolution and base cell, 19.
+	digitRegionOffset = bitSize - MaxResolution*perDigitOffset
+
+	// h3Init has every digit set to numDigits and every other field zero.
+	h3Init = 1<<(MaxResolution*perDigitOffset) - 1
+
+	// validCellTopBits is the expected value of the top 8 bits of a valid cell:
+	// high bit 0, mode 1 (cell), reserved 000.
+	validCellTopBits = 0b00001000
+
+	// base16 is the radix of an index's string form.
+	base16 = 16
+)
+
+// Sentinels in the lookup tables.
+const (
 	// invalidVertexNum marks a vertex number that is not valid for a cell.
 	invalidVertexNum = -1
 	// invalidRotations marks a base cell that is not found on a queried face.
 	invalidRotations = -1
-
+	// invalidFace marks an unused slot while collecting a cell's icosahedron
+	// faces.
+	invalidFace = -1
 	// invalidBaseCell is the sentinel in baseCellNeighbors marking the missing
 	// neighbor across a pentagon's deleted k-axis edge.
 	invalidBaseCell = 127
@@ -137,7 +185,7 @@ var (
 
 	// unitIjkToDigitLUT precomputes the digit for each normalized unit IJK.
 	// Valid unit IJK coordinates have at most one of i/j/k as 1 and the rest 0.
-	// Indexed by [i][j][k] for i,j,k in {0,1}. Invalid entries map to invalidDigit.
+	// Indexed by [i][j][k] for i,j,k in {0,1}. Invalid entries map to numDigits.
 	unitIjkToDigitLUT = [2][2][2]int{
 		{
 			{centerDigit, kAxesDigit},
@@ -145,7 +193,7 @@ var (
 		},
 		{
 			{iAxesDigit, ikAxesDigit},
-			{ijAxesDigit, invalidDigit},
+			{ijAxesDigit, numDigits},
 		},
 	}
 

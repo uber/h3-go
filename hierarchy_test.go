@@ -379,7 +379,7 @@ func TestCellToChildPosInvalidDigit(t *testing.T) {
 		t.Parallel()
 
 		// Hexagon base cell 0, res-2, with an unused (7) digit in a used slot.
-		cell := setH3Index(2, 0, centerDigit).setIndexDigit(2, invalidDigit)
+		cell := setH3Index(2, 0, centerDigit).setIndexDigit(2, numDigits)
 		if _, err := CellToChildPos(cell, 1); !errors.Is(err, ErrCellInvalid) {
 			t.Fatalf("CellToChildPos(hexagon invalid digit): got %v, want ErrCellInvalid", err)
 		}

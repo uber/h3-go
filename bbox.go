@@ -120,7 +120,7 @@ func (c Cell) hexRadiusKm() float64 {
 	res := c.Resolution()
 	center := fijk.toVec3(res).toLatLng()
 
-	var buf [maxCellBoundaryVerts]LatLng
+	var buf [MaxCellBndryVerts]LatLng
 
 	var boundary CellBoundary
 	if c.IsPentagon() {

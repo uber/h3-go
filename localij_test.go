@@ -542,7 +542,7 @@ func TestLocalIJDefensive(t *testing.T) {
 	neighbor := res2Cell(neighborBC)
 
 	// A pentagon index whose leading digit is the unused sentinel.
-	corruptLead := pentagon.setIndexDigit(1, invalidDigit)
+	corruptLead := pentagon.setIndexDigit(1, numDigits)
 	// A pentagon index whose leading digit is the deleted k axis.
 	corruptK := pentagon.setIndexDigit(1, kAxesDigit)
 
@@ -676,7 +676,7 @@ func TestGridPathInterpolateError(t *testing.T) {
 		t.Fatalf("Pentagons(2): %v", err)
 	}
 
-	corrupt := pent[0].setIndexDigit(1, invalidDigit)
+	corrupt := pent[0].setIndexDigit(1, numDigits)
 	out := make([]Cell, 2)
 
 	if err := gridPathInterpolate(corrupt, pent[0], 1, out, 0, 1); !errors.Is(err, ErrCellInvalid) {

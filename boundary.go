@@ -32,7 +32,7 @@ func CellToBoundary(c Cell) (CellBoundary, error) {
 // Boundary returns the geographic boundary of the cell as an ordered list of
 // vertices in degrees.
 func (c Cell) Boundary() (CellBoundary, error) {
-	return c.appendBoundary(make(CellBoundary, 0, maxCellBoundaryVerts))
+	return c.appendBoundary(make(CellBoundary, 0, MaxCellBndryVerts))
 }
 
 // appendBoundary appends the geographic boundary of the cell to out and returns

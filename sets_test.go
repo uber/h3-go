@@ -42,8 +42,8 @@ func TestSetH3IndexValue(t *testing.T) {
 	}
 
 	for r := 6; r <= MaxResolution; r++ {
-		if indexDigit(h, r) != invalidDigit {
-			t.Fatalf("digit %d = %d, want %d", r, indexDigit(h, r), invalidDigit)
+		if indexDigit(h, r) != numDigits {
+			t.Fatalf("digit %d = %d, want %d", r, indexDigit(h, r), numDigits)
 		}
 	}
 

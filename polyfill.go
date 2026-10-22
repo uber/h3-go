@@ -298,10 +298,10 @@ func nextCell(cell Cell) Cell {
 			return baseCellNumToCell(cell.BaseCellNumber() + 1)
 		}
 
-		parent := cell.setResolution(res-1).setIndexDigit(res, digitMask)
+		parent := cell.setResolution(res-1).setIndexDigit(res, numDigits)
 
 		digit := indexDigit(cell, res)
-		if digit < invalidDigit-1 {
+		if digit < numDigits-1 {
 			step := 1
 			// Skip the missing center child of a pentagon.
 			if parent.IsPentagon() && digit == centerDigit {
