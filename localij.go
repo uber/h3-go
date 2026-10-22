@@ -29,7 +29,7 @@ type CoordIJ struct {
 }
 
 // getBaseCellDirection returns the digit direction from one base cell to a
-// neighboring base cell, or invalidDigit if they are not neighbors.
+// neighboring base cell, or numDigits if they are not neighbors.
 func getBaseCellDirection(originBaseCell, neighborBaseCell int) int {
 	for dir := centerDigit; dir < numDigits; dir++ {
 		if baseCellNeighbors[originBaseCell][dir] == neighborBaseCell {
@@ -37,7 +37,7 @@ func getBaseCellDirection(originBaseCell, neighborBaseCell int) int {
 		}
 	}
 
-	return invalidDigit
+	return numDigits
 }
 
 // cubeRound rounds floating-point cube coordinates to the nearest valid integer
@@ -86,7 +86,7 @@ func (c Cell) cellToLocalIjk(target Cell) (coordIJK, error) {
 
 	if originBaseCell != baseCell {
 		dir = getBaseCellDirection(originBaseCell, baseCell)
-		if dir == invalidDigit {
+		if dir == numDigits {
 			return coordIJK{}, ErrFailed
 		}
 
@@ -130,7 +130,7 @@ func (c Cell) cellToLocalIjk(target Cell) (coordIJK, error) {
 
 		if originOnPent {
 			originLeadingDigit := c.leadingNonZeroDigit()
-			if originLeadingDigit == invalidDigit {
+			if originLeadingDigit == numDigits {
 				return coordIJK{}, ErrCellInvalid
 			}
 
@@ -142,7 +142,7 @@ func (c Cell) cellToLocalIjk(target Cell) (coordIJK, error) {
 			pentagonRots = directionRots
 		} else if indexOnPent {
 			indexLeadingDigit := index.leadingNonZeroDigit()
-			if indexLeadingDigit == invalidDigit {
+			if indexLeadingDigit == numDigits {
 				return coordIJK{}, ErrCellInvalid
 			}
 
@@ -181,7 +181,7 @@ func (c Cell) cellToLocalIjk(target Cell) (coordIJK, error) {
 		originLeadingDigit := c.leadingNonZeroDigit()
 		indexLeadingDigit := index.leadingNonZeroDigit()
 
-		if originLeadingDigit == invalidDigit || indexLeadingDigit == invalidDigit {
+		if originLeadingDigit == numDigits || indexLeadingDigit == numDigits {
 			return coordIJK{}, ErrCellInvalid
 		}
 
@@ -217,7 +217,7 @@ func (c Cell) localIjkToCell(ijk coordIJK) (Cell, error) {
 	// res 0 / base cell case.
 	if res == 0 {
 		dir := ijk.unitToDigit()
-		if dir == invalidDigit {
+		if dir == numDigits {
 			return 0, ErrFailed
 		}
 
@@ -272,7 +272,7 @@ func (c Cell) localIjkToCell(ijk coordIJK) (Cell, error) {
 		originLeadingDigit := c.leadingNonZeroDigit()
 		indexLeadingDigit := out.leadingNonZeroDigit()
 
-		if originLeadingDigit == invalidDigit || indexLeadingDigit == invalidDigit {
+		if originLeadingDigit == numDigits || indexLeadingDigit == numDigits {
 			return 0, ErrCellInvalid
 		}
 
@@ -306,7 +306,7 @@ func (c Cell) localIjkToCellOffOrigin(out Cell, dir, originBaseCell, baseCell in
 
 	if originOnPent {
 		originLeadingDigit := c.leadingNonZeroDigit()
-		if originLeadingDigit == invalidDigit {
+		if originLeadingDigit == numDigits {
 			return 0, 0, ErrCellInvalid
 		}
 

@@ -91,9 +91,9 @@ func TestCellToBoundarySweep(t *testing.T) {
 			minVerts = numPentVerts
 		}
 
-		if len(boundary) < minVerts || len(boundary) > maxCellBoundaryVerts {
+		if len(boundary) < minVerts || len(boundary) > MaxCellBndryVerts {
 			t.Fatalf("CellToBoundary(%015x): %d vertices, want %d..%d",
-				uint64(c), len(boundary), minVerts, maxCellBoundaryVerts)
+				uint64(c), len(boundary), minVerts, MaxCellBndryVerts)
 		}
 
 		for i, vert := range boundary {

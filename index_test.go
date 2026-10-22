@@ -260,7 +260,7 @@ func TestConstructCell(t *testing.T) {
 		"digits_shorter_than_res_pads_centers": {giveRes: 3, giveBaseCell: 0, giveDigits: []int{0, 0}, wantCell: setH3Index(3, 0, 0)},
 		"digits_empty_pads_centers":            {giveRes: 2, giveBaseCell: 0, giveDigits: nil, wantCell: setH3Index(2, 0, 0)},
 		"digit_negative":                       {giveRes: 1, giveBaseCell: 0, giveDigits: []int{-1}, wantErr: ErrDigitDomain},
-		"digit_is_invalid":                     {giveRes: 1, giveBaseCell: 0, giveDigits: []int{invalidDigit}, wantErr: ErrDigitDomain},
+		"digit_is_invalid":                     {giveRes: 1, giveBaseCell: 0, giveDigits: []int{numDigits}, wantErr: ErrDigitDomain},
 		"pentagon_deleted_k_axis":              {giveRes: 1, giveBaseCell: 4, giveDigits: []int{kAxesDigit}, wantErr: ErrDeletedDigit},
 		"pentagon_deleted_below_centers":       {giveRes: 3, giveBaseCell: 4, giveDigits: []int{0, 0, kAxesDigit}, wantErr: ErrDeletedDigit},
 		"res_zero_ignores_nil_digits":          {giveRes: 0, giveBaseCell: 14, giveDigits: nil, wantCell: setH3Index(0, 14, 0)},

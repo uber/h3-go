@@ -116,7 +116,7 @@ func TestVertexNumForDirectionInvalid(t *testing.T) {
 		t.Fatalf("vertexNumForDirection(center): got %d, want %d", got, invalidVertexNum)
 	}
 
-	if got := hexagon.vertexNumForDirection(invalidDigit); got != invalidVertexNum {
+	if got := hexagon.vertexNumForDirection(numDigits); got != invalidVertexNum {
 		t.Fatalf("vertexNumForDirection(invalid): got %d, want %d", got, invalidVertexNum)
 	}
 
@@ -135,12 +135,12 @@ func TestDirectionForVertexNumInvalid(t *testing.T) {
 	t.Parallel()
 
 	hexagon := CellFromString("8928308280fffff")
-	if got := hexagon.directionForVertexNum(-1); got != invalidDigit {
-		t.Fatalf("directionForVertexNum(-1): got %d, want %d", got, invalidDigit)
+	if got := hexagon.directionForVertexNum(-1); got != numDigits {
+		t.Fatalf("directionForVertexNum(-1): got %d, want %d", got, numDigits)
 	}
 
-	if got := hexagon.directionForVertexNum(numHexVerts); got != invalidDigit {
-		t.Fatalf("directionForVertexNum(6): got %d, want %d", got, invalidDigit)
+	if got := hexagon.directionForVertexNum(numHexVerts); got != numDigits {
+		t.Fatalf("directionForVertexNum(6): got %d, want %d", got, numDigits)
 	}
 }
 
@@ -159,8 +159,8 @@ func TestVertexRotationsError(t *testing.T) {
 		t.Fatalf("vertexNumForDirection(corrupt): got %d, want %d", got, invalidVertexNum)
 	}
 
-	if got := corrupt.directionForVertexNum(0); got != invalidDigit {
-		t.Fatalf("directionForVertexNum(corrupt): got %d, want %d", got, invalidDigit)
+	if got := corrupt.directionForVertexNum(0); got != numDigits {
+		t.Fatalf("directionForVertexNum(corrupt): got %d, want %d", got, numDigits)
 	}
 }
 

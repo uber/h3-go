@@ -123,7 +123,7 @@ func baseCellIsCwOffset(baseCell, testFace int) bool {
 func (c Cell) neighborRotations(dir, rotations int) (Cell, int, error) {
 	current := c
 
-	if dir < centerDigit || dir >= invalidDigit {
+	if dir < centerDigit || dir >= numDigits {
 		return 0, 0, ErrFailed
 	}
 
@@ -162,7 +162,7 @@ func (c Cell) neighborRotations(dir, rotations int) (Cell, int, error) {
 		}
 
 		oldDigit := indexDigit(current, res+1)
-		if oldDigit == invalidDigit {
+		if oldDigit == numDigits {
 			return 0, 0, ErrCellInvalid
 		}
 
@@ -661,7 +661,7 @@ func (c Cell) IsNeighbor(other Cell) (bool, error) {
 				return true, nil
 			}
 
-			if originResDigit >= invalidDigit {
+			if originResDigit >= numDigits {
 				return false, ErrCellInvalid
 			}
 
@@ -709,7 +709,7 @@ func (c Cell) IsNeighbor(other Cell) (bool, error) {
 }
 
 // directionForNeighbor returns the digit direction from origin to destination,
-// the reverse of stepping a neighbor. It returns invalidDigit when the cells are
+// the reverse of stepping a neighbor. It returns numDigits when the cells are
 // not neighbors. It checks each neighbor in turn, skipping the center (which is
 // the origin) and the deleted k axis for pentagons.
 func (c Cell) directionForNeighbor(destination Cell) int {
@@ -725,7 +725,7 @@ func (c Cell) directionForNeighbor(destination Cell) int {
 		}
 	}
 
-	return invalidDigit
+	return numDigits
 }
 
 // baseCellToCCWrot60 returns the number of 60° counterclockwise rotations for a

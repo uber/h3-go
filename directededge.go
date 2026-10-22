@@ -27,7 +27,7 @@ type DirectedEdge int64
 // neighbors at the same resolution, otherwise it returns ErrNotNeighbors.
 func (c Cell) DirectedEdge(other Cell) (DirectedEdge, error) {
 	direction := c.directionForNeighbor(other)
-	if direction == invalidDigit {
+	if direction == numDigits {
 		return 0, ErrNotNeighbors
 	}
 

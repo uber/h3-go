@@ -54,11 +54,11 @@ var (
 
 	// directionToVertexNumHex maps a hexagon direction digit to its first vertex
 	// number (same face). Direction 0 (center) is unused.
-	directionToVertexNumHex = [numDigits]int{invalidDigit, 3, 1, 2, 5, 4, 0}
+	directionToVertexNumHex = [numDigits]int{numDigits, 3, 1, 2, 5, 4, 0}
 
 	// directionToVertexNumPent maps a pentagon direction digit to its first vertex
 	// number (same face). Directions 0 (center) and 1 (deleted K axis) are unused.
-	directionToVertexNumPent = [numDigits]int{invalidDigit, invalidDigit, 1, 2, 4, 3, 0}
+	directionToVertexNumPent = [numDigits]int{numDigits, numDigits, 1, 2, 4, 3, 0}
 
 	// vertexNumToDirectionHex maps a hexagon vertex number to its direction digit.
 	vertexNumToDirectionHex = [numHexVerts]int{
@@ -73,7 +73,7 @@ var (
 	// revNeighborDirectionsHex maps a direction digit to the reverse direction from
 	// the neighbor in that direction, given as an index into directions to allow
 	// rotation. Direction 0 (center) is unused.
-	revNeighborDirectionsHex = [numDigits]int{invalidDigit, 5, 3, 4, 1, 0, 2}
+	revNeighborDirectionsHex = [numDigits]int{numDigits, 5, 3, 4, 1, 0, 2}
 )
 
 // vertexRotations returns the number of counterclockwise 60° rotations of the
@@ -129,7 +129,7 @@ func (c Cell) vertexRotations() (int, error) {
 // sequence. It returns invalidVertexNum if the direction is not valid.
 func (c Cell) vertexNumForDirection(direction int) int {
 	isPent := c.IsPentagon()
-	if direction == centerDigit || direction >= invalidDigit || (isPent && direction == kAxesDigit) {
+	if direction == centerDigit || direction >= numDigits || (isPent && direction == kAxesDigit) {
 		return invalidVertexNum
 	}
 
@@ -146,7 +146,7 @@ func (c Cell) vertexNumForDirection(direction int) int {
 }
 
 // directionForVertexNum returns the direction for the neighbor between the given
-// vertex number and the next in sequence, or invalidDigit if the vertex number
+// vertex number and the next in sequence, or numDigits if the vertex number
 // is not valid for the cell.
 func (c Cell) directionForVertexNum(vertexNum int) int {
 	isPent := c.IsPentagon()
@@ -157,12 +157,12 @@ func (c Cell) directionForVertexNum(vertexNum int) int {
 	}
 
 	if vertexNum < 0 || vertexNum > maxVerts-1 {
-		return invalidDigit
+		return numDigits
 	}
 
 	rotations, err := c.vertexRotations()
 	if err != nil {
-		return invalidDigit
+		return numDigits
 	}
 
 	if isPent {
@@ -216,7 +216,7 @@ func (c Cell) vertexOwner(vertexNum, cellNumVerts, res int) (Cell, int, error) {
 
 	// Left neighbor of the vertex, with its rotations.
 	left := c.directionForVertexNum(vertexNum)
-	if left == invalidDigit {
+	if left == numDigits {
 		return 0, 0, ErrFailed
 	}
 

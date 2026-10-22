@@ -21,13 +21,6 @@ import (
 	"slices"
 )
 
-// Child-set sizes: a hexagon has 7 immediate children, a pentagon 6 (its
-// K-axis child is deleted).
-const (
-	numHexChildren  = 7
-	numPentChildren = 6
-)
-
 // setResolution returns the cell with its resolution field set to res.
 func (c Cell) setResolution(res int) Cell {
 	c &= ^(Cell(resolutionMask) << resolutionOffset)
@@ -171,7 +164,7 @@ func (c Cell) childCells(childRes int) iter.Seq[Cell] {
 					break
 				}
 
-				if indexDigit(cur, i) == invalidDigit {
+				if indexDigit(cur, i) == numDigits {
 					cur = cur.incrementResDigit(i) // zeroes digit i and carries into i-1
 				} else {
 					break
@@ -186,7 +179,7 @@ func (c Cell) childCells(childRes int) iter.Seq[Cell] {
 }
 
 // incrementResDigit returns h with the digit at res incremented by one. A digit
-// that overflows past 6 becomes invalidDigit (7); incrementing again zeroes it
+// that overflows past 6 becomes numDigits (7); incrementing again zeroes it
 // and carries into the next coarser digit.
 func (c Cell) incrementResDigit(res int) Cell {
 	var val Cell = 1
@@ -236,7 +229,7 @@ func (c Cell) ChildPos(parentRes int) (int, error) {
 			parentIsPentagon = parent.IsPentagon()
 
 			rawDigit := indexDigit(c, res)
-			if rawDigit == invalidDigit || (parentIsPentagon && rawDigit == kAxesDigit) {
+			if rawDigit == numDigits || (parentIsPentagon && rawDigit == kAxesDigit) {
 				return 0, ErrCellInvalid
 			}
 
@@ -259,7 +252,7 @@ func (c Cell) ChildPos(parentRes int) (int, error) {
 		// Hexagon offsets are simple powers of 7.
 		for res := childRes; res > parentRes; res-- {
 			digit := indexDigit(c, res)
-			if digit == invalidDigit {
+			if digit == numDigits {
 				return 0, ErrCellInvalid
 			}
 			out += int64(digit) * pow7[childRes-res]
@@ -456,8 +449,8 @@ func CompactCells(in []Cell) ([]Cell, error) {
 // hexagons.
 func (c Cell) fullChildCount() int {
 	if c.IsPentagon() {
-		return numPentChildren
+		return 6
 	}
 
-	return numHexChildren
+	return 7
 }

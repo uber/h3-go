@@ -397,7 +397,7 @@ func crossingPoint(oracle *exactOracle, from, to coordIJK, face, adjRes, dir int
 func hexagonBoundaryPoints(oracle *exactOracle, fijk faceIJK, res int) []projectionPoint {
 	adjRes, verts := fijk.toVerts(res)
 	centerFace := fijk.face
-	points := make([]projectionPoint, 0, maxCellBoundaryVerts)
+	points := make([]projectionPoint, 0, MaxCellBndryVerts)
 
 	lastFace := -1
 	lastOverage := noOverage
@@ -439,7 +439,7 @@ func hexagonBoundaryPoints(oracle *exactOracle, fijk faceIJK, res int) []project
 // pentagonBoundaryPoints mirrors faceIJK.pentToCellBoundary for a whole loop.
 func pentagonBoundaryPoints(oracle *exactOracle, fijk faceIJK, res int) []projectionPoint {
 	adjRes, verts := fijk.pentToVerts(res)
-	points := make([]projectionPoint, 0, maxCellBoundaryVerts)
+	points := make([]projectionPoint, 0, MaxCellBndryVerts)
 
 	var lastFijk faceIJK
 

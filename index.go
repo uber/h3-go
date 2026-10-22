@@ -43,29 +43,6 @@ const (
 	vertexMode                       // H3_VERTEX_MODE
 )
 
-// Index-format constants shared by the introspection and hierarchy helpers.
-const (
-	base16  = 16
-	bitSize = 64
-
-	// reservedOffset is the bit offset of the reserved field (H3_RESERVED_OFFSET).
-	reservedOffset = 56
-	// baseCellMask masks the 7-bit base cell field after shifting.
-	baseCellMask = 0x7F
-	// modeMask masks the 4-bit mode field after shifting.
-	modeMask = 0xF
-	// reservedMask masks the 3-bit reserved field after shifting.
-	reservedMask = 0x7
-
-	// digitRegionOffset is the number of non-digit bits above the 15×3-bit digit
-	// region (high + mode + reserved + resolution + base cell = 19).
-	digitRegionOffset = bitSize - MaxResolution*perDigitOffset
-
-	// validCellTopBits is the expected value of the top 8 bits of a valid cell:
-	// high bit=0, mode=1 (cell), reserved=000.
-	validCellTopBits = 0b00001000
-)
-
 // pow7 holds precomputed powers of 7: pow7[i] == 7^i for i in [0, MaxResolution].
 var pow7 = [MaxResolution + 1]int64{
 	1,
@@ -244,7 +221,7 @@ func ConstructCell(res, baseCell int, digits []int) (Cell, error) {
 	provided := min(len(digits), res)
 
 	for i, digit := range digits[:provided] {
-		if digit < centerDigit || digit >= invalidDigit {
+		if digit < centerDigit || digit >= numDigits {
 			return 0, ErrDigitDomain
 		}
 

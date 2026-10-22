@@ -20,9 +20,6 @@ import (
 	"math"
 )
 
-// invalidFace marks an unused slot while collecting a cell's icosahedron faces.
-const invalidFace = -1
-
 type (
 	vec3d    struct{ x, y, z float64 }
 	vec2d    struct{ x, y float64 }
@@ -262,13 +259,13 @@ func (c coordIJK) distance(b coordIJK) int {
 }
 
 // unitToDigit maps an IJK coordinate to its digit if, once normalized, it is the
-// center or one of the six unit neighbors, returning invalidDigit otherwise.
+// center or one of the six unit neighbors, returning numDigits otherwise.
 func (c coordIJK) unitToDigit() int {
 	c = c.normalize()
 
 	// Each unsigned comparison rejects both negatives and values above one.
 	if uint(c.i) > 1 || uint(c.j) > 1 || uint(c.k) > 1 {
-		return invalidDigit
+		return numDigits
 	}
 
 	return unitIjkToDigitLUT[c.i][c.j][c.k]
@@ -305,7 +302,7 @@ func (c coordIJK) downAp3r() coordIJK {
 // digit direction. The center and invalid digits leave the coordinate
 // unchanged.
 func (c coordIJK) neighbor(digit int) coordIJK {
-	if digit > centerDigit && digit < invalidDigit {
+	if digit > centerDigit && digit < numDigits {
 		c = c.add(unitVecs[digit]).normalize()
 	}
 
@@ -580,7 +577,7 @@ func rotate60cw(digit int) int {
 var digitRotate60ccw = digitRotations()
 
 // digitRotations builds digitRotate60ccw by composing single rotations.
-func digitRotations() (ccw [6][invalidDigit + 1]int) {
+func digitRotations() (ccw [6][numDigits + 1]int) {
 	for digit := range ccw[0] {
 		ccw[0][digit] = digit
 	}
@@ -807,7 +804,7 @@ func (c Cell) toFaceIjkWithInitializedFijk(fijk faceIJK) (faceIJK, bool) {
 			ijk = coordIJK{i: 3*ijk.i + ijk.k, j: ijk.i + 3*ijk.j, k: ijk.j + 3*ijk.k}
 		}
 
-		if digit := indexDigit(c, r); digit > centerDigit && digit < invalidDigit {
+		if digit := indexDigit(c, r); digit > centerDigit && digit < numDigits {
 			unit := unitVecs[digit]
 			ijk = coordIJK{i: ijk.i + unit.i, j: ijk.j + unit.j, k: ijk.k + unit.k}
 		}

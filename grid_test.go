@@ -312,8 +312,8 @@ func TestNeighborRotationsErrors(t *testing.T) {
 
 	origin := CellFromString("8928308280fffff")
 
-	if _, _, err := origin.neighborRotations(invalidDigit, 0); !errors.Is(err, ErrFailed) {
-		t.Fatalf("neighborRotations(invalidDigit): got %v, want ErrFailed", err)
+	if _, _, err := origin.neighborRotations(numDigits, 0); !errors.Is(err, ErrFailed) {
+		t.Fatalf("neighborRotations(numDigits): got %v, want ErrFailed", err)
 	}
 
 	if _, _, err := origin.neighborRotations(-1, 0); !errors.Is(err, ErrFailed) {
@@ -325,7 +325,7 @@ func TestNeighborRotationsErrors(t *testing.T) {
 		t.Fatalf("neighborRotations(bad base cell): got %v, want ErrCellInvalid", err)
 	}
 
-	badDigit := origin.setIndexDigit(origin.Resolution(), invalidDigit)
+	badDigit := origin.setIndexDigit(origin.Resolution(), numDigits)
 	if _, _, err := badDigit.neighborRotations(kAxesDigit, 0); !errors.Is(err, ErrCellInvalid) {
 		t.Fatalf("neighborRotations(invalid digit): got %v, want ErrCellInvalid", err)
 	}
@@ -348,8 +348,8 @@ func TestGridDefensiveErrors(t *testing.T) {
 	// firstStep fails on the move to the next ring; secondStep passes that move
 	// but fails while tracing the ring. Together they exercise both neighbor-step
 	// error returns in the fast disk and ring traversals.
-	firstStep := base.setIndexDigit(9, invalidDigit)
-	secondStep := base.setIndexDigit(8, invalidDigit)
+	firstStep := base.setIndexDigit(9, numDigits)
+	secondStep := base.setIndexDigit(8, numDigits)
 
 	for _, malformed := range []Cell{firstStep, secondStep} {
 		if _, err := malformed.GridDiskDistancesUnsafe(1); err == nil {
@@ -487,7 +487,7 @@ func TestIsNeighborDefensive(t *testing.T) {
 	base := CellFromString("8928308280fffff")
 
 	// Same res-8 parent, but the origin's finest digit is the unused sentinel.
-	invalidChild := base.setIndexDigit(9, invalidDigit)
+	invalidChild := base.setIndexDigit(9, numDigits)
 	sibling := base.setIndexDigit(9, jAxesDigit)
 
 	if _, err := invalidChild.IsNeighbor(sibling); !errors.Is(err, ErrCellInvalid) {
@@ -511,7 +511,7 @@ func TestIsNeighborDefensive(t *testing.T) {
 
 	// A malformed origin with a different parent than the target skips the
 	// optimization and fails in the general disk fallback.
-	malformed := base.setIndexDigit(9, invalidDigit)
+	malformed := base.setIndexDigit(9, numDigits)
 
 	far, err := LatLngToCell(LatLng{Lat: -33.8688, Lng: 151.2093}, 9)
 	if err != nil {
