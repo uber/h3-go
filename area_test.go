@@ -308,8 +308,10 @@ func rotateHalfTurn(lng float64) float64 {
 func assertRelClose(t *testing.T, got, want float64, label string) {
 	t.Helper()
 
+	// Every comparison against NaN is false, so test for it explicitly or a
+	// NaN result would pass.
 	const tol = 1e-9
-	if math.Abs(got-want) > tol*math.Max(1, math.Abs(want)) {
+	if math.IsNaN(got) || math.Abs(got-want) > tol*math.Max(1, math.Abs(want)) {
 		t.Fatalf("%s = %.17g, want %.17g", label, got, want)
 	}
 }

@@ -250,6 +250,19 @@ func TestGreatCircleDistance(t *testing.T) {
 		}
 	})
 
+	t.Run("antipodal", func(t *testing.T) {
+		t.Parallel()
+
+		// Rounding pushes the haversine term just above 1 for this pair, so an
+		// unclamped sqrt(1 - h) is NaN.
+		point := LatLng{Lat: 10.123456789, Lng: 20.987654321}
+		antipode := LatLng{Lat: -point.Lat, Lng: point.Lng - piDeg}
+
+		assertRelClose(t, GreatCircleDistanceRads(point, antipode), math.Pi, "rads")
+		assertRelClose(t, GreatCircleDistanceKm(point, antipode), math.Pi*earthRadiusKm, "km")
+		assertRelClose(t, GreatCircleDistanceM(point, antipode), math.Pi*earthRadiusKm*1000, "m")
+	})
+
 	t.Run("symmetric", func(t *testing.T) {
 		t.Parallel()
 

@@ -166,6 +166,10 @@ func GreatCircleDistanceRads(a, b LatLng) float64 {
 
 	h := sinLat*sinLat + math.Cos(aLat)*math.Cos(bLat)*sinLng*sinLng
 
+	// Rounding can push h slightly above its mathematical maximum of 1 for
+	// antipodal points, and sqrt(1 - h) would then be NaN.
+	h = math.Min(h, 1)
+
 	return 2 * math.Atan2(math.Sqrt(h), math.Sqrt(1-h))
 }
 
