@@ -1,6 +1,7 @@
 package h3
 
 import (
+	"math"
 	"strconv"
 	"testing"
 )
@@ -168,5 +169,70 @@ func BenchmarkNumCells(b *testing.B) {
 				NumCells(res)
 			}
 		})
+	}
+}
+
+// Polygons for the polygon-to-cells benchmarks, matching the reference
+// library's: a state, a large ellipse and a long thin triangle whose edges are
+// far from straight in latitude and longitude.
+var (
+	// benchColorado is the state of Colorado.
+	benchColorado = GeoPolygon{GeoLoop: radLoop([][2]float64{
+		{0.645778804554910, -1.903190792178713}, {0.645682811446050, -1.780975856637062},
+		{0.715595465293187, -1.781167842854781}, {0.715578012000667, -1.903262350678044},
+		{0.645778804554910, -1.903190792178713},
+	})}
+
+	// benchEllipse is a 100-vertex ellipse about 1800 km by 1100 km, centered
+	// at 35°N 95°W with semi-axes of 5° of latitude and 10° of longitude.
+	benchEllipse = GeoPolygon{GeoLoop: func() GeoLoop {
+		const sides = 100
+
+		loop := make(GeoLoop, sides)
+		for i := range loop {
+			theta := 2 * math.Pi * float64(i) / sides
+			loop[i] = LatLng{Lat: 35 + 5*math.Cos(theta), Lng: -95 + 10*math.Sin(theta)}
+		}
+
+		return loop
+	}()}
+
+	// benchLondonNY is a sliver between London and New York.
+	benchLondonNY = GeoPolygon{GeoLoop: radLoop([][2]float64{
+		{0.8989737191417, -0.0022305307840}, {0.7105724077059, -1.2916483662309}, {0.8989737191417, -0.0022305307840},
+	})}
+)
+
+// BenchmarkPolygonToCellsExperimental times the planar and geodesic fills in
+// overlapping mode on the three reference polygons.
+func BenchmarkPolygonToCellsExperimental(b *testing.B) {
+	polygons := []struct {
+		name    string
+		polygon GeoPolygon
+		res     int
+	}{
+		{"colorado", benchColorado, 5},
+		{"ellipse", benchEllipse, 4},
+		{"london_ny", benchLondonNY, 3},
+	}
+
+	modes := []struct {
+		name string
+		mode ContainmentMode
+	}{
+		{"planar", ContainmentOverlapping},
+		{"geodesic", ContainmentOverlapping | ContainmentGeodesic},
+	}
+
+	for _, pg := range polygons {
+		for _, md := range modes {
+			b.Run(pg.name+"/"+md.name, func(b *testing.B) {
+				for b.Loop() {
+					if _, err := PolygonToCellsExperimental(pg.polygon, pg.res, md.mode); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
 	}
 }
