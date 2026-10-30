@@ -192,7 +192,7 @@ func TestPolygonToCellsExperimentalErrors(t *testing.T) {
 		}
 	}
 
-	for _, mode := range []ContainmentMode{ContainmentInvalid, ContainmentMode(16)} {
+	for _, mode := range []ContainmentMode{ContainmentInvalid, ContainmentMode(32), ContainmentGeodesic | ContainmentOverlappingBbox} {
 		if _, err := PolygonToCellsExperimental(polygon, 6, mode); !errors.Is(err, ErrOptionInvalid) {
 			t.Fatalf("mode %d: got %v, want ErrOptionInvalid", mode, err)
 		}
@@ -300,13 +300,13 @@ func TestBaseCellNumToCellRange(t *testing.T) {
 func TestValidateContainmentMode(t *testing.T) {
 	t.Parallel()
 
-	for _, mode := range []ContainmentMode{ContainmentCenter, ContainmentOverlappingBbox} {
+	for _, mode := range []ContainmentMode{ContainmentCenter, ContainmentOverlappingBbox, ContainmentGeodesic | ContainmentFull} {
 		if err := validateContainmentMode(mode); err != nil {
 			t.Fatalf("validateContainmentMode(%d): %v", mode, err)
 		}
 	}
 
-	for _, mode := range []ContainmentMode{ContainmentInvalid, ContainmentMode(16)} {
+	for _, mode := range []ContainmentMode{ContainmentInvalid, ContainmentMode(32), ContainmentGeodesic | ContainmentOverlappingBbox} {
 		if err := validateContainmentMode(mode); !errors.Is(err, ErrOptionInvalid) {
 			t.Fatalf("validateContainmentMode(%d): got %v, want ErrOptionInvalid", mode, err)
 		}
