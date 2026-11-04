@@ -966,7 +966,7 @@ func TestGeodesicContainsPoint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !region.overlapsAABB(nearby.box) {
+	if !region.overlapsBox(nearby.box) {
 		t.Error("the box test prunes a cell 7° from the polygon; this test no longer shows the cap test at work")
 	}
 
@@ -1006,41 +1006,42 @@ func TestGeodesicContainsPoint(t *testing.T) {
 	}
 }
 
-// TestSphereCapOverlapsAABB covers both rejections of the cap-box test: the
+// TestSphereCapOverlapsBox covers both rejections of the cap-box test: the
 // box corner nearest the cap outside the cap, and a box entirely outside the
 // unit sphere.
-func TestSphereCapOverlapsAABB(t *testing.T) {
+func TestSphereCapOverlapsBox(t *testing.T) {
 	t.Parallel()
 
 	region := sphereCap{center: vec3d{z: 1}, cosRadius: math.Cos(10 * DegsToRads)}
 
-	near := aabb{min: vec3d{x: -0.1, y: -0.1, z: 0.9}, max: vec3d{x: 0.1, y: 0.1, z: 1}}
-	if !region.overlapsAABB(near) {
+	near := axisAlignedBoundingBox{min: vec3d{x: -0.1, y: -0.1, z: 0.9}, max: vec3d{x: 0.1, y: 0.1, z: 1}}
+	if !region.overlapsBox(near) {
 		t.Error("a box around the cap center does not overlap")
 	}
 
-	far := aabb{min: vec3d{x: -0.1, y: -0.1, z: -1}, max: vec3d{x: 0.1, y: 0.1, z: -0.9}}
-	if region.overlapsAABB(far) {
+	far := axisAlignedBoundingBox{min: vec3d{x: -0.1, y: -0.1, z: -1}, max: vec3d{x: 0.1, y: 0.1, z: -0.9}}
+	if region.overlapsBox(far) {
 		t.Error("a box at the antipode overlaps")
 	}
 
 	// Within the cap's cone but beyond the sphere.
-	outside := aabb{min: vec3d{x: 1.5, y: 1.5, z: 1.5}, max: vec3d{x: 2, y: 2, z: 2}}
-	if (sphereCap{center: vec3d{x: 1, y: 1, z: 1}.normalized(), cosRadius: -1}).overlapsAABB(outside) {
+	outside := axisAlignedBoundingBox{min: vec3d{x: 1.5, y: 1.5, z: 1.5}, max: vec3d{x: 2, y: 2, z: 2}}
+	if (sphereCap{center: vec3d{x: 1, y: 1, z: 1}.normalized(), cosRadius: -1}).overlapsBox(outside) {
 		t.Error("a box off the sphere overlaps")
 	}
 }
 
-// TestAABBArcExtrema checks that an arc's box covers its interior extremum and
-// skips the degenerate cases: a zero normal, and an axis along the normal.
-func TestAABBArcExtrema(t *testing.T) {
+// TestBoundingBoxArcExtrema checks that an arc's box covers its interior
+// extremum and skips the degenerate cases: a zero normal, and an axis along
+// the normal.
+func TestBoundingBoxArcExtrema(t *testing.T) {
 	t.Parallel()
 
 	point := func(lat, lng float64) vec3d { return latLngToVec3(lat*DegsToRads, lng*DegsToRads) }
 
 	// An equatorial arc from 80°E to 100°E peaks at y = 1 between its endpoints.
 	v1, v2 := point(0, 80), point(0, 100)
-	box := emptyAABB()
+	box := emptyBoundingBox()
 	box.update(v1)
 	box.update(v2)
 	box.updateWithArcExtrema(v1, v2, v1.cross(v2))
@@ -1163,7 +1164,7 @@ func TestGeodesicLoopCentroid(t *testing.T) {
 
 	// A loop around the north pole encloses (0, 0, 1), so its box reaches z = 1.
 	polar := loopFromDegrees(t, [][2]float64{{80, 0}, {80, 90}, {80, 180}, {80, -90}})
-	if box := polar.toAABB(); box.max.z != 1 {
+	if box := polar.toBoundingBox(); box.max.z != 1 {
 		t.Errorf("polar loop box max z = %v, want 1", box.max.z)
 	}
 }

@@ -94,9 +94,9 @@ var unitAxes = [...]vec3d{{x: 1}, {y: 1}, {z: 1}}
 var cardinalPoints = [...]vec3d{{x: 1}, {x: -1}, {y: 1}, {y: -1}, {z: 1}, {z: -1}}
 
 type (
-	// aabb is an axis-aligned bounding box in Cartesian space on the unit
-	// sphere.
-	aabb struct {
+	// axisAlignedBoundingBox bounds a set of points in Cartesian space on the
+	// unit sphere.
+	axisAlignedBoundingBox struct {
 		min vec3d
 		max vec3d
 	}
@@ -110,10 +110,10 @@ type (
 
 	// geodesicEdge caches a polygon vertex and the great-circle edge leaving it.
 	geodesicEdge struct {
-		vert      vec3d   // vertex on the unit sphere
-		edgeCross vec3d   // normal of the great circle through this edge
-		edgeDot   float64 // dot product of the edge's two vertices
-		box       aabb    // bounding box of the edge arc
+		vert      vec3d                  // vertex on the unit sphere
+		edgeCross vec3d                  // normal of the great circle through this edge
+		edgeDot   float64                // dot product of the edge's two vertices
+		box       axisAlignedBoundingBox // bounding box of the edge arc
 	}
 
 	// geodesicLoop is a polygon loop on the unit sphere.
@@ -128,8 +128,8 @@ type (
 	geodesicPolygon struct {
 		holes     []geodesicLoop
 		geoloop   geodesicLoop
-		box       aabb  // bounding box of the whole outer loop
-		capCenter vec3d // center of a cap holding the whole outer loop
+		box       axisAlignedBoundingBox // bounding box of the whole outer loop
+		capCenter vec3d                  // center of a cap holding the whole outer loop
 		// capCos[res] is the cosine of the outer loop's cap radius plus a
 		// cell cap radius at res: a cell whose center is further from
 		// capCenter than that cannot touch the polygon.
@@ -139,14 +139,14 @@ type (
 
 // --- Bounding boxes and caps ---
 
-// emptyAABB returns the inverted empty box, min above max on every axis, so
-// that the first update sets both corners.
-func emptyAABB() aabb {
-	return aabb{min: vec3d{x: 1, y: 1, z: 1}, max: vec3d{x: -1, y: -1, z: -1}}
+// emptyBoundingBox returns the inverted empty box, min above max on every
+// axis, so that the first update sets both corners.
+func emptyBoundingBox() axisAlignedBoundingBox {
+	return axisAlignedBoundingBox{min: vec3d{x: 1, y: 1, z: 1}, max: vec3d{x: -1, y: -1, z: -1}}
 }
 
 // update grows the box to include the point.
-func (b *aabb) update(v vec3d) {
+func (b *axisAlignedBoundingBox) update(v vec3d) {
 	b.min = vec3d{x: math.Min(b.min.x, v.x), y: math.Min(b.min.y, v.y), z: math.Min(b.min.z, v.z)}
 	b.max = vec3d{x: math.Max(b.max.x, v.x), y: math.Max(b.max.y, v.y), z: math.Max(b.max.z, v.z)}
 }
@@ -185,7 +185,7 @@ func isOnArc(p, v1, v2, n vec3d) bool {
 // coordinate is extremized on the circle where the axis projects onto the
 // circle's plane, so those points and their opposites are tested for lying on
 // the arc.
-func (b *aabb) updateWithArcExtrema(v1, v2, n vec3d) {
+func (b *axisAlignedBoundingBox) updateWithArcExtrema(v1, v2, n vec3d) {
 	// A near-zero normal is a degenerate edge whose endpoints bound it already.
 	if n.normSq() < epsilon*epsilon {
 		return
@@ -212,10 +212,10 @@ func (b *aabb) updateWithArcExtrema(v1, v2, n vec3d) {
 	}
 }
 
-// overlapsAABB reports whether the cap may intersect the box. It is false only
+// overlapsBox reports whether the cap may intersect the box. It is false only
 // when an intersection is impossible: either the box corner nearest the cap's
 // center is outside the cap, or the box lies entirely outside the unit sphere.
-func (c sphereCap) overlapsAABB(b aabb) bool {
+func (c sphereCap) overlapsBox(b axisAlignedBoundingBox) bool {
 	far := vec3d{
 		x: pickCorner(c.center.x, b.min.x, b.max.x),
 		y: pickCorner(c.center.y, b.min.y, b.max.y),
@@ -330,10 +330,10 @@ func (l *geodesicLoop) containsPoint(point vec3d) bool {
 	return math.Abs(total) > math.Pi
 }
 
-// toAABB returns the bounding box of the loop: its vertices, the extrema of
-// its arcs, and any cardinal point of the sphere the loop encloses.
-func (l *geodesicLoop) toAABB() aabb {
-	box := emptyAABB()
+// toBoundingBox returns the bounding box of the loop: its vertices, the
+// extrema of its arcs, and any cardinal point of the sphere the loop encloses.
+func (l *geodesicLoop) toBoundingBox() axisAlignedBoundingBox {
+	box := emptyBoundingBox()
 
 	for i := range l.edges {
 		box.update(l.edges[i].vert)
@@ -482,7 +482,7 @@ func newGeodesicLoop(loop GeoLoop, rejectLarge bool) (geodesicLoop, error) {
 		edges[i].edgeCross = v1.cross(v2)
 		edges[i].edgeDot = v1.dot(v2)
 
-		box := emptyAABB()
+		box := emptyBoundingBox()
 		box.update(v1)
 		box.update(v2)
 		box.updateWithArcExtrema(v1, v2, edges[i].edgeCross)
@@ -515,7 +515,7 @@ func newGeodesicPolygon(polygon GeoPolygon) (*geodesicPolygon, error) {
 		}
 	}
 
-	out.box = out.geoloop.toAABB()
+	out.box = out.geoloop.toBoundingBox()
 
 	var capRadius float64
 	out.capCenter, capRadius = out.geoloop.boundingCap()
@@ -547,7 +547,7 @@ func (l *geodesicLoop) boundingCap() (vec3d, float64) {
 // capIntersects reports whether a cell's bounding cap may touch the polygon's
 // outer loop.
 func (p *geodesicPolygon) capIntersects(region sphereCap, res int) bool {
-	return region.center.dot(p.capCenter) >= p.capCos[res]-geodesicCapEps && region.overlapsAABB(p.box)
+	return region.center.dot(p.capCenter) >= p.capCos[res]-geodesicCapEps && region.overlapsBox(p.box)
 }
 
 // boundaryIntersects reports whether a cell boundary crosses any loop of the
@@ -570,7 +570,7 @@ func (p *geodesicPolygon) boundaryIntersects(boundary []vec3d, region sphereCap)
 // boundaryIntersects reports whether a cell boundary crosses the loop.
 func (l *geodesicLoop) boundaryIntersects(boundary []vec3d, region sphereCap) bool {
 	for i := range l.edges {
-		if !region.overlapsAABB(l.edges[i].box) {
+		if !region.overlapsBox(l.edges[i].box) {
 			continue
 		}
 
