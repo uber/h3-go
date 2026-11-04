@@ -52,6 +52,32 @@ func (c Cell) appendBoundary(out CellBoundary) (CellBoundary, error) {
 	return fijk.toCellBoundary(out, res, 0, numHexVerts), nil
 }
 
+// boundaryVec3 appends the cell's boundary as unit vectors on the sphere to
+// out, in the same order as Boundary.
+func (c Cell) boundaryVec3(out []vec3d) ([]vec3d, error) {
+	fijk, err := c.toFaceIjk()
+	if err != nil {
+		return nil, err
+	}
+
+	res := c.Resolution()
+	if c.IsPentagon() {
+		return fijk.pentToCellBoundaryVec3(out, res, 0, numPentVerts), nil
+	}
+
+	return fijk.toCellBoundaryVec3(out, res, 0, numHexVerts), nil
+}
+
+// centerVec3 returns the cell's center as a unit vector on the sphere.
+func (c Cell) centerVec3() (vec3d, error) {
+	fijk, err := c.toFaceIjk()
+	if err != nil {
+		return vec3d{}, err
+	}
+
+	return fijk.toVec3(c.Resolution()), nil
+}
+
 // toCellBoundary appends the geographic boundary of a hexagon cell, built from
 // its FaceIJK address, to out. It walks length topological vertices starting at
 // start, adjusting each onto the correct face and inserting an extra vertex
@@ -60,6 +86,17 @@ func (c Cell) appendBoundary(out CellBoundary) (CellBoundary, error) {
 // sub-range of the loop, which directed-edge boundaries use to project a single
 // edge.
 func (fijk faceIJK) toCellBoundary(out CellBoundary, res, start, length int) CellBoundary {
+	var buf [MaxCellBndryVerts]vec3d
+	for _, point := range fijk.toCellBoundaryVec3(buf[:0], res, start, length) {
+		out = append(out, point.toLatLng())
+	}
+
+	return out
+}
+
+// toCellBoundaryVec3 is toCellBoundary with the boundary left as unit vectors
+// on the sphere, the form the geodesic polygon fill works in.
+func (fijk faceIJK) toCellBoundaryVec3(out []vec3d, res, start, length int) []vec3d {
 	adjRes, fijkVerts := fijk.toVerts(res)
 	centerFace := fijk.face
 
@@ -99,13 +136,13 @@ func (fijk faceIJK) toCellBoundary(out CellBoundary, res, start, length int) Cel
 			// If the intersection lands on a hexagon vertex, both adjacent edges
 			// lie on a single face and no extra vertex is needed.
 			if !orig2d0.almostEquals(inter) && !orig2d1.almostEquals(inter) {
-				out = append(out, inter.toVec3(centerFace, adjRes, true).toLatLng())
+				out = append(out, inter.toVec3(centerFace, adjRes, true))
 			}
 		}
 
 		// The final extra iteration only tests for an edge intersection.
 		if vert < start+numHexVerts {
-			out = append(out, vfijk.coord.toHex2d().toVec3(vfijk.face, adjRes, true).toLatLng())
+			out = append(out, vfijk.coord.toHex2d().toVec3(vfijk.face, adjRes, true))
 		}
 
 		lastFace = vfijk.face
@@ -121,6 +158,17 @@ func (fijk faceIJK) toCellBoundary(out CellBoundary, res, start, length int) Cel
 // and length select a sub-range of the loop, which directed-edge boundaries use
 // to project a single edge.
 func (fijk faceIJK) pentToCellBoundary(out CellBoundary, res, start, length int) CellBoundary {
+	var buf [MaxCellBndryVerts]vec3d
+	for _, point := range fijk.pentToCellBoundaryVec3(buf[:0], res, start, length) {
+		out = append(out, point.toLatLng())
+	}
+
+	return out
+}
+
+// pentToCellBoundaryVec3 is pentToCellBoundary with the boundary left as unit
+// vectors on the sphere.
+func (fijk faceIJK) pentToCellBoundaryVec3(out []vec3d, res, start, length int) []vec3d {
 	adjRes, fijkVerts := fijk.pentToVerts(res)
 
 	additionalIteration := 0
@@ -157,11 +205,11 @@ func (fijk faceIJK) pentToCellBoundary(out CellBoundary, res, start, length int)
 
 			edge0, edge1 := icosaEdge(adjRes, adjacentFaceDir[tmpFijk.face][vfijk.face])
 			inter := orig2d0.intersect(orig2d1, edge0, edge1)
-			out = append(out, inter.toVec3(tmpFijk.face, adjRes, true).toLatLng())
+			out = append(out, inter.toVec3(tmpFijk.face, adjRes, true))
 		}
 
 		if vert < start+numPentVerts {
-			out = append(out, vfijk.coord.toHex2d().toVec3(vfijk.face, adjRes, true).toLatLng())
+			out = append(out, vfijk.coord.toHex2d().toVec3(vfijk.face, adjRes, true))
 		}
 
 		lastFijk = vfijk

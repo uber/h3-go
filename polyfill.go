@@ -39,9 +39,23 @@ const (
 	ContainmentInvalid
 )
 
+// ContainmentGeodesic is a flag combined with ContainmentCenter,
+// ContainmentFull or ContainmentOverlapping, as in
+// ContainmentFull|ContainmentGeodesic, that makes PolygonToCellsExperimental
+// treat polygon edges as great-circle arcs rather than straight lines in
+// latitude and longitude. The two agree for small polygons and diverge for
+// polygons spanning hundreds of kilometers or more, where the straight line
+// bows away from the arc. Geodesic filling is slower than planar filling, so
+// prefer coarser resolutions for very large polygons. The outer loop must fit
+// within a hemisphere, and no loop may have every vertex on one great circle;
+// either is ErrDomain. ContainmentOverlappingBbox cannot be combined with it.
+const ContainmentGeodesic ContainmentMode = 1 << 4
+
 const (
 	// flagContainmentModeMask masks the containment-mode bits out of the flags word.
 	flagContainmentModeMask = 15
+	// flagGeodesicMask masks the geodesic bit out of the flags word.
+	flagGeodesicMask = uint32(ContainmentGeodesic)
 
 	// cellScaleFactor scales a cell's bounding box to be sure it covers the cell.
 	// childScaleFactor scales it to cover all of the cell's finer-resolution
@@ -207,11 +221,25 @@ var (
 	validRangeBBox = bbox{north: halfPiDeg, south: -halfPiDeg, east: piDeg, west: -piDeg}
 )
 
-// validateContainmentMode reports an error if the mode is out of range or sets
-// flag bits outside the containment-mode field.
+// validateContainmentMode reports an error if the mode is out of range, sets
+// flag bits outside the containment-mode field and the geodesic bit, or
+// combines the geodesic bit with a mode the geodesic fill does not support.
 func validateContainmentMode(mode ContainmentMode) error {
 	flags := uint32(mode)
-	if flags&^uint32(flagContainmentModeMask) != 0 || flags&flagContainmentModeMask >= uint32(ContainmentInvalid) {
+	if flags&^(flagContainmentModeMask|flagGeodesicMask) != 0 {
+		return ErrOptionInvalid
+	}
+
+	base := ContainmentMode(flags & flagContainmentModeMask)
+	if flags&flagGeodesicMask != 0 {
+		if base != ContainmentCenter && base != ContainmentFull && base != ContainmentOverlapping {
+			return ErrOptionInvalid
+		}
+
+		return nil
+	}
+
+	if base >= ContainmentInvalid {
 		return ErrOptionInvalid
 	}
 
@@ -449,9 +477,10 @@ func polygonCompactCells(polygon GeoPolygon, bboxes []bbox, res int, mode Contai
 }
 
 // PolygonToCellsExperimental fills the polygon with cells of the given
-// resolution, including a cell according to the containment mode. The optional
-// maxNumCellsReturn caps the number of cells; exceeding it returns
-// ErrMemoryBounds. Output ordering is not significant.
+// resolution, including a cell according to the containment mode, which may
+// carry the ContainmentGeodesic flag. The optional maxNumCellsReturn caps the
+// number of cells; exceeding it returns ErrMemoryBounds. Output ordering is not
+// significant.
 func PolygonToCellsExperimental(polygon GeoPolygon, res int, mode ContainmentMode, maxNumCellsReturn ...int64) ([]Cell, error) {
 	maxNumCells := int64(math.MaxInt64)
 	if len(maxNumCellsReturn) > 0 {
@@ -470,14 +499,25 @@ func PolygonToCellsExperimental(polygon GeoPolygon, res int, mode ContainmentMod
 		return nil, err
 	}
 
-	bboxes := polygon.toBboxes()
+	var compactCells iter.Seq[Cell]
+
+	if mode&ContainmentGeodesic == 0 {
+		compactCells = polygonCompactCells(polygon, polygon.toBboxes(), res, mode)
+	} else {
+		geodesic, err := newGeodesicPolygon(polygon)
+		if err != nil {
+			return nil, err
+		}
+
+		compactCells = geodesic.cells(res, mode&^ContainmentGeodesic)
+	}
 
 	var (
 		out   []Cell
 		count int64
 	)
 
-	for compact := range polygonCompactCells(polygon, bboxes, res, mode) {
+	for compact := range compactCells {
 		for child := range compact.childCells(res) {
 			if count >= maxNumCells {
 				return nil, ErrMemoryBounds
