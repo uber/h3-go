@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-// TestCellToChildrenSizeKnown covers known-value cases for cellToChildrenSize,
+// TestCellToChildrenSizeKnown covers known-value cases for Cell.ChildrenSize,
 // spanning hexagons, pentagons, and the largest res-0 cases.
 func TestCellToChildrenSizeKnown(t *testing.T) {
 	t.Parallel()
@@ -30,14 +30,15 @@ func TestCellToChildrenSizeKnown(t *testing.T) {
 	tests := map[string]struct {
 		giveCell     Cell
 		giveChildRes int
-		wantSize     int64
-		wantErr      bool
+		wantSize     int
+		wantErr      error
 	}{
-		"hex_coarser_res":     {giveCell: 0x87283080dffffff, giveChildRes: 3, wantErr: true},
+		"hex_coarser_res":     {giveCell: 0x87283080dffffff, giveChildRes: 3, wantErr: ErrResolutionDomain},
 		"hex_same_res":        {giveCell: 0x87283080dffffff, giveChildRes: 7, wantSize: 1},
 		"hex_child_res":       {giveCell: 0x87283080dffffff, giveChildRes: 8, wantSize: 7},
 		"hex_grandchild_res":  {giveCell: 0x87283080dffffff, giveChildRes: 9, wantSize: 49},
-		"pent_coarser_res":    {giveCell: 0x870800000ffffff, giveChildRes: 3, wantErr: true},
+		"hex_beyond_finest":   {giveCell: 0x87283080dffffff, giveChildRes: MaxResolution + 1, wantErr: ErrResolutionDomain},
+		"pent_coarser_res":    {giveCell: 0x870800000ffffff, giveChildRes: 3, wantErr: ErrResolutionDomain},
 		"pent_same_res":       {giveCell: 0x870800000ffffff, giveChildRes: 7, wantSize: 1},
 		"pent_child_res":      {giveCell: 0x870800000ffffff, giveChildRes: 8, wantSize: 6},
 		"pent_grandchild_res": {giveCell: 0x870800000ffffff, giveChildRes: 9, wantSize: 5*7 + 6},
@@ -49,13 +50,60 @@ func TestCellToChildrenSizeKnown(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := tt.giveCell.childrenSize(tt.giveChildRes)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			got, err := tt.giveCell.ChildrenSize(tt.giveChildRes)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tt.wantErr)
 			}
 
-			if !tt.wantErr && got != tt.wantSize {
+			if got != tt.wantSize {
 				t.Fatalf("size = %d, want %d", got, tt.wantSize)
+			}
+		})
+	}
+}
+
+// TestChildrenSizeMatchesChildren checks that ChildrenSize is the length of
+// Children and the exclusive upper bound of the positions ChildPosToCell
+// accepts.
+func TestChildrenSizeMatchesChildren(t *testing.T) {
+	t.Parallel()
+
+	const childRes = 9
+
+	tests := map[string]Cell{
+		"hexagon":  0x87283080dffffff,
+		"pentagon": 0x870800000ffffff,
+	}
+
+	for name, cell := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			size, err := cell.ChildrenSize(childRes)
+			if err != nil {
+				t.Fatalf("ChildrenSize: %v", err)
+			}
+
+			children, err := cell.Children(childRes)
+			if err != nil {
+				t.Fatalf("Children: %v", err)
+			}
+
+			if size != len(children) {
+				t.Fatalf("ChildrenSize = %d, want len(Children) = %d", size, len(children))
+			}
+
+			last, err := cell.ChildPosToCell(size-1, childRes)
+			if err != nil {
+				t.Fatalf("ChildPosToCell(%d): %v", size-1, err)
+			}
+
+			if want := children[len(children)-1]; last != want {
+				t.Fatalf("ChildPosToCell(%d) = %s, want %s", size-1, last, want)
+			}
+
+			if _, err := cell.ChildPosToCell(size, childRes); !errors.Is(err, ErrDomain) {
+				t.Fatalf("ChildPosToCell(%d) err = %v, want %v", size, err, ErrDomain)
 			}
 		})
 	}

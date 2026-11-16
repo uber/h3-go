@@ -122,6 +122,16 @@ func (c Cell) ImmediateChildren() ([]Cell, error) {
 	return c.Children(c.Resolution() + 1)
 }
 
+// ChildrenSize returns the number of children (or grandchildren, etc.) of the
+// cell at childRes, without building them. It is the length of the slice
+// Children returns, and positions passed to ChildPosToCell range over
+// [0, ChildrenSize).
+func (c Cell) ChildrenSize(childRes int) (int, error) {
+	size, err := c.childrenSize(childRes)
+
+	return int(size), err
+}
+
 // childCells returns an iterator over the children of c at childRes. It yields
 // nothing for invalid input (c == 0, or childRes outside [resolution(c),
 // MaxResolution]).
