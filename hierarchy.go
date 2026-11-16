@@ -56,21 +56,6 @@ func (c Cell) hasChildAtRes(childRes int) bool {
 	return childRes >= parentRes && childRes <= MaxResolution
 }
 
-// childrenSize returns the exact number of children of c at childRes, handling
-// hexagons and pentagons.
-func (c Cell) childrenSize(childRes int) (int64, error) {
-	if !c.hasChildAtRes(childRes) {
-		return 0, ErrResolutionDomain
-	}
-
-	n := childRes - c.Resolution()
-	if c.IsPentagon() {
-		return 1 + 5*(pow7[n]-1)/6, nil
-	}
-
-	return pow7[n], nil
-}
-
 // Parent returns the parent (or grandparent, etc.) of the cell at parentRes.
 func (c Cell) Parent(parentRes int) (Cell, error) {
 	childRes := c.Resolution()
@@ -104,7 +89,7 @@ func (c Cell) CenterChild(childRes int) (Cell, error) {
 // Children returns the children (or grandchildren, etc.) of the cell at
 // childRes.
 func (c Cell) Children(childRes int) ([]Cell, error) {
-	size, err := c.childrenSize(childRes)
+	size, err := c.ChildrenSize(childRes)
 	if err != nil {
 		return nil, err
 	}
@@ -127,9 +112,16 @@ func (c Cell) ImmediateChildren() ([]Cell, error) {
 // Children returns, and positions passed to ChildPosToCell range over
 // [0, ChildrenSize).
 func (c Cell) ChildrenSize(childRes int) (int, error) {
-	size, err := c.childrenSize(childRes)
+	if !c.hasChildAtRes(childRes) {
+		return 0, ErrResolutionDomain
+	}
 
-	return int(size), err
+	n := childRes - c.Resolution()
+	if c.IsPentagon() {
+		return int(1 + 5*(pow7[n]-1)/6), nil
+	}
+
+	return int(pow7[n]), nil
 }
 
 // childCells returns an iterator over the children of c at childRes. It yields
@@ -200,8 +192,8 @@ func (c Cell) incrementResDigit(res int) Cell {
 
 // validateChildPos returns an error if childPos is out of range for the children
 // of parent at childRes.
-func (c Cell) validateChildPos(childPos int64, childRes int) error {
-	maxChildCount, err := c.childrenSize(childRes)
+func (c Cell) validateChildPos(childPos, childRes int) error {
+	maxChildCount, err := c.ChildrenSize(childRes)
 	if err != nil {
 		return err
 	}
@@ -290,7 +282,7 @@ func (c Cell) ChildPosToCell(position int, childRes int) (Cell, error) {
 		return 0, ErrResolutionMismatch
 	}
 
-	if err := c.validateChildPos(int64(position), childRes); err != nil {
+	if err := c.validateChildPos(position, childRes); err != nil {
 		return 0, err
 	}
 	resOffset := childRes - parentRes
@@ -332,14 +324,14 @@ func (c Cell) ChildPosToCell(position int, childRes int) (Cell, error) {
 
 // UncompactCells expands a compacted set back to the full set of cells at res.
 func UncompactCells(in []Cell, res int) ([]Cell, error) {
-	var total int64
+	var total int
 
 	for _, c := range in {
 		if c == 0 {
 			continue
 		}
 
-		size, err := c.childrenSize(res)
+		size, err := c.ChildrenSize(res)
 		if err != nil {
 			return nil, ErrResolutionMismatch
 		}
