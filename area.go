@@ -55,23 +55,42 @@ func CellAreaM2(c Cell) (float64, error) {
 //
 // Every vertex bounds two edges, so its trig terms are evaluated once and
 // carried from one edge to the next rather than recomputed per edge.
+//
+// The Cagnoli terms measure area relative to the south pole. For a loop near
+// the north pole they sum to nearly -4π, so the area would be what is left
+// after adding 4π back, and most of its significant digits are lost to that
+// cancellation (a few percent for the smallest cells at the north pole). A
+// loop in the northern hemisphere is therefore evaluated mirrored across the
+// equator: mirroring preserves the enclosed area but reverses the winding,
+// so the sum is negated afterwards.
 func (b CellBoundary) areaRads2() float64 {
 	if len(b) == 0 {
 		return 0
 	}
 
+	var latSum float64
+	for _, v := range b {
+		latSum += v.Lat
+	}
+
+	mirror := latSum > 0
+
 	var adder kahanAdder
 
-	first := b[0].cagnoliVertex()
+	first := b[0].cagnoliVertex(mirror)
 	prev := first
 
 	for i := 1; i < len(b); i++ {
-		cur := b[i].cagnoliVertex()
+		cur := b[i].cagnoliVertex(mirror)
 		adder.add(prev.cagnoli(cur))
 		prev = cur
 	}
 
 	adder.add(prev.cagnoli(first))
+
+	if mirror {
+		adder.sum, adder.comp = -adder.sum, -adder.comp
+	}
 
 	if adder.sum < 0 {
 		adder.add(2 * m2PI) // 4π, the area of the whole sphere
@@ -89,9 +108,14 @@ type cagnoliVertex struct {
 }
 
 // cagnoliVertex evaluates the per-vertex Cagnoli terms of a point given in
-// degrees.
-func (ll LatLng) cagnoliVertex() cagnoliVertex {
-	halfLat := ll.Lat*DegsToRads/2 + math.Pi/4
+// degrees, mirrored across the equator if mirror is set.
+func (ll LatLng) cagnoliVertex(mirror bool) cagnoliVertex {
+	lat := ll.Lat
+	if mirror {
+		lat = -lat
+	}
+
+	halfLat := lat*DegsToRads/2 + math.Pi/4
 
 	return cagnoliVertex{
 		sinHalfLat: math.Sin(halfLat),

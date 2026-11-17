@@ -10,6 +10,10 @@ fixes via **patches** with patch version bumps.
 
 * [#181]: Introduced `Cell#ChildrenSize`.
 
+### Fixed
+
+* [#183]: `CellAreaRads2`, `CellAreaKm2` and `CellAreaM2` no longer lose precision for cells near the north pole.
+
 ## 4.5.0 (26 May 2026)
 
 ### Added
@@ -278,6 +282,7 @@ Thanks to [@jogly] for their contributions to this release.
 [#116]: https://github.com/uber/h3-go/pull/116
 [#117]: https://github.com/uber/h3-go/pull/117
 [#181]: https://github.com/uber/h3-go/pull/181
+[#183]: https://github.com/uber/h3-go/pull/183
 
 [c3cc4ae]: https://github.com/uber/h3-go/commit/c3cc4ae1af0472866452d998fe5576839450e342
 [migration guide]: https://h3geo.org/docs/library/migrating-3.x
