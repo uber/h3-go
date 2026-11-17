@@ -263,6 +263,21 @@ func TestGreatCircleDistance(t *testing.T) {
 		assertRelClose(t, GreatCircleDistanceM(point, antipode), math.Pi*earthRadiusKm*1000, "m")
 	})
 
+	t.Run("same_point_beyond_pole", func(t *testing.T) {
+		t.Parallel()
+
+		// A latitude past 90 degrees names the same point as its reflection
+		// across the pole on the opposite meridian. The negative cosine
+		// product cancels the latitude term and rounding leaves the haversine
+		// term just below 0, so an unclamped sqrt(h) is NaN.
+		point := LatLng{Lat: 100.8, Lng: -179}
+		reflection := LatLng{Lat: 79.2, Lng: 1}
+
+		assertRelClose(t, GreatCircleDistanceRads(point, reflection), 0, "rads")
+		assertRelClose(t, GreatCircleDistanceKm(point, reflection), 0, "km")
+		assertRelClose(t, GreatCircleDistanceM(point, reflection), 0, "m")
+	})
+
 	t.Run("symmetric", func(t *testing.T) {
 		t.Parallel()
 
