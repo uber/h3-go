@@ -346,9 +346,7 @@ func digestCell(w *lineWriter, cell h3.Cell, res int) {
 
 	w.start(cell)
 	w.index(must(cell.CenterChild(res + 1)))
-
-	children := must(cell.Children(res + 1))
-	w.integer(len(children))
+	w.integer(must(cell.ChildrenSize(res + 1)))
 
 	pos := must(cell.ChildPos(0))
 	w.integer(pos)
@@ -456,6 +454,8 @@ func digestCell(w *lineWriter, cell h3.Cell, res int) {
 	w.finish("localIj")
 
 	w.start(cell)
+
+	children := must(cell.Children(res + 1))
 	slices.Sort(children)
 	w.cellSet(must(h3.CompactCells(children[:len(children)-1])))
 	w.finish("compact")

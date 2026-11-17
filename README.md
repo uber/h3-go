@@ -94,6 +94,7 @@ func ExampleLatLngToCell() {
 | `isValidCell`                | `Cell#IsValid`                                            |
 | `cellToParent`               | `Cell#Parent`, `Cell#ImmediateParent`                     |
 | `cellToChildren`             | `Cell#Children` `Cell#ImmediateChildren`                  |
+| `cellToChildrenSize`         | `Cell#ChildrenSize`                                       |
 | `cellToCenterChild`          | `Cell#CenterChild`                                        |
 | `compactCells`               | `CompactCells`                                            |
 | `uncompactCells`             | `UncompactCells`                                          |
