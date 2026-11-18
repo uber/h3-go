@@ -341,6 +341,7 @@ func TestCellAreaPolarMirror(t *testing.T) {
 				}
 
 				n := len(boundary)
+
 				mirrored := make(CellBoundary, n)
 				for i := range boundary {
 					mirrored[n-1-i] = LatLng{Lat: -boundary[i].Lat, Lng: boundary[i].Lng}
