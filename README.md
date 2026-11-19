@@ -109,6 +109,7 @@ func ExampleLatLngToCell() {
 | `directedEdgeToCells`        | `DirectedEdge#Cells`                                      |
 | `originToDirectedEdges`      | `Cell#DirectedEdges`                                      |
 | `directedEdgeToBoundary`     | `DirectedEdge#Boundary`                                   |
+| `edgeToVertexes`             | `DirectedEdge#Vertexes`                                   |
 | `cellToVertex`               | `CellToVertex`                                            |
 | `cellToVertexes`             | `CellToVertexes`                                          |
 | `vertexToLatLng`             | `VertexToLatLng`                                          |

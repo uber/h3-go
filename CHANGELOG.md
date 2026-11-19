@@ -9,6 +9,7 @@ fixes via **patches** with patch version bumps.
 ### Added
 
 * [#181]: Introduced `Cell#ChildrenSize`.
+* [#184]: Introduced `DirectedEdge#Vertexes`, the counterpart of `edgeToVertexes`.
 
 ## 4.5.0 (26 May 2026)
 
@@ -278,6 +279,7 @@ Thanks to [@jogly] for their contributions to this release.
 [#116]: https://github.com/uber/h3-go/pull/116
 [#117]: https://github.com/uber/h3-go/pull/117
 [#181]: https://github.com/uber/h3-go/pull/181
+[#184]: https://github.com/uber/h3-go/pull/184
 
 [c3cc4ae]: https://github.com/uber/h3-go/commit/c3cc4ae1af0472866452d998fe5576839450e342
 [migration guide]: https://h3geo.org/docs/library/migrating-3.x
