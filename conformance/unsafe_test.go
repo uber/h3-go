@@ -39,15 +39,15 @@ func checkUnsafe(t *testing.T, record UnsafeRecord) {
 
 	cell := h3.CellFromString(record.Index)
 
-	disks := record.DiskUnsafe
+	diskOutcomes := record.DiskUnsafe
 	rings := record.RingUnsafe
 
-	if len(disks) != len(rings) {
-		t.Fatalf("record has %d disk outcomes and %d ring outcomes", len(disks), len(rings))
+	if len(diskOutcomes) != len(rings) {
+		t.Fatalf("record has %d disk outcomes and %d ring outcomes", len(diskOutcomes), len(rings))
 	}
 
-	for k := 1; k <= len(disks); k++ {
-		want := disks[k-1]
+	for k := 1; k <= len(diskOutcomes); k++ {
+		want := diskOutcomes[k-1]
 
 		disk, err := cell.GridDiskUnsafe(k)
 		checkUnsafeOutcome(t, "GridDiskUnsafe", k, cellsResult(disk, err), want, func() []h3.Cell {
@@ -61,6 +61,11 @@ func checkUnsafe(t *testing.T, record UnsafeRecord) {
 
 		distances, err := cell.GridDiskDistancesUnsafe(k)
 		checkUnsafeOutcome(t, "GridDiskDistancesUnsafe", k, cellsResult(slices.Concat(distances...), err), want, func() []h3.Cell {
+			return disk
+		})
+
+		disks, err := h3.GridDisksUnsafe([]h3.Cell{cell}, k)
+		checkUnsafeOutcome(t, "GridDisksUnsafe", k, cellsResult(slices.Concat(disks...), err), want, func() []h3.Cell {
 			return disk
 		})
 

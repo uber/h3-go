@@ -153,6 +153,37 @@ func TestResolutionDigests(t *testing.T) {
 	})
 }
 
+// TestResolutionCounts checks, for every resolution with a digest record,
+// that NumCells is the record's count and that Pentagons returns that
+// resolution's twelve pentagons in ascending order. Neither enumerates the
+// grid, so no resolution is skipped.
+func TestResolutionCounts(t *testing.T) {
+	t.Parallel()
+
+	runGroup(t, "digests/resolutions", func(t *testing.T, record ResolutionDigestsRecord) {
+		t.Helper()
+
+		if got := h3.NumCells(record.Res); int64(got) != record.Count {
+			t.Errorf("NumCells(%d) = %d, want %d", record.Res, got, record.Count)
+		}
+
+		pentagons, err := h3.Pentagons(record.Res)
+		if err != nil {
+			t.Fatalf("Pentagons(%d): %v", record.Res, err)
+		}
+
+		if len(pentagons) != h3.NumPentagons || !slices.IsSorted(pentagons) {
+			t.Fatalf("Pentagons(%d) = %v, want %d cells in ascending order", record.Res, pentagons, h3.NumPentagons)
+		}
+
+		for _, pentagon := range pentagons {
+			if !pentagon.IsValid() || !pentagon.IsPentagon() || pentagon.Resolution() != record.Res {
+				t.Errorf("Pentagons(%d) contains %s, which is not a valid pentagon at that resolution", record.Res, pentagon)
+			}
+		}
+	})
+}
+
 // combineBaseCells derives a resolution's count and digests from its base
 // cells in order: per stream, the SHA-256 of the 122 hex digests
 // concatenated.

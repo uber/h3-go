@@ -63,6 +63,20 @@ func checkHierarchy(t *testing.T, record HierarchyRecord) {
 		t.Errorf("Children(%d) = %s, want %s", res+1, formatResult(got), formatResult(record.Children))
 	}
 
+	immediateChildren, err := cell.ImmediateChildren()
+	if got := cellsResult(immediateChildren, err); !equalResults(got, record.Children, slices.Equal) {
+		t.Errorf("ImmediateChildren() = %s, want %s", formatResult(got), formatResult(record.Children))
+	}
+
+	immediateParent, err := cell.ImmediateParent()
+	if res == 0 {
+		if err == nil {
+			t.Errorf("ImmediateParent() = %s, want an error at resolution 0", immediateParent)
+		}
+	} else if err != nil || immediateParent.String() != record.Parents[res-1] {
+		t.Errorf("ImmediateParent() = %s (%v), want %s", immediateParent, err, record.Parents[res-1])
+	}
+
 	childPos, err := cell.ChildPos(0)
 	if got := (Result[int64]{Value: int64(childPos), Err: ErrorName(err)}); !equalResults(got, record.ChildPos, equalValues) {
 		t.Errorf("ChildPos(0) = %s, want %s", formatResult(got), formatResult(record.ChildPos))

@@ -681,6 +681,24 @@ static void writeEdgesRecord(FILE *out, H3Index h, Splitmix64 *rng) {
     fputs(",\"destinations\":", out);
     printIndexSequence(out, destinations, count);
 
+    H3Index reverses[NUM_HEX_EDGES];
+    for (int64_t i = 0; i < count; i++) {
+        must(reverseDirectedEdge(edges[i], &reverses[i]));
+    }
+    fputs(",\"reverses\":", out);
+    printIndexSequence(out, reverses, count);
+
+    fputs(",\"vertexes\":[", out);
+    for (int64_t i = 0; i < count; i++) {
+        H3Index ends[2];
+        must(edgeToVertexes(edges[i], &ends[0], &ends[1]));
+        if (i > 0) {
+            fputc(',', out);
+        }
+        printIndexSequence(out, ends, 2);
+    }
+    fputc(']', out);
+
     H3Index target = drawDiskTarget(rng, h, 1);
     fputs(",\"target\":", out);
     printIndex(out, target);
