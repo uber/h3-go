@@ -60,24 +60,8 @@ func checkTraversal(t *testing.T, record TraversalRecord) {
 			t.Errorf("GridDisk(%d) = %s, want %v", k, formatResult(got), disk)
 		}
 
-		distances, err := cell.GridDiskDistances(k)
-		if err != nil {
-			t.Errorf("GridDiskDistances(%d): %v", k, err)
-
-			continue
-		}
-
-		if len(distances) != k+1 {
-			t.Errorf("GridDiskDistances(%d) has %d rings, want %d", k, len(distances), k+1)
-
-			continue
-		}
-
-		for distance, want := range rings[:k+1] {
-			if got := cellsResult(distances[distance], nil); !slices.Equal(got.Value, want) {
-				t.Errorf("GridDiskDistances(%d)[%d] = %v, want %v", k, distance, got.Value, want)
-			}
-		}
+		checkDiskDistances(t, "GridDiskDistances", k, rings, cell.GridDiskDistances)
+		checkDiskDistances(t, "GridDiskDistancesSafe", k, rings, cell.GridDiskDistancesSafe)
 	}
 
 	distance, err := cell.GridDistance(target)
@@ -93,6 +77,31 @@ func checkTraversal(t *testing.T, record TraversalRecord) {
 	neighbor, err := cell.IsNeighbor(target)
 	if got := (Result[bool]{Value: neighbor, Err: ErrorName(err)}); !equalResults(got, record.Neighbor, equalValues) {
 		t.Errorf("IsNeighbor(%s) = %s, want %s", target, formatResult(got), formatResult(record.Neighbor))
+	}
+}
+
+// checkDiskDistances asserts that a distance-grouped disk of radius k is the
+// record's rings 0 to k in order.
+func checkDiskDistances(t *testing.T, name string, k int, rings [][]string, disk func(int) ([][]h3.Cell, error)) {
+	t.Helper()
+
+	distances, err := disk(k)
+	if err != nil {
+		t.Errorf("%s(%d): %v", name, k, err)
+
+		return
+	}
+
+	if len(distances) != k+1 {
+		t.Errorf("%s(%d) has %d rings, want %d", name, k, len(distances), k+1)
+
+		return
+	}
+
+	for distance, want := range rings[:k+1] {
+		if got := cellsResult(distances[distance], nil); !slices.Equal(got.Value, want) {
+			t.Errorf("%s(%d)[%d] = %v, want %v", name, k, distance, got.Value, want)
+		}
 	}
 }
 

@@ -225,6 +225,12 @@ type EdgesRecord struct {
 	// Destinations is getDirectedEdgeDestination for each entry of Edges in
 	// its written (ascending) order.
 	Destinations []string `json:"destinations"`
+	// Reverses is reverseDirectedEdge for each entry of Edges in its written
+	// order.
+	Reverses []string `json:"reverses"`
+	// Vertexes is edgeToVertexes for each entry of Edges in its written
+	// order, each as its start and end vertex.
+	Vertexes [][]string `json:"vertexes"`
 	// Target is a cell drawn from the subject's 1-disk.
 	Target string `json:"target"`
 	// Edge is cellsToDirectedEdge(index, target).
