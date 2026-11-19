@@ -142,7 +142,7 @@ a consumer runs every file of a group the same way.
 ```json
 {
   "format": "h3-conformance/1",
-  "h3Version": "4.5.0",
+  "h3Version": "4.6.0",
   "generator": {"name": "...", "seed": 20260929},
   "tolerances": {"angularDeg": 1e-12, "relative": 1e-9},
   "files": {"inspection/cells.jsonl": {"records": 1885, "sha256": "..."}}
@@ -1062,7 +1062,7 @@ third_party/h3` once after cloning; nothing else in the repository needs
 it). The generator, `internal/gen/gen.c`, is a standalone C99 program that
 depends only on the public H3 API and the C standard library.
 `internal/gen/build.sh` copies the submodule's `src/h3lib` sources into a
-scratch tree, renders `h3api.h` from its CMake template, applies the patches
+scratch tree, renders `h3api.h` from its CMake template, applies any patches
 in `internal/gen/patches/` and compiles `gen.c` against the result; the
 submodule itself is never modified. A patch carries an upstream change the
 pinned release does not yet contain, and is deleted once it does, which
