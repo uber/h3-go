@@ -6,6 +6,10 @@ fixes via **patches** with patch version bumps.
 
 ## Unreleased
 
+### Breaking Changes
+
+* [#186]: `DirectedEdge#Cells` now returns the origin and destination as two values instead of a slice.
+
 ### Added
 
 * [#181]: Introduced `Cell#ChildrenSize`.
@@ -280,6 +284,7 @@ Thanks to [@jogly] for their contributions to this release.
 [#117]: https://github.com/uber/h3-go/pull/117
 [#181]: https://github.com/uber/h3-go/pull/181
 [#184]: https://github.com/uber/h3-go/pull/184
+[#186]: https://github.com/uber/h3-go/pull/186
 
 [c3cc4ae]: https://github.com/uber/h3-go/commit/c3cc4ae1af0472866452d998fe5576839450e342
 [migration guide]: https://h3geo.org/docs/library/migrating-3.x
