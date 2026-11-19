@@ -4,7 +4,7 @@ This project tracks the **major** and **minor** versions set upstream by
 [h3](https://github.com/uber/h3) and introduces backwards-compatible updates and/or
 fixes via **patches** with patch version bumps.
 
-## Unreleased
+## 4.6.0 (19 Nov 2026)
 
 h3-go is now pure Go ([#174]): the cgo binding and its vendored C sources
 are gone, so building no longer needs cgo or a C toolchain, and the package
