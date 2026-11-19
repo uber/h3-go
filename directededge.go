@@ -121,18 +121,18 @@ func (e DirectedEdge) Reverse() (DirectedEdge, error) {
 
 // Cells returns the origin and destination cells of the directed edge, in that
 // order.
-func (e DirectedEdge) Cells() ([]Cell, error) {
+func (e DirectedEdge) Cells() (Cell, Cell, error) {
 	origin, err := e.Origin()
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
 
 	destination, err := e.Destination()
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
 
-	return []Cell{origin, destination}, nil
+	return origin, destination, nil
 }
 
 // Vertexes returns the start and end vertexes of the directed edge, in that

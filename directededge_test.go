@@ -62,9 +62,10 @@ func TestDirectedEdgeRoundTrip(t *testing.T) {
 				t.Fatalf("DirectedEdge round trip: got %015x (%v), want %015x", uint64(rebuilt), err, uint64(edge))
 			}
 
-			cells, err := edge.Cells()
-			if err != nil || cells[0] != origin || cells[1] != dest {
-				t.Fatalf("Cells(%015x): got %v (%v)", uint64(edge), cells, err)
+			cellsOrigin, cellsDest, err := edge.Cells()
+			if err != nil || cellsOrigin != origin || cellsDest != dest {
+				t.Fatalf("Cells(%015x): got %015x, %015x (%v), want %015x, %015x",
+					uint64(edge), uint64(cellsOrigin), uint64(cellsDest), err, uint64(origin), uint64(dest))
 			}
 
 			reverse, err := edge.Reverse()
@@ -306,7 +307,7 @@ func TestDirectedEdgeInvalid(t *testing.T) {
 		t.Fatalf("Reverse(cell mode): got %v, want ErrDirectedEdgeInvalid", err)
 	}
 
-	if _, err := cellModeEdge.Cells(); !errors.Is(err, ErrDirectedEdgeInvalid) {
+	if _, _, err := cellModeEdge.Cells(); !errors.Is(err, ErrDirectedEdgeInvalid) {
 		t.Fatalf("Cells(cell mode): got %v, want ErrDirectedEdgeInvalid", err)
 	}
 
@@ -343,7 +344,7 @@ func TestDirectedEdgeDestinationError(t *testing.T) {
 		t.Fatal("Destination(corrupt origin): got nil error, want failure")
 	}
 
-	if _, err := edge.Cells(); err == nil {
+	if _, _, err := edge.Cells(); err == nil {
 		t.Fatal("Cells(corrupt origin): got nil error, want failure")
 	}
 
