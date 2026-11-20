@@ -4,6 +4,12 @@ This project tracks the **major** and **minor** versions set upstream by
 [h3](https://github.com/uber/h3) and introduces backwards-compatible updates and/or
 fixes via **patches** with patch version bumps.
 
+## Unreleased
+
+### Fixed
+
+* [#183]: `CellAreaRads2`, `CellAreaKm2` and `CellAreaM2` no longer lose precision for cells near the north pole.
+
 ## 4.6.0 (19 Nov 2026)
 
 h3-go is now pure Go ([#174]): the cgo binding and its vendored C sources
@@ -309,6 +315,7 @@ Thanks to [@jogly] for their contributions to this release.
 [#179]: https://github.com/uber/h3-go/pull/179
 [#181]: https://github.com/uber/h3-go/pull/181
 [#182]: https://github.com/uber/h3-go/pull/182
+[#183]: https://github.com/uber/h3-go/pull/183
 [#184]: https://github.com/uber/h3-go/pull/184
 [#186]: https://github.com/uber/h3-go/pull/186
 

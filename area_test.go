@@ -315,3 +315,46 @@ func assertRelClose(t *testing.T, got, want float64, label string) {
 		t.Fatalf("%s = %.17g, want %.17g", label, got, want)
 	}
 }
+
+// TestCellAreaPolarMirror checks, at every resolution, that a cell near the
+// north pole keeps its area when its boundary is mirrored across the equator
+// (and reversed, to keep it counterclockwise). Mirroring cannot change an area,
+// so no reference values are needed. The
+// Cagnoli terms measure area from the south pole, so evaluating a loop near the
+// north pole directly cancels most of its significant digits.
+func TestCellAreaPolarMirror(t *testing.T) {
+	t.Parallel()
+
+	for res := 0; res <= MaxResolution; res++ {
+		t.Run(strconv.Itoa(res), func(t *testing.T) {
+			t.Parallel()
+
+			for _, ll := range []LatLng{{Lat: 90, Lng: 0}, {Lat: 89.9999, Lng: 40}, {Lat: 89.99, Lng: -120}} {
+				cell, err := LatLngToCell(ll, res)
+				if err != nil {
+					t.Fatalf("LatLngToCell: %v", err)
+				}
+
+				boundary, err := cell.Boundary()
+				if err != nil {
+					t.Fatalf("Boundary: %v", err)
+				}
+
+				n := len(boundary)
+
+				mirrored := make(CellBoundary, n)
+				for i := range boundary {
+					mirrored[n-1-i] = LatLng{Lat: -boundary[i].Lat, Lng: boundary[i].Lng}
+				}
+
+				const tol = 1e-8
+
+				got, want := boundary.areaRads2(), mirrored.areaRads2()
+				if rel := math.Abs(got-want) / want; rel > tol {
+					t.Fatalf("%s: area %.17g, mirrored %.17g: relative difference %.2e > %.0e",
+						cell, got, want, rel, tol)
+				}
+			}
+		})
+	}
+}
