@@ -18,6 +18,7 @@ package h3
 
 import (
 	"errors"
+	"slices"
 	"testing"
 )
 
@@ -61,9 +62,10 @@ func TestDirectedEdgeRoundTrip(t *testing.T) {
 				t.Fatalf("DirectedEdge round trip: got %015x (%v), want %015x", uint64(rebuilt), err, uint64(edge))
 			}
 
-			cells, err := edge.Cells()
-			if err != nil || cells[0] != origin || cells[1] != dest {
-				t.Fatalf("Cells(%015x): got %v (%v)", uint64(edge), cells, err)
+			cellsOrigin, cellsDest, err := edge.Cells()
+			if err != nil || cellsOrigin != origin || cellsDest != dest {
+				t.Fatalf("Cells(%015x): got %015x, %015x (%v), want %015x, %015x",
+					uint64(edge), uint64(cellsOrigin), uint64(cellsDest), err, uint64(origin), uint64(dest))
 			}
 
 			reverse, err := edge.Reverse()
@@ -139,6 +141,107 @@ func TestDirectedEdgeBoundary(t *testing.T) {
 	}
 }
 
+// TestDirectedEdgeVertexes checks each edge's vertexes over the corpus: two
+// distinct vertexes of the origin cell, at the ends of the edge boundary, and
+// swapped by the reverse edge.
+func TestDirectedEdgeVertexes(t *testing.T) {
+	t.Parallel()
+
+	for _, origin := range gridCorpus(t) {
+		cellVertexes, err := origin.Vertexes()
+		if err != nil {
+			t.Fatalf("Vertexes(%015x): %v", uint64(origin), err)
+		}
+
+		edges, err := origin.DirectedEdges()
+		if err != nil {
+			t.Fatalf("DirectedEdges(%015x): %v", uint64(origin), err)
+		}
+
+		for _, edge := range edges {
+			start, end, err := edge.Vertexes()
+			if err != nil {
+				t.Fatalf("Vertexes(%015x): %v", uint64(edge), err)
+			}
+
+			if start == end {
+				t.Fatalf("Vertexes(%015x): start and end are both %015x", uint64(edge), uint64(start))
+			}
+
+			vertexes := []Vertex{start, end}
+			for _, vertex := range vertexes {
+				if !vertex.IsValid() {
+					t.Fatalf("Vertexes(%015x): %015x is not valid", uint64(edge), uint64(vertex))
+				}
+
+				if !slices.Contains(cellVertexes, vertex) {
+					t.Fatalf("Vertexes(%015x): %015x is not a vertex of the origin", uint64(edge), uint64(vertex))
+				}
+			}
+
+			boundary, err := edge.Boundary()
+			if err != nil {
+				t.Fatalf("Boundary(%015x): %v", uint64(edge), err)
+			}
+
+			ends := []LatLng{boundary[0], boundary[len(boundary)-1]}
+
+			for i, vertex := range vertexes {
+				point, err := vertex.LatLng()
+				if err != nil {
+					t.Fatalf("LatLng(%015x): %v", uint64(vertex), err)
+				}
+
+				if distance := GreatCircleDistanceRads(point, ends[i]); distance > sharedPointBoundDeg*DegsToRads {
+					t.Fatalf("Vertexes(%015x)[%d]: %v is %g rad from boundary end %v", uint64(edge), i, point, distance, ends[i])
+				}
+			}
+
+			reverse, err := edge.Reverse()
+			if err != nil {
+				t.Fatalf("Reverse(%015x): %v", uint64(edge), err)
+			}
+
+			reverseStart, reverseEnd, err := reverse.Vertexes()
+			if err != nil || reverseStart != end || reverseEnd != start {
+				t.Fatalf("Vertexes(Reverse(%015x)): got %015x, %015x (%v), want %015x, %015x",
+					uint64(edge), uint64(reverseStart), uint64(reverseEnd), err, uint64(end), uint64(start))
+			}
+		}
+	}
+}
+
+// TestDirectedEdgeVertexesInvalid covers the inputs Vertexes rejects.
+func TestDirectedEdgeVertexesInvalid(t *testing.T) {
+	t.Parallel()
+
+	origin := CellFromString("8928308280fffff")
+	pentagon := CellFromString("823007fffffffff")
+
+	tests := []struct {
+		name string
+		give DirectedEdge
+	}{
+		{name: "zero", give: 0},
+		{name: "cell mode", give: DirectedEdge(origin)},
+		{name: "center direction", give: DirectedEdge(origin.setMode(directedEdgeMode).setReservedBits(centerDigit))},
+		{name: "pentagon k direction", give: DirectedEdge(pentagon.setMode(directedEdgeMode).setReservedBits(kAxesDigit))},
+		{name: "corrupt base cell", give: DirectedEdge(origin.setBaseCell(NumBaseCells).setMode(directedEdgeMode).setReservedBits(jAxesDigit))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			start, end, err := tt.give.Vertexes()
+			if !errors.Is(err, ErrDirectedEdgeInvalid) || start != 0 || end != 0 {
+				t.Fatalf("Vertexes(%015x): got %015x, %015x (%v), want 0, 0, ErrDirectedEdgeInvalid",
+					uint64(tt.give), uint64(start), uint64(end), err)
+			}
+		})
+	}
+}
+
 // TestEdgeLengthUnits checks the unit conversions of edge length relative to one
 // another.
 func TestEdgeLengthUnits(t *testing.T) {
@@ -204,7 +307,7 @@ func TestDirectedEdgeInvalid(t *testing.T) {
 		t.Fatalf("Reverse(cell mode): got %v, want ErrDirectedEdgeInvalid", err)
 	}
 
-	if _, err := cellModeEdge.Cells(); !errors.Is(err, ErrDirectedEdgeInvalid) {
+	if _, _, err := cellModeEdge.Cells(); !errors.Is(err, ErrDirectedEdgeInvalid) {
 		t.Fatalf("Cells(cell mode): got %v, want ErrDirectedEdgeInvalid", err)
 	}
 
@@ -241,7 +344,7 @@ func TestDirectedEdgeDestinationError(t *testing.T) {
 		t.Fatal("Destination(corrupt origin): got nil error, want failure")
 	}
 
-	if _, err := edge.Cells(); err == nil {
+	if _, _, err := edge.Cells(); err == nil {
 		t.Fatal("Cells(corrupt origin): got nil error, want failure")
 	}
 

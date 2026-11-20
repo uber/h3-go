@@ -6,13 +6,38 @@ fixes via **patches** with patch version bumps.
 
 ## Unreleased
 
-### Added
-
-* [#181]: Introduced `Cell#ChildrenSize`.
-
 ### Fixed
 
 * [#183]: `CellAreaRads2`, `CellAreaKm2` and `CellAreaM2` no longer lose precision for cells near the north pole.
+
+## 4.6.0 (19 Nov 2026)
+
+h3-go is now pure Go ([#174]): the cgo binding and its vendored C sources
+are gone, so building no longer needs cgo or a C toolchain, and the package
+cross-compiles like any other Go code. Results are held to the H3 C library
+by a conformance suite generated from it: discrete outputs such as cells,
+edges and vertexes are identical, and coordinates and measures agree within
+1e-12 degrees of arc and 1e-9 relative. The [README](README.md#conformance)
+states the full contract, including the knife-edge inputs it excludes and
+the deliberate differences from the C library.
+
+### Breaking Changes
+
+* [#186]: `DirectedEdge#Cells` now returns the origin and destination as two values instead of a slice.
+
+### Added
+
+* [#123]: Introduced `LatLngToCellString`.
+* [#147]: Introduced `ConstructCell`, and `GridDiskUnsafe` for `Cell`s.
+* [#179]: Introduced `ContainmentGeodesic`, a `PolygonToCellsExperimental` flag that treats polygon edges as great-circle arcs.
+* [#181]: Introduced `Cell#ChildrenSize`.
+* [#184]: Introduced `DirectedEdge#Vertexes`, the counterpart of `edgeToVertexes`.
+
+### Fixed
+
+* [#167]: Latitudes near the poles no longer lose precision.
+* [#176]: Cells crossing the antimeridian no longer report areas that are too small, which reached 9% at resolution 15.
+* [#178], [#182]: `GreatCircleDistance*` no longer returns NaN for antipodal points, or for a latitude beyond +-90 degrees that names the same point as the other argument.
 
 ## 4.5.0 (26 May 2026)
 
@@ -281,8 +306,18 @@ Thanks to [@jogly] for their contributions to this release.
 [#111]: https://github.com/uber/h3-go/pull/111
 [#116]: https://github.com/uber/h3-go/pull/116
 [#117]: https://github.com/uber/h3-go/pull/117
+[#123]: https://github.com/uber/h3-go/pull/123
+[#147]: https://github.com/uber/h3-go/pull/147
+[#167]: https://github.com/uber/h3-go/pull/167
+[#174]: https://github.com/uber/h3-go/pull/174
+[#176]: https://github.com/uber/h3-go/pull/176
+[#178]: https://github.com/uber/h3-go/pull/178
+[#179]: https://github.com/uber/h3-go/pull/179
 [#181]: https://github.com/uber/h3-go/pull/181
+[#182]: https://github.com/uber/h3-go/pull/182
 [#183]: https://github.com/uber/h3-go/pull/183
+[#184]: https://github.com/uber/h3-go/pull/184
+[#186]: https://github.com/uber/h3-go/pull/186
 
 [c3cc4ae]: https://github.com/uber/h3-go/commit/c3cc4ae1af0472866452d998fe5576839450e342
 [migration guide]: https://h3geo.org/docs/library/migrating-3.x

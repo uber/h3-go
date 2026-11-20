@@ -54,8 +54,9 @@ func checkEdges(t *testing.T, record EdgesRecord) {
 		t.Fatalf("DirectedEdges() = %v, want %v", got, record.Edges)
 	}
 
-	if len(record.Destinations) != len(edges) {
-		t.Fatalf("record has %d destinations for %d edges", len(record.Destinations), len(edges))
+	if len(record.Destinations) != len(edges) || len(record.Reverses) != len(edges) || len(record.Vertexes) != len(edges) {
+		t.Fatalf("record has %d destinations, %d reverses and %d vertex pairs for %d edges",
+			len(record.Destinations), len(record.Reverses), len(record.Vertexes), len(edges))
 	}
 
 	for i, edge := range edges {
@@ -67,6 +68,21 @@ func checkEdges(t *testing.T, record EdgesRecord) {
 		destination, err := edge.Destination()
 		if err != nil || destination.String() != record.Destinations[i] {
 			t.Errorf("Destination(%s) = %s (%v), want %s", edge, destination, err, record.Destinations[i])
+		}
+
+		cellsOrigin, cellsDestination, err := edge.Cells()
+		if err != nil || cellsOrigin != cell || cellsDestination.String() != record.Destinations[i] {
+			t.Errorf("Cells(%s) = %s, %s (%v), want %s, %s", edge, cellsOrigin, cellsDestination, err, cell, record.Destinations[i])
+		}
+
+		reverse, err := edge.Reverse()
+		if err != nil || reverse.String() != record.Reverses[i] {
+			t.Errorf("Reverse(%s) = %s (%v), want %s", edge, reverse, err, record.Reverses[i])
+		}
+
+		start, end, err := edge.Vertexes()
+		if want := record.Vertexes[i]; err != nil || len(want) != 2 || start.String() != want[0] || end.String() != want[1] {
+			t.Errorf("Vertexes(%s) = %s, %s (%v), want %v", edge, start, end, err, want)
 		}
 
 		if !edge.IsValid() {

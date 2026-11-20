@@ -142,7 +142,7 @@ a consumer runs every file of a group the same way.
 ```json
 {
   "format": "h3-conformance/1",
-  "h3Version": "4.5.0",
+  "h3Version": "4.6.0",
   "generator": {"name": "...", "seed": 20260929},
   "tolerances": {"angularDeg": 1e-12, "relative": 1e-9},
   "files": {"inspection/cells.jsonl": {"records": 1885, "sha256": "..."}}
@@ -309,8 +309,9 @@ those rows are the group's error cases.
 
 Only the rings are recorded. The `k`-disk is the cell together with rings 1
 through `k`, and `gridDiskDistances(index, k)` grouped by distance is the
-cell, then ring 1, and so on, so a consumer checks `gridDisk` and
-`gridDiskDistances` for `k` 1 to 3 against sets it builds from the rings.
+cell, then ring 1, and so on, so a consumer checks `gridDisk`,
+`gridDiskDistances` and `gridDiskDistancesSafe` for `k` 1 to 3 against sets
+it builds from the rings.
 
 | Key | Function | Type |
 |---|---|---|
@@ -370,16 +371,19 @@ The target is the cell itself about one time in seven, which makes
 | `index` | the subject cell | index string |
 | `edges` | `originToDirectedEdges(index)`, with `0` padding removed | set of index strings |
 | `destinations` | `getDirectedEdgeDestination(e)` for each `e` in `edges`, in the written (ascending) order | sequence of index strings |
+| `reverses` | `reverseDirectedEdge(e)` for each `e` in `edges`, in the written order | sequence of index strings |
+| `vertexes` | `edgeToVertexes(e)` for each `e` in `edges`, in the written order, as `[v1, v2]` | sequence of pairs of index strings |
 | `target` | the second cell of the pair | index string |
 | `edge` | `cellsToDirectedEdge(index, target)` | index string, or error |
 
-A consumer must also check that `isValidDirectedEdge(e)` holds and
-`getDirectedEdgeOrigin(e) == index` for every `e` in `edges`.
+A consumer must also check that `isValidDirectedEdge(e)` holds,
+`getDirectedEdgeOrigin(e) == index`, and `directedEdgeToCells(e)` is `index`
+followed by the matching entry of `destinations`, for every `e` in `edges`.
 
 Example:
 
 ```json
-{"index":"8005fffffffffff","edges":["11005fffffffffff","12005fffffffffff","13005fffffffffff","14005fffffffffff","15005fffffffffff","16005fffffffffff"],"destinations":["800dfffffffffff","8015fffffffffff","8017fffffffffff","8001fffffffffff","8003fffffffffff","800bfffffffffff"],"target":"8003fffffffffff","edge":"15005fffffffffff"}
+{"index":"8005fffffffffff","edges":["11005fffffffffff","12005fffffffffff","13005fffffffffff","14005fffffffffff","15005fffffffffff","16005fffffffffff"],"destinations":["800dfffffffffff","8015fffffffffff","8017fffffffffff","8001fffffffffff","8003fffffffffff","800bfffffffffff"],"reverses":["1600dfffffffffff","15015fffffffffff","14017fffffffffff","13001fffffffffff","16003fffffffffff","1100bfffffffffff"],"vertexes":[["23005fffffffffff","21003fffffffffff"],["21005fffffffffff","22005fffffffffff"],["22005fffffffffff","23005fffffffffff"],["23001fffffffffff","22001fffffffffff"],["21003fffffffffff","23001fffffffffff"],["22001fffffffffff","21005fffffffffff"]],"target":"8003fffffffffff","edge":"15005fffffffffff"}
 ```
 
 ### `vertexes`
@@ -592,7 +596,10 @@ two levels:
   base-cell order then digit order, so this fixes every line of the
   resolution in sequence while letting the 122 subtrees be computed in any
   order or in parallel; resolution 7 is 98.8 million cells and takes about
-  an hour on one core.
+  an hour on one core. A consumer must also check that `getNumCells(res)`
+  equals `count`, and that `getPentagons(res)` returns twelve valid pentagons
+  at `res` in ascending order. Neither needs the grid enumerated, so both
+  apply to every line, however many resolutions a run digests.
 
 `digests` is an object from stream name to hex SHA-256. Every stream has
 one line per cell, starting with the cell. The `polygons` stream exists
@@ -1062,7 +1069,7 @@ third_party/h3` once after cloning; nothing else in the repository needs
 it). The generator, `internal/gen/gen.c`, is a standalone C99 program that
 depends only on the public H3 API and the C standard library.
 `internal/gen/build.sh` copies the submodule's `src/h3lib` sources into a
-scratch tree, renders `h3api.h` from its CMake template, applies the patches
+scratch tree, renders `h3api.h` from its CMake template, applies any patches
 in `internal/gen/patches/` and compiles `gen.c` against the result; the
 submodule itself is never modified. A patch carries an upstream change the
 pinned release does not yet contain, and is deleted once it does, which

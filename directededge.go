@@ -121,18 +121,43 @@ func (e DirectedEdge) Reverse() (DirectedEdge, error) {
 
 // Cells returns the origin and destination cells of the directed edge, in that
 // order.
-func (e DirectedEdge) Cells() ([]Cell, error) {
+func (e DirectedEdge) Cells() (Cell, Cell, error) {
 	origin, err := e.Origin()
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
 
 	destination, err := e.Destination()
 	if err != nil {
-		return nil, err
+		return 0, 0, err
 	}
 
-	return []Cell{origin, destination}, nil
+	return origin, destination, nil
+}
+
+// Vertexes returns the start and end vertexes of the directed edge, in that
+// order. The start vertex is the origin cell's vertex in the edge's direction
+// and the end vertex is the next one counterclockwise, so they sit at the ends
+// of Boundary.
+func (e DirectedEdge) Vertexes() (Vertex, Vertex, error) {
+	if !e.IsValid() {
+		return 0, 0, ErrDirectedEdgeInvalid
+	}
+
+	origin := ownerCell(e)
+
+	cellNumVerts := numHexVerts
+	if origin.IsPentagon() {
+		cellNumVerts = numPentVerts
+	}
+
+	// The edge is valid, so its direction has a vertex number on the origin
+	// and both vertex lookups cannot fail.
+	startVertexNum := origin.vertexNumForDirection(reservedBits(e))
+	start, _ := origin.Vertex(startVertexNum)
+	end, _ := origin.Vertex((startVertexNum + 1) % cellNumVerts)
+
+	return start, end, nil
 }
 
 // Boundary returns the coordinates of the directed edge: the geographic line
